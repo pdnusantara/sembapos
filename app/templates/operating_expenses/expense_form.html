@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} biaya{% endblock %}
+{% block page_title %}{{ action }} pengeluaran{% endblock %}
+{% block page_sub %}Biaya operasional{% endblock %}
+
+{% block content %}
+<div class="page-shell opex-page">
+<div class="card form-card-narrow">
+  {% if not categories %}
+  <p class="text-muted mb-3">Belum ada kategori aktif. {% if current_user.role in ('superadmin', 'admin') %}<a href="{{ url_for('operating_expenses.categories') }}">Kelola kategori</a>{% else %}Hubungi admin.{% endif %}</p>
+  {% endif %}
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="form-group">
+      <label class="form-label">Kategori *</label>
+      <select name="category_id" class="form-control" required {% if not categories %}disabled{% endif %}>
+        {% for c in categories %}
+        <option value="{{ c.id }}" {{ 'selected' if expense and expense.category_id == c.id else '' }}>{{ c.nama }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tanggal *</label>
+      <input type="date" name="tanggal" class="form-control" required
+        value="{{ expense.tanggal.strftime('%Y-%m-%d') if expense else today_str }}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Jumlah (Rp) *</label>
+      <input type="number" name="jumlah" class="form-control" required min="1" step="1"
+        value="{{ expense.jumlah|int if expense else '' }}" placeholder="Contoh: 150000">
+    </div>
+    {% if current_user.role in ('superadmin', 'admin') %}
+    <div class="form-group">
+      <label class="form-label">Cabang</label>
+      <select name="branch_id" class="form-control">
+        <option value="">— Semua tenant / tidak spesifik —</option>
+        {% for b in branches %}
+        <option value="{{ b.id }}" {{ 'selected' if expense and expense.branch_id == b.id else '' }}>{{ b.nama }}</option>
+        {% endfor %}
+      </select>
+      <p class="text-muted mt-2" style="font-size:12px;">Kosongkan jika biaya tidak melekat ke satu cabang.</p>
+    </div>
+    {% endif %}
+    <div class="form-group">
+      <label class="form-label">Keterangan</label>
+      <input type="text" name="keterangan" class="form-control" placeholder="Opsional"
+        value="{{ expense.keterangan or '' if expense else '' }}">
+    </div>
+    <div class="form-actions-row">
+      <button type="submit" class="btn btn-primary" {% if not categories %}disabled{% endif %}>Simpan</button>
+      <a href="{{ url_for('operating_expenses.index') }}" class="btn btn-outline">Batal</a>
+    </div>
+  </form>
+</div>
+</div>
+{% endblock %}

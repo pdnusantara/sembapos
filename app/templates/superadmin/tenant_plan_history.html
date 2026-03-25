@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Riwayat paket — {{ tenant.nama }}{% endblock %}
+{% block page_title %}📜 Riwayat paket &amp; kuota{% endblock %}
+{% block page_sub %}{{ tenant.nama }} ({{ tenant.kode }}){% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.index'), false),
+  ('Detail tenant', url_for('superadmin.view_tenant', id=tenant.id), false),
+  ('Riwayat paket', '', true),
+]) }}
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Perubahan tercatat</div>
+    <div style="font-size:12px;color:var(--text-muted);">{{ total }} entri</div>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Waktu (UTC)</th>
+          <th>Event</th>
+          <th>Paket</th>
+          <th>Max cabang</th>
+          <th>Max user</th>
+          <th>Oleh</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="text-muted" style="font-size:12px;white-space:nowrap;">{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td><span class="badge badge-info">{{ r.event }}</span></td>
+          <td style="font-size:12px;">
+            {% if r.old_paket_kode or r.new_paket_kode %}
+            <span class="text-muted">{{ r.old_paket_kode or '—' }}</span>
+            → <strong>{{ r.new_paket_kode or '—' }}</strong>
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-size:12px;">
+            {% if r.old_max_cabang is not none or r.new_max_cabang is not none %}
+            {{ r.old_max_cabang if r.old_max_cabang is not none else '—' }} → {{ r.new_max_cabang if r.new_max_cabang is not none else '—' }}
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-size:12px;">
+            {% if r.old_max_user is not none or r.new_max_user is not none %}
+            {{ r.old_max_user if r.old_max_user is not none else '—' }} → {{ r.new_max_user if r.new_max_user is not none else '—' }}
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-size:12px;">{% if r.actor %}@{{ r.actor.username }}{% else %}—{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:32px;">Belum ada riwayat.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if total_pages > 1 %}
+  <div style="padding:12px 16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+    {% if page > 1 %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.tenant_plan_history', id=tenant.id, page=page-1) }}">←</a>
+    {% endif %}
+    <span class="text-muted" style="font-size:13px;">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.tenant_plan_history', id=tenant.id, page=page+1) }}">→</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+<a href="{{ url_for('superadmin.view_tenant', id=tenant.id) }}" class="btn btn-outline mt-3">← Kembali ke detail tenant</a>
+{% endblock %}

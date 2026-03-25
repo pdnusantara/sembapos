@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}Biaya operasional{% endblock %}
+{% block page_title %}💸 Biaya operasional{% endblock %}
+{% block page_sub %}Pengeluaran rutin &amp; kategori{% endblock %}
+
+{% block content %}
+<div class="page-shell opex-page">
+<div class="card opex-filter-card mb-3">
+  <form method="GET" class="opex-toolbar">
+    <div class="form-group">
+      <label class="form-label">Dari</label>
+      <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Sampai</label>
+      <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Kategori</label>
+      <select name="category_id" class="form-control">
+        <option value="">Semua</option>
+        {% for c in categories %}
+        <option value="{{ c.id }}" {{ 'selected' if category_id == (c.id|string) else '' }}>{{ c.nama }}{% if not c.aktif %} (nonaktif){% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if current_user.role in ('superadmin', 'admin') %}
+    <div class="form-group">
+      <label class="form-label">Cabang</label>
+      <select name="branch_id" class="form-control">
+        <option value="">Semua</option>
+        {% for b in branches %}
+        <option value="{{ b.id }}" {{ 'selected' if branch_id == (b.id|string) else '' }}>{{ b.nama }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="opex-toolbar-actions">
+      <button type="submit" class="btn btn-primary">Tampilkan</button>
+      <a href="{{ url_for('operating_expenses.add') }}" class="btn btn-primary">➕ Catat biaya</a>
+      {% if current_user.role in ('superadmin', 'admin') %}
+      <a href="{{ url_for('operating_expenses.categories') }}" class="btn btn-outline">🏷️ Kategori</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<div class="card opex-summary-card mb-3">
+  <div class="stat-card primary">
+    <div class="stat-icon primary">Σ</div>
+    <div class="stat-info">
+      <div class="stat-value" style="font-size:clamp(18px,4vw,22px);">Rp {{ "{:,.0f}".format(total_periode).replace(",",".") }}</div>
+      <div class="stat-label">Total periode (sesuai filter)</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Daftar pengeluaran</div>
+  </div>
+  <div class="table-wrapper opex-table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Kategori</th>
+          <th>Cabang</th>
+          <th>Jumlah</th>
+          <th>Keterangan</th>
+          <th>Dicatat</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in expenses %}
+        <tr>
+          <td>{{ e.tanggal.strftime('%d/%m/%Y') }}</td>
+          <td style="font-weight:600;">{{ e.category.nama }}</td>
+          <td class="text-muted">{{ e.branch.nama if e.branch else '—' }}</td>
+          <td class="fw-bold">Rp {{ "{:,.0f}".format(e.jumlah).replace(",",".") }}</td>
+          <td class="text-muted" style="max-width:200px;font-size:12px;">{{ e.keterangan or '—' }}</td>
+          <td class="text-muted" style="font-size:12px;">{{ e.recorder.nama if e.recorder else '—' }}</td>
+          <td>
+            <div class="d-flex flex-wrap gap-2">
+              {% if current_user.role in ('superadmin', 'admin') or (e.user_id == current_user.id) %}
+              <a href="{{ url_for('operating_expenses.edit', id=e.id) }}" class="btn btn-outline btn-sm">Edit</a>
+              {% endif %}
+              {% if current_user.role in ('superadmin', 'admin') %}
+              <form method="POST" action="{{ url_for('operating_expenses.delete', id=e.id) }}" style="display:inline;" onsubmit="return confirm('Hapus pengeluaran ini?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger);">Hapus</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">Belum ada data untuk filter ini.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+{% endblock %}

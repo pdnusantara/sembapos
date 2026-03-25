@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0f1a">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Kasir Sembako{% endblock %}</title>
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('app-theme');
+        var preferred = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', preferred);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<div class="app-layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🏪</div>
+      <div class="logo-text">
+        <div class="logo-title">
+          {% if current_user.tenant %}{{ current_user.tenant.nama }}{% else %}Kasir Platform{% endif %}
+        </div>
+        <div class="logo-sub">
+          {% if current_user.branch %}{{ current_user.branch.nama }}{% elif current_user.is_superadmin %}Super Admin{% else %}Semua Cabang{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-group">
+        <div class="nav-group-label">Menu Utama</div>
+        <a href="{{ url_for('dashboard.index') }}" class="nav-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+          <span class="nav-icon">📊</span> Dashboard
+        </a>
+        {% if not current_user.is_superadmin %}
+        {% if perm('pos') %}
+        <a href="{{ url_for('pos.index') }}" class="nav-item {% if request.blueprint == 'pos' %}active{% endif %}">
+          <span class="nav-icon">🛒</span> Kasir / POS
+        </a>
+        {% endif %}
+        {% if perm('cash_shifts') %}
+        <a href="{{ url_for('shifts.index') }}" class="nav-item {% if request.blueprint == 'shifts' %}active{% endif %}">
+          <span class="nav-icon">🕐</span> Shift kasir
+        </a>
+        {% endif %}
+        {% if perm('transactions') %}
+        <a href="{{ url_for('transactions.index') }}" class="nav-item {% if request.blueprint == 'transactions' %}active{% endif %}">
+          <span class="nav-icon">📜</span> Riwayat Transaksi
+        </a>
+        {% endif %}
+        {% if perm('operating_expenses') %}
+        <a href="{{ url_for('operating_expenses.index') }}" class="nav-item {% if request.blueprint == 'operating_expenses' %}active{% endif %}">
+          <span class="nav-icon">💸</span> Biaya operasional
+        </a>
+        {% endif %}
+        {% endif %}
+      </div>
+
+      {% if not current_user.is_superadmin %}
+      {% if perm('products') or perm('suppliers') or perm('purchases') %}
+      <div class="nav-group">
+        <div class="nav-group-label">Inventory</div>
+        {% if perm('products') %}
+        <a href="{{ url_for('products.index') }}" class="nav-item {% if request.blueprint == 'products' and 'categor' not in request.endpoint %}active{% endif %}">
+          <span class="nav-icon">📦</span> Produk
+        </a>
+        <a href="{{ url_for('products.categories') }}" class="nav-item {% if 'categor' in request.endpoint %}active{% endif %}">
+          <span class="nav-icon">🏷️</span> Kategori
+        </a>
+        {% endif %}
+        {% if perm('suppliers') %}
+        <a href="{{ url_for('suppliers.index') }}" class="nav-item {% if request.blueprint == 'suppliers' %}active{% endif %}">
+          <span class="nav-icon">🏭</span> Supplier
+        </a>
+        {% endif %}
+        {% if perm('purchases') %}
+        <a href="{{ url_for('purchases.index') }}" class="nav-item {% if request.blueprint == 'purchases' %}active{% endif %}">
+          <span class="nav-icon">📥</span> Pembelian (PO)
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if perm('members') or perm('debts') %}
+      <div class="nav-group">
+        <div class="nav-group-label">Pelanggan</div>
+        {% if perm('members') %}
+        <a href="{{ url_for('members.index') }}" class="nav-item {% if request.blueprint == 'members' %}active{% endif %}">
+          <span class="nav-icon">👤</span> Member
+        </a>
+        {% endif %}
+        {% if perm('debts') %}
+        <a href="{{ url_for('debts.index') }}" class="nav-item {% if request.blueprint == 'debts' %}active{% endif %}">
+          <span class="nav-icon">💳</span> Hutang Piutang
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if perm('reports') or perm('returns') %}
+      <div class="nav-group">
+        <div class="nav-group-label">Laporan</div>
+        {% if perm('reports') %}
+        <a href="{{ url_for('reports.index') }}" class="nav-item {% if request.endpoint == 'reports.index' %}active{% endif %}">
+          <span class="nav-icon">📋</span> Laporan Penjualan
+        </a>
+        <a href="{{ url_for('reports.pembelian') }}" class="nav-item {% if request.endpoint == 'reports.pembelian' or request.endpoint == 'reports.pembelian_export_csv' %}active{% endif %}">
+          <span class="nav-icon">📥</span> Laporan Pembelian
+        </a>
+        <a href="{{ url_for('reports.stok') }}" class="nav-item {% if request.endpoint in ('reports.stok', 'reports.stok_export_produk') %}active{% endif %}">
+          <span class="nav-icon">📦</span> Laporan Stok
+        </a>
+        <a href="{{ url_for('reports.sales_breakdown') }}" class="nav-item {% if request.endpoint == 'reports.sales_breakdown' %}active{% endif %}">
+          <span class="nav-icon">📈</span> Produk &amp; Kategori
+        </a>
+        {% endif %}
+        {% if perm('returns') %}
+        <a href="{{ url_for('returns.index') }}" class="nav-item {% if request.blueprint == 'returns' %}active{% endif %}">
+          <span class="nav-icon">↩️</span> Retur penjualan
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endif %}
+
+      {% if current_user.is_admin %}
+      <div class="nav-group">
+        <div class="nav-group-label">{% if current_user.is_superadmin %}Super Admin{% else %}Manajemen{% endif %}</div>
+        {% if not current_user.is_superadmin %}
+        <a href="{{ url_for('admin.users') }}" class="nav-item {% if request.endpoint == 'admin.users' %}active{% endif %}">
+          <span class="nav-icon">👥</span> Pengguna
+        </a>
+        <a href="{{ url_for('admin.branches') }}" class="nav-item {% if request.endpoint == 'admin.branches' %}active{% endif %}">
+          <span class="nav-icon">🏬</span> Cabang
+        </a>
+        {% else %}
+        <a href="{{ url_for('superadmin.index') }}" class="nav-item {% if request.endpoint in ('superadmin.index', 'superadmin.view_tenant', 'superadmin.edit_tenant', 'superadmin.add_tenant', 'superadmin.export_csv', 'superadmin.tenant_plan_history') %}active{% endif %}">
+          <span class="nav-icon">🏢</span> Daftar tenant
+        </a>
+        <a href="{{ url_for('superadmin.paket_index') }}" class="nav-item {% if request.endpoint in ('superadmin.paket_index', 'superadmin.paket_add', 'superadmin.paket_edit') %}active{% endif %}">
+          <span class="nav-icon">📦</span> Paket tenant
+        </a>
+        <a href="{{ url_for('superadmin.audit_logs') }}" class="nav-item {% if request.endpoint == 'superadmin.audit_logs' %}active{% endif %}">
+          <span class="nav-icon">📜</span> Log audit
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-card__top">
+          <div class="user-avatar" aria-hidden="true">{{ current_user.nama[0].upper() }}</div>
+          <div class="user-card__headline">
+            <div class="user-name" title="{{ current_user.nama }}">{{ current_user.nama }}</div>
+            <div class="user-role">
+              {% if current_user.role == 'superadmin' %}🔑 Super Admin
+              {% elif current_user.role == 'admin' %}🛡️ Admin
+              {% else %}💼 Kasir{% endif %}
+            </div>
+          </div>
+          <form method="POST" action="{{ url_for('auth.logout') }}" class="user-card__logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn-logout" title="Keluar" aria-label="Keluar dari akun">⏻</button>
+          </form>
+        </div>
+        {% if current_user.tenant %}
+        {% set t = current_user.tenant %}
+        {% set lim_c = t.max_cabang >= 9000 %}
+        {% set lim_u = t.max_user >= 9000 %}
+        <div class="user-card__tenant" aria-label="Paket dan langganan">
+          <div class="user-tenant-line">
+            {% if t.paket == 'pro' %}<span class="user-tenant-pill user-tenant-pill--pro">🥈 Pro</span>
+            {% elif t.paket == 'enterprise' %}<span class="user-tenant-pill user-tenant-pill--ent">🥇 Enterprise</span>
+            {% else %}<span class="user-tenant-pill user-tenant-pill--basic">🥉 Basic</span>{% endif %}
+          </div>
+          <div class="user-tenant-line user-tenant-line--sub">
+            {% if t.tanggal_expired %}
+              {% if utc_now() > t.tanggal_expired %}
+              <span class="user-tenant-warn">⛔ Kedaluwarsa {{ t.tanggal_expired.strftime('%d/%m/%Y') }}</span>
+              {% else %}
+              📅 Sampai {{ t.tanggal_expired.strftime('%d/%m/%Y') }}
+              {% endif %}
+            {% else %}
+            📅 Tanpa batas tanggal
+            {% endif %}
+          </div>
+          <div class="user-tenant-line user-tenant-line--sub user-tenant-line--stats">
+            <span class="user-tenant-stat">🏬 {{ t.branches|length }}/{% if lim_c %}∞{% else %}{{ t.max_cabang }}{% endif %}</span>
+            <span class="user-tenant-stat-sep" aria-hidden="true">·</span>
+            <span class="user-tenant-stat">👥 {{ t.users|length }}/{% if lim_u %}∞{% else %}{{ t.max_user }}{% endif %}</span>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    {% if session.get('impersonator_id') %}
+    <div class="impersonation-banner" style="background:linear-gradient(90deg,#5c4d00,#8b6914);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.2);">
+      <span>👤 Anda sedang <strong>masuk sebagai</strong> tenant: {{ current_user.nama }} (@{{ current_user.username }})</span>
+      <form method="POST" action="{{ url_for('superadmin.stop_impersonate') }}" style="margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-sm" style="background:#fff;color:#5c4d00;border:none;font-weight:600;">Keluar & kembali ke Super Admin</button>
+      </form>
+    </div>
+    {% endif %}
+    {% if subscription_banner %}
+    <div class="subscription-banner" style="padding:10px 16px;font-size:13px;line-height:1.45;border-bottom:1px solid var(--border);{% if subscription_banner.kind == 'read_only' %}background:rgba(180,80,0,0.15);color:var(--text-light);{% elif subscription_banner.kind == 'grace' %}background:rgba(200,160,0,0.2);color:var(--text-light);{% else %}background:rgba(80,120,200,0.12);color:var(--text-light);{% endif %}">
+      {% if subscription_banner.kind == 'grace' %}
+      <strong>⏳ Masa tenggang langganan.</strong> Tanggal berlangganan telah lewat; Anda masih memiliki akses penuh sampai <strong>{{ subscription_banner.grace_ends_at.strftime('%d/%m/%Y %H:%M') }} UTC</strong>. Setelah itu berlaku kebijakan di server (baca saja atau blokir login).
+      {% elif subscription_banner.kind == 'read_only' %}
+      <strong>👁️ Mode baca saja.</strong> Langganan berakhir — Anda dapat melihat halaman tetapi tidak dapat menyimpan transaksi atau mengubah data. Hubungi penyedia layanan.
+      {% elif subscription_banner.kind == 'expiring_soon' %}
+      <strong>📅 Segera perpanjang.</strong> Langganan tenant berakhir {{ subscription_banner.until.strftime('%d/%m/%Y %H:%M') }} UTC.
+      {% endif %}
+    </div>
+    {% endif %}
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <div class="topbar-left">
+        <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
+        <div class="topbar-sub">{% block page_sub %}{% endblock %}</div>
+      </div>
+      <div class="topbar-right">
+        {% if current_user.branch %}
+        <div class="branch-badge">
+          🏬 <span>{{ current_user.branch.nama }}</span>
+        </div>
+        {% endif %}
+        <button type="button" id="themeToggle" class="theme-toggle" onclick="toggleTheme()" aria-label="Ubah tema">
+          🌙 Dark
+        </button>
+        <div class="branch-badge clock-badge">
+          🕐 <span id="clock">--:--</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- FLASH MESSAGES -->
+    <div class="flash-messages-wrap">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div style="margin-top: 16px;">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }}">
+              <span>{{ '✅' if category == 'success' else ('❌' if category in ['danger','error'] else ('⚠️' if category == 'warning' else 'ℹ️')) }}</span>
+              <span>{{ message }}</span>
+              <button class="alert-close" onclick="this.parentElement.remove()">✕</button>
+            </div>
+          {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+    </div>
+
+    <!-- PAGE CONTENT -->
+    <div class="page-content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// Clock
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  const el = document.getElementById('clock');
+  if(el) el.textContent = `${h}:${m}:${s}`;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// Sidebar toggle (mobile)
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('active');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('active');
+}
+
+// Theme toggle (dark/light)
+function setTheme(theme) {
+  const mode = (theme === 'light') ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', mode);
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) {
+    metaTheme.setAttribute('content', mode === 'light' ? '#f4f6fb' : '#0f0f1a');
+  }
+  const btn = document.getElementById('themeToggle');
+  if (btn) {
+    btn.textContent = mode === 'light' ? '☀️ Light' : '🌙 Dark';
+    btn.setAttribute('aria-label', mode === 'light' ? 'Ganti ke dark mode' : 'Ganti ke light mode');
+  }
+  try { localStorage.setItem('app-theme', mode); } catch (e) {}
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  setTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+
+// Toast notification
+function showToast(message, type='info', duration=4000) {
+  const container = document.getElementById('toastContainer');
+  const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<span>${icons[type] || '●'}</span><span>${message}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'slideInRight 0.3s ease reverse';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+// Format rupiah
+function formatRupiah(num) {
+  return 'Rp ' + parseFloat(num).toLocaleString('id-ID');
+}
+
+// Auto-dismiss alerts after 5s
+setTimeout(() => {
+  document.querySelectorAll('.alert').forEach(el => {
+    el.style.transition = 'all 0.3s ease';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 300);
+  });
+}, 5000);
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

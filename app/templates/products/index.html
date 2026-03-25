@@ -1,0 +1,178 @@
+{% extends 'base.html' %}
+{% block title %}Produk{% endblock %}
+{% block page_title %}📦 Manajemen Produk{% endblock %}
+{% block page_sub %}{{ products.total }} produk (filter saat ini){% endblock %}
+
+{% block content %}
+<div class="product-stats-grid">
+  <div class="product-stat-card">
+    <div class="product-stat-label">SKU aktif</div>
+    <div class="product-stat-value">{{ stats.count_aktif }}</div>
+  </div>
+  <div class="product-stat-card product-stat-warning">
+    <div class="product-stat-label">Stok menipis</div>
+    <div class="product-stat-value">{{ stats.count_menipis }}</div>
+  </div>
+  <div class="product-stat-card product-stat-danger">
+    <div class="product-stat-label">Stok habis</div>
+    <div class="product-stat-value">{{ stats.count_habis }}</div>
+  </div>
+  <div class="product-stat-card product-stat-info">
+    <div class="product-stat-label">Nilai persediaan (× harga beli)</div>
+    <div class="product-stat-value" style="font-size:18px;">Rp {{ "{:,.0f}".format(stats.nilai_persediaan).replace(",",".") }}</div>
+  </div>
+</div>
+
+<div class="product-toolbar mb-3">
+  <form method="GET" class="product-filter-form">
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Nama atau barcode...">
+    </div>
+    <select name="category" class="form-control filter-select" onchange="this.form.submit()">
+      <option value="">Semua Kategori</option>
+      {% for cat in categories %}
+      <option value="{{ cat.id }}" {{ 'selected' if cat_id|string == cat.id|string }}>{{ cat.nama }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" class="form-control filter-select" onchange="this.form.submit()">
+      <option value="all" {{ 'selected' if status == 'all' }}>Status: Semua</option>
+      <option value="aktif" {{ 'selected' if status == 'aktif' }}>Aktif saja</option>
+      <option value="nonaktif" {{ 'selected' if status == 'nonaktif' }}>Nonaktif saja</option>
+    </select>
+    <select name="stock" class="form-control filter-select" onchange="this.form.submit()">
+      <option value="all" {{ 'selected' if stock_filter == 'all' }}>Stok: Semua</option>
+      <option value="menipis" {{ 'selected' if stock_filter == 'menipis' }}>Menipis</option>
+      <option value="habis" {{ 'selected' if stock_filter == 'habis' }}>Habis</option>
+    </select>
+    <select name="sort" class="form-control filter-select" onchange="this.form.submit()">
+      <option value="nama" {{ 'selected' if sort == 'nama' }}>Urut: Nama A–Z</option>
+      <option value="harga_jual_asc" {{ 'selected' if sort == 'harga_jual_asc' }}>Harga jual ↑</option>
+      <option value="harga_jual_desc" {{ 'selected' if sort == 'harga_jual_desc' }}>Harga jual ↓</option>
+      <option value="stok_asc" {{ 'selected' if sort == 'stok_asc' }}>Stok terendah</option>
+      <option value="stok_desc" {{ 'selected' if sort == 'stok_desc' }}>Stok tertinggi</option>
+    </select>
+    <button type="submit" class="btn btn-outline">Terapkan</button>
+  </form>
+  <div class="product-toolbar-actions">
+    <a href="{{ url_for('products.export_csv') }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-outline" title="CSV sesuai filter">⬇️ Export CSV</a>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('products.import_products') }}" class="btn btn-outline">📤 Import CSV</a>
+    <a href="{{ url_for('products.add') }}" class="btn btn-primary">➕ Tambah Produk</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrapper table-sticky">
+    <table class="table table-responsive-min">
+      <thead>
+        <tr>
+          <th style="width:52px;"></th>
+          <th>Produk</th>
+          <th>Kategori</th>
+          <th>Satuan</th>
+          <th>Harga Beli</th>
+          <th>Harga Jual</th>
+          <th>Margin</th>
+          <th>Stok</th>
+          <th>Status</th>
+          {% if current_user.is_admin %}<th class="th-actions">Aksi</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products.items %}
+        {% set margin = p.harga_jual - p.harga_beli %}
+        {% set margin_pct = (margin / p.harga_beli * 100) if p.harga_beli and p.harga_beli > 0 else none %}
+        <tr>
+          <td>
+            {% if p.gambar %}
+            <img src="{{ url_for('static', filename=p.gambar) }}" alt="" class="product-thumb">
+            {% else %}
+            <span class="product-thumb-placeholder">📦</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="font-weight:600;color:var(--text-light);">{{ p.nama }}</div>
+            {% if p.barcode %}<div style="font-size:11px;color:var(--text-muted);font-family:monospace;">{{ p.barcode }}</div>{% endif %}
+          </td>
+          <td>{{ p.category.nama if p.category else '—' }}</td>
+          <td><span class="badge badge-info">{{ p.satuan }}</span></td>
+          <td class="text-muted">Rp {{ "{:,.0f}".format(p.harga_beli).replace(",",".") }}</td>
+          <td>
+            <div class="fw-bold text-light">Ecer: Rp {{ "{:,.0f}".format(p.harga_jual).replace(",",".") }}</div>
+            {% if p.min_qty_grosir_1 and p.harga_jual_grosir_1 %}
+            <div style="font-size:11px;color:var(--text-muted);">G1 ≥ {{ p.min_qty_grosir_1 }}: Rp {{ "{:,.0f}".format(p.harga_jual_grosir_1).replace(",",".") }}</div>
+            {% endif %}
+            {% if p.min_qty_grosir_2 and p.harga_jual_grosir_2 %}
+            <div style="font-size:11px;color:var(--text-muted);">G2 ≥ {{ p.min_qty_grosir_2 }}: Rp {{ "{:,.0f}".format(p.harga_jual_grosir_2).replace(",",".") }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="text-light">Rp {{ "{:,.0f}".format(margin).replace(",",".") }}</span>
+            {% if margin_pct is not none %}
+            <div style="font-size:11px;color:var(--text-muted);">{{ "{:.1f}".format(margin_pct) }}%</div>
+            {% else %}
+            <div style="font-size:11px;color:var(--text-muted);">—</div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge {{ 'badge-danger' if p.stok <= 0 else ('badge-warning' if p.stok <= p.stok_minimum else 'badge-success') }}">
+              {{ p.stok|int if p.stok == p.stok|int else p.stok }} {{ p.satuan }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {{ 'badge-success' if p.aktif else 'badge-danger' }}">
+              {{ '✅ Aktif' if p.aktif else '❌ Nonaktif' }}
+            </span>
+          </td>
+          {% if current_user.is_admin %}
+          <td>
+            <div class="product-actions">
+              <a href="{{ url_for('products.edit', id=p.id) }}" class="btn btn-outline btn-sm" title="Edit">✏️</a>
+              <a href="{{ url_for('products.stock_in', id=p.id) }}" class="btn btn-outline btn-sm" title="Stok masuk">📥</a>
+              <a href="{{ url_for('products.stock_adjust', id=p.id) }}" class="btn btn-outline btn-sm" title="Koreksi stok">⚖️</a>
+              <a href="{{ url_for('products.stock_history', id=p.id) }}" class="btn btn-outline btn-sm" title="Riwayat">📜</a>
+              <form method="POST" action="{{ url_for('products.duplicate', id=p.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm" title="Duplikat">📋</button>
+              </form>
+              <form method="POST" action="{{ url_for('products.delete', id=p.id) }}" onsubmit="return confirm('Nonaktifkan produk ini?');" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button class="btn btn-outline btn-sm" style="color:var(--danger);" title="Nonaktifkan">🗑️</button>
+              </form>
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{% if current_user.is_admin %}10{% else %}9{% endif %}" style="text-align:center;padding:40px;color:var(--text-muted);">
+            📭 Tidak ada produk untuk filter ini.
+            {% if current_user.is_admin %}<a href="{{ url_for('products.add') }}">Tambah produk</a>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if products.pages > 1 %}
+<div class="pagination">
+  {% if products.has_prev %}
+  <a href="{{ url_for('products.index', page=products.prev_num, q=search, category=cat_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">‹</a>
+  {% endif %}
+  {% for p in products.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+    {% if p %}
+    <a href="{{ url_for('products.index', page=p, q=search, category=cat_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn {{ 'active' if p == products.page }}">{{ p }}</a>
+    {% else %}
+    <span class="page-btn" style="cursor:default;">…</span>
+    {% endif %}
+  {% endfor %}
+  {% if products.has_next %}
+  <a href="{{ url_for('products.index', page=products.next_num, q=search, category=cat_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">›</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

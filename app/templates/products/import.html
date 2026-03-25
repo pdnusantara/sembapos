@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Import Produk{% endblock %}
+{% block page_title %}📤 Import Produk (CSV){% endblock %}
+{% block page_sub %}UTF-8, kolom wajib: nama, harga_jual{% endblock %}
+
+{% block content %}
+<div style="max-width:640px;">
+  <div class="card" style="margin-bottom:16px;">
+    <p style="color:var(--text-muted);line-height:1.6;">
+      Kolom opsional: <code style="font-size:12px;">barcode</code>,
+      <code>kategori</code> (nama; dibuat otomatis jika belum ada),
+      <code>satuan</code>, <code>harga_beli</code>, <code>stok_awal</code> atau <code>stok</code>,
+      <code>stok_minimum</code>, <code>supplier</code> (harus sudah terdaftar).
+      Barcode duplikat akan dilewati.
+    </p>
+    <a href="{{ url_for('products.import_sample') }}" class="btn btn-outline btn-sm">⬇️ Unduh contoh CSV</a>
+  </div>
+  <div class="card">
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="form-group">
+        <label class="form-label">File CSV</label>
+        <input type="file" name="file" class="form-control" accept=".csv,text/csv" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Unggah &amp; impor</button>
+      <a href="{{ url_for('products.index') }}" class="btn btn-outline">Batal</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

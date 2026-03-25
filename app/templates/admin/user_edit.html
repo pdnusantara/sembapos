@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block title %}Edit Pengguna{% endblock %}
+{% block page_title %}✏️ Edit Pengguna{% endblock %}
+{% block page_sub %}{{ user.nama }} · @{{ user.username }}{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;">
+  <div class="card">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+      <div class="form-group">
+        <label class="form-label">Nama lengkap *</label>
+        <input type="text" name="nama" class="form-control" required minlength="2" value="{{ user.nama }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Username *</label>
+        <input type="text" name="username" class="form-control" required value="{{ user.username }}" autocomplete="off" pattern="[a-zA-Z0-9_]{3,50}" title="3–50 karakter: huruf, angka, underscore">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role *</label>
+        {% if user.id == current_user.id and user.role == 'admin' %}
+        <select class="form-control" disabled>
+          <option selected>🛡️ Admin</option>
+        </select>
+        <input type="hidden" name="role" value="admin">
+        <p class="text-muted" style="font-size:12px;margin-top:6px;">Role akun Anda tetap Admin.</p>
+        {% else %}
+        <select name="role" class="form-control">
+          <option value="kasir" {% if user.role == 'kasir' %}selected{% endif %}>💼 Kasir</option>
+          <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>🛡️ Admin</option>
+        </select>
+        {% endif %}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cabang</label>
+        <select name="branch_id" class="form-control">
+          <option value="">— Semua cabang —</option>
+          {% for b in branches %}
+          <option value="{{ b.id }}" {% if user.branch_id == b.id %}selected{% endif %}>{{ b.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" name="aktif" value="1" {% if user.aktif %}checked{% endif %} {% if user.id == current_user.id %}disabled{% endif %}>
+          <span>Pengguna aktif (bisa login)</span>
+        </label>
+        {% if user.id == current_user.id %}
+        <input type="hidden" name="aktif" value="1">
+        <p class="text-muted" style="font-size:12px;margin-top:6px;">Akun Anda selalu aktif.</p>
+        {% endif %}
+      </div>
+
+      <hr style="border-color:var(--border);margin:20px 0;">
+      <div class="card-title" style="font-size:15px;margin-bottom:8px;">🔐 Hak akses modul</div>
+      <p class="text-muted" style="font-size:12px;margin-bottom:12px;">Default mengikuti role (semua modul). Centang di bawah untuk membatasi menu &amp; halaman yang bisa dibuka.</p>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;">
+          <input type="checkbox" name="use_custom_perms" value="1" id="useCustomPerm" {% if use_custom_perms %}checked{% endif %}>
+          Batasi akses modul (kustom)
+        </label>
+      </div>
+      <fieldset id="permFieldset" class="perm-fieldset">
+        {% for key, label in PERMISSION_MODULES %}
+        <label class="perm-check">
+          <input type="checkbox" name="perm" value="{{ key }}" {% if key in perm_codes_checked %}checked{% endif %}>
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+      <script>
+      (function(){
+        var u = document.getElementById('useCustomPerm');
+        var f = document.getElementById('permFieldset');
+        if (!u || !f) return;
+        function sync() {
+          f.disabled = !u.checked;
+          f.style.opacity = u.checked ? '1' : '0.45';
+        }
+        u.addEventListener('change', sync);
+        sync();
+      })();
+      </script>
+
+      <hr style="border-color:var(--border);margin:20px 0;">
+      <div class="card-title" style="font-size:15px;margin-bottom:12px;">🔑 Password baru (opsional)</div>
+      <p class="text-muted" style="font-size:12px;margin-bottom:12px;">Kosongkan jika tidak diubah. Mengisi akan mengeluarkan pengguna dari perangkat lain.</p>
+      <div class="form-group">
+        <label class="form-label">Password baru</label>
+        <input type="password" name="password_new" class="form-control" placeholder="Minimal 8 karakter" minlength="8" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Konfirmasi password baru</label>
+        <input type="password" name="password_confirm" class="form-control" placeholder="Ulangi password baru" minlength="8" autocomplete="new-password">
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">
+        <button type="submit" class="btn btn-primary">💾 Simpan</button>
+        <a href="{{ url_for('admin.users') }}" class="btn btn-outline">← Kembali</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

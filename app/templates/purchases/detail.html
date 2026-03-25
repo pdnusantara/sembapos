@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}Detail PO: {{ po.nomor }}{% endblock %}
+{% block page_title %}📄 Detail Purchase Order{% endblock %}
+{% block page_sub %}Nomor: <span style="font-family:monospace;color:var(--primary-light);">{{ po.nomor }}</span>{% endblock %}
+
+{% block content %}
+<div class="layout-two-col">
+  
+  <div class="card">
+    <div class="card-header"><div class="card-title">Daftar Barang Pesanan</div></div>
+    
+    {% if po.status == 'dipesan' %}
+    <form method="POST" action="{{ url_for('purchases.receive', id=po.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    {% endif %}
+    
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Produk</th>
+            <th>Harga Beli</th>
+            <th>Qty Pesan</th>
+            {% if po.status != 'draft' %}<th>Qty Terima</th>{% endif %}
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in po.items %}
+          <tr>
+            <td style="font-weight:600;">{{ item.nama_produk }}</td>
+            <td>Rp {{ "{:,.0f}".format(item.harga_beli).replace(",",".") }}</td>
+            <td>{{ item.qty_pesan }}</td>
+            
+            {% if po.status != 'draft' %}
+            <td>
+              {% if po.status == 'dipesan' %}
+              <!-- Input qty terima aktual -->
+              <input type="number" name="terima_{{ item.id }}" class="form-control" style="width:100px;padding:4px 8px;" step="0.1" value="{{ item.qty_pesan }}" required>
+              {% else %}
+              <strong style="color:var(--success);">{{ item.qty_terima }}</strong>
+              {% endif %}
+            </td>
+            {% endif %}
+            
+            <td style="font-weight:600;">Rp {{ "{:,.0f}".format(item.subtotal).replace(",",".") }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="{{ 4 if po.status != 'draft' else 3 }}" style="text-align:right;font-weight:600;">TOTAL</td>
+            <td style="font-weight:700;color:var(--primary-light);font-size:16px;">Rp {{ "{:,.0f}".format(po.total).replace(",",".") }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    {% if po.status == 'dipesan' %}
+    <div style="padding:16px;background:rgba(76,175,80,0.1);border-top:1px solid rgba(76,175,80,0.2);margin-top:10px;">
+      <div style="font-size:14px;color:var(--success);margin-bottom:12px;">✅ Klik tombol di bawah ini jika barang fisik sudah datang di toko. Stok akan otomatis ditambahkan ke inventory.</div>
+      <button type="submit" class="btn btn-success">📦 Terima Barang & Update Stok</button>
+    </div>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Informasi Pesanan</div></div>
+    
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--text-muted);">Status PO</div>
+      <span class="badge {{ 'badge-warning' if po.status == 'dipesan' else ('badge-success' if po.status == 'diterima' else 'badge-danger') }}" style="font-size:14px;">
+        {{ po.status|upper }}
+      </span>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--text-muted);">Supplier</div>
+      <div style="font-weight:600;">{{ po.supplier.nama }}</div>
+      {% if po.supplier.telepon %}<div style="font-size:12px;">📞 {{ po.supplier.telepon }}</div>{% endif %}
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--text-muted);">Tanggal Pesan</div>
+      <div>📅 {{ po.tanggal_pesan.strftime('%d %b %Y - %H:%M') }}</div>
+    </div>
+    
+    {% if po.tanggal_terima %}
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--text-muted);">Tanggal Diterima</div>
+      <div style="color:var(--success);">✅ {{ po.tanggal_terima.strftime('%d %b %Y - %H:%M') }}</div>
+    </div>
+    {% endif %}
+
+    {% if po.catatan %}
+    <div style="margin-bottom:16px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:13px;font-style:italic;">
+      "{{ po.catatan }}"
+    </div>
+    {% endif %}
+    
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:24px;">
+      {% if po.status == 'dipesan' and current_user.is_admin %}
+      <form method="POST" action="{{ url_for('purchases.cancel', id=po.id) }}" onsubmit="return confirm('Yakin ingin membatalkan pesanan ini?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-outline btn-block" style="color:var(--danger);border-color:var(--danger);">❌ Batalkan Pesanan</button>
+      </form>
+      {% endif %}
+      <a href="{{ url_for('purchases.index') }}" class="btn btn-outline btn-block">← Kembali List PO</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

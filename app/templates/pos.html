@@ -1,0 +1,1139 @@
+{% extends 'base.html' %}
+{% block title %}Kasir / POS{% endblock %}
+{% block page_title %}🛒 Kasir / POS{% endblock %}
+{% block page_sub %}Point of Sale — {{ branch.nama if branch else 'Semua Cabang' }}{% endblock %}
+
+{% block content %}
+<div class="pos-page-bleed">
+<div class="card pos-shift-strip" id="posShiftStrip" style="margin-bottom:12px;padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;border-radius:12px;">
+  <div id="posShiftStripText" class="text-muted" style="font-size:14px;">Memuat status shift…</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button type="button" id="btnOpenShift" class="btn btn-primary btn-sm" style="display:none;">Buka shift</button>
+    <button type="button" id="btnCloseShift" class="btn btn-outline btn-sm" style="display:none;">Tutup shift</button>
+  </div>
+</div>
+<div class="pos-layout">
+  <div class="pos-products">
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" class="form-control" placeholder="Cari / scan barcode, Enter = item pertama" autocomplete="off">
+    </div>
+
+    {% if categories %}
+    <div class="pos-cat-bar" id="categoryBar">
+      <button type="button" class="pos-cat-chip active" data-cat="all">Semua</button>
+      {% for c in categories %}
+      <button type="button" class="pos-cat-chip" data-cat="{{ c.id }}">{{ c.nama }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="pos-search-panel" id="ajaxSearchPanel"></div>
+
+    <div class="pos-products-grid" id="productGrid">
+      {% for p in products %}
+      <div class="product-card pos-product-add"
+           data-id="{{ p.id }}"
+           data-nama="{{ p.nama|e }}"
+           data-harga="{{ p.harga_jual }}"
+           data-harga-ecer="{{ p.harga_jual }}"
+           data-min-g1="{{ p.min_qty_grosir_1 or '' }}"
+           data-harga-g1="{{ p.harga_jual_grosir_1 or '' }}"
+           data-min-g2="{{ p.min_qty_grosir_2 or '' }}"
+           data-harga-g2="{{ p.harga_jual_grosir_2 or '' }}"
+           data-name="{{ p.nama|lower }}"
+           data-barcode="{{ (p.barcode or '')|lower }}"
+           data-cat="{{ p.category_id or 0 }}"
+           data-stok="{{ p.stok }}"
+           data-satuan="{{ p.satuan|e }}"
+           data-stok-min="{{ p.stok_minimum }}">
+        {% if p.gambar %}
+        <img class="pos-product-thumb" src="{{ url_for('static', filename=p.gambar) }}" alt="">
+        {% else %}
+        <span class="product-emoji">
+          {% if p.category and p.category.nama %}
+            {% set name = p.category.nama|lower %}
+            {% if 'beras' in name or 'gula' in name %}🍚{% elif 'minyak' in name %}🍶{% elif 'tepung' in name %}🌾{% elif 'garam' in name %}🧂{% elif 'sabun' in name or 'detergen' in name %}🧹{% elif 'minuman' in name or 'air' in name %}💧{% elif 'snack' in name or 'cemilan' in name %}🍿{% elif 'kopi' in name or 'teh' in name %}☕{% else %}📦{% endif %}
+          {% else %}📦{% endif %}
+        </span>
+        {% endif %}
+        <div class="product-name">{{ p.nama }}</div>
+        <div class="product-price">Ecer Rp {{ "{:,.0f}".format(p.harga_jual).replace(",",".") }}</div>
+        {% if p.min_qty_grosir_1 and p.harga_jual_grosir_1 %}
+        <div style="font-size:11px;color:var(--text-muted);">G1 ≥ {{ p.min_qty_grosir_1 }}: Rp {{ "{:,.0f}".format(p.harga_jual_grosir_1).replace(",",".") }}</div>
+        {% endif %}
+        {% if p.min_qty_grosir_2 and p.harga_jual_grosir_2 %}
+        <div style="font-size:11px;color:var(--text-muted);">G2 ≥ {{ p.min_qty_grosir_2 }}: Rp {{ "{:,.0f}".format(p.harga_jual_grosir_2).replace(",",".") }}</div>
+        {% endif %}
+        <div class="product-stock {{ 'low' if p.stok <= p.stok_minimum else '' }}">
+          Stok: {{ p.stok|int if p.stok == p.stok|int else p.stok }} {{ p.satuan }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if not products %}
+    <div style="text-align:center;padding:60px;color:var(--text-muted);">
+      <div style="font-size:48px;margin-bottom:12px;">📭</div>
+      <p>Belum ada produk. <a href="{{ url_for('products.add') }}">Tambah produk</a> terlebih dahulu.</p>
+    </div>
+    {% endif %}
+
+    <div class="pos-recent" id="posRecent" style="display:none;">
+      <div class="pos-recent-title">Transaksi hari ini</div>
+      <div id="posRecentList"></div>
+    </div>
+  </div>
+
+  <div class="pos-cart">
+    <div class="cart-header">
+      <div class="cart-title">🛒 Keranjang</div>
+      <div class="cart-header-actions">
+        <button type="button" class="btn btn-outline btn-sm" onclick="holdCart()" title="Simpan keranjang">⏸️ Tahan</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="recallCart()" title="Ambil keranjang tertahan">▶️ Ambil</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="clearCart()">🗑️ Kosongkan</button>
+      </div>
+    </div>
+
+    <div id="cartEmpty" class="cart-empty">
+      <div class="cart-empty-icon">🛒</div>
+      <div class="cart-empty-text">Keranjang masih kosong</div>
+      <div style="font-size:12px;color:var(--text-muted);">Klik produk atau pilih dari hasil pencarian</div>
+    </div>
+
+    <div class="cart-items" id="cartItems" style="display:none;"></div>
+
+    <div class="cart-footer">
+      <div class="cart-summary">
+        <div class="cart-row">
+          <span>Subtotal</span>
+          <span id="subtotalDisplay">Rp 0</span>
+        </div>
+        <div class="cart-row" id="diskonMemberRow" style="display:none;">
+          <span>Diskon member</span>
+          <span id="diskonMemberDisplay" class="text-success">Rp 0</span>
+        </div>
+        <div class="cart-row cart-row--diskon">
+          <span>Diskon manual (Rp)</span>
+          <span>
+            <input type="number" id="diskonInput" class="form-control pos-diskon-field" value="0" min="0" oninput="recalculate()">
+          </span>
+        </div>
+        <div class="cart-total">
+          <span class="total-label">💰 TOTAL</span>
+          <span class="total-value" id="totalDisplay">Rp 0</span>
+        </div>
+      </div>
+
+      <button type="button" class="btn-checkout btn-checkout--open-pay" id="openPayModalBtn" disabled onclick="openPayModal()">
+        💳 Bayar
+      </button>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="payModal" onclick="if(event.target===this)closePayModal()">
+  <div class="modal pos-pay-modal" onclick="event.stopPropagation()">
+    <div class="pos-pay-modal-head">
+      <div>
+        <div class="modal-title pos-pay-modal-title">Pembayaran</div>
+        <div class="pos-pay-modal-total-line">Total tagihan <strong id="payModalTotal">Rp 0</strong></div>
+      </div>
+      <button type="button" class="pos-pay-modal-close" onclick="closePayModal()" aria-label="Tutup">✕</button>
+    </div>
+
+    <div class="cart-payment pos-pay-modal-body">
+      <div class="payment-methods">
+        <button type="button" class="method-btn active" data-method="tunai" onclick="setMethod('tunai',this)">💵 Tunai</button>
+        <button type="button" class="method-btn" data-method="transfer" onclick="setMethod('transfer',this)">🏦 Transfer</button>
+        <button type="button" class="method-btn" data-method="qris" onclick="setMethod('qris',this)">📱 QRIS</button>
+        <button type="button" class="method-btn method-btn--danger" data-method="kredit" onclick="setMethod('kredit',this)">💳 Kredit</button>
+      </div>
+
+      <div id="cashSection">
+        <label class="form-label" style="margin-top:8px;">Uang dibayar</label>
+        <div class="payment-input">
+          <span class="currency-prefix">Rp</span>
+          <input type="number" id="bayarInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
+        </div>
+        <div class="pos-quick-cash" id="quickCash"></div>
+        <div class="change-display" id="changeDisplay" style="margin-top:10px;">
+          <span class="change-label">💵 Kembalian</span>
+          <span class="change-value">Rp 0</span>
+        </div>
+      </div>
+
+      <label class="form-label" style="margin-top:12px;">Member</label>
+      <select id="memberSelect" class="form-control" style="font-size:14px;">
+        <option value="" data-diskon="0">— Transaksi umum (bukan member) —</option>
+        {% for m in members %}
+        <option value="{{ m.id }}" data-diskon="{{ m.diskon_persen or 0 }}">{{ m.nama }} ({{ m.telepon }}) — ⭐ {{ m.poin }}{% if m.diskon_persen %} — diskon {{ m.diskon_persen|int }}%{% endif %}</option>
+        {% endfor %}
+      </select>
+
+      <div id="debtDueRow" style="display:none;margin-top:10px;">
+        <label class="form-label">Jatuh tempo hutang (opsional)</label>
+        <input type="date" id="debtJatuhTempo" class="form-control" title="Untuk transaksi kredit">
+      </div>
+
+      <input type="text" id="catatanInput" class="form-control" placeholder="Catatan (opsional)..." style="margin-top:10px;">
+
+      <button type="button" class="btn-checkout" id="checkoutBtn" onclick="checkout()" disabled style="margin-top:14px;">
+        🧾 Proses pembayaran
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="successModal">
+  <div class="modal" style="text-align:center;max-width:380px;">
+    <div class="success-animation">
+      <span class="success-icon">✅</span>
+      <h2 style="color:var(--text-light);margin-bottom:8px;">Transaksi Berhasil!</h2>
+      <p class="text-muted" id="successNomor"></p>
+    </div>
+    <div style="background:rgba(255,255,255,0.04);border-radius:12px;padding:16px;margin:16px 0;text-align:left;">
+      <div class="cart-row"><span>Total</span><span id="successTotal" class="fw-bold text-light"></span></div>
+      <div class="cart-row"><span>Dibayar</span><span id="successBayar" class="fw-bold"></span></div>
+      <div class="cart-row" id="successChangeRow"><span>Kembalian</span><span id="successKembalian" class="fw-bold text-success"></span></div>
+      <div class="cart-row" id="successPointRow" style="display:none;"><span>Poin didapat</span><span id="successPoint" class="fw-bold text-warning"></span></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <a id="btnCetakStruk" href="#" target="_blank" class="btn btn-primary" style="flex:1;min-width:140px;">🖨️ Cetak struk</a>
+      <button type="button" class="btn btn-outline" style="flex:1;min-width:140px;" onclick="closeSuccessModal()">🆕 Transaksi baru</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="shiftOpenModal" onclick="if(event.target===this)closeShiftOpenModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:420px;">
+    <div class="modal-title">Buka shift</div>
+    <p class="text-muted" style="font-size:13px;margin-bottom:12px;">Masukkan saldo awal uang di laci sebelum melayani penjualan.</p>
+    <label class="form-label">Saldo awal (Rp)</label>
+    <input type="number" id="shiftOpeningFloat" class="form-control" min="0" step="1" value="0">
+    <label class="form-label" style="margin-top:10px;">Catatan (opsional)</label>
+    <input type="text" id="shiftNoteOpen" class="form-control" placeholder="Keterangan">
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-primary" id="shiftOpenSubmit" onclick="submitOpenShift()">Simpan &amp; buka</button>
+      <button type="button" class="btn btn-outline" onclick="closeShiftOpenModal()">Batal</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="shiftCloseModal" onclick="if(event.target===this)closeShiftCloseModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:440px;">
+    <div class="modal-title">Tutup shift</div>
+    <p class="text-muted" style="font-size:13px;">Ekspektasi tunai: <strong id="shiftCloseExpected">Rp 0</strong> (saldo awal + penjualan tunai selesai).</p>
+    <label class="form-label">Uang fisik di laci (Rp)</label>
+    <input type="number" id="shiftClosingCounted" class="form-control" min="0" step="1" value="0" oninput="updateShiftClosePreview()">
+    <p id="shiftClosePreview" class="text-muted" style="font-size:13px;margin-top:8px;">Selisih: —</p>
+    <label class="form-label" style="margin-top:10px;">Catatan tutup (opsional)</label>
+    <input type="text" id="shiftNoteClose" class="form-control" placeholder="Keterangan">
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-primary" id="shiftCloseSubmit" onclick="submitCloseShift()">Tutup shift</button>
+      <button type="button" class="btn btn-outline" onclick="closeShiftCloseModal()">Batal</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.POS_CAN_OVERRIDE = {{ can_override_price|tojson }};
+const POS_HOLD_KEY = 'sembako_pos_hold_v1';
+
+let shiftOpen = false;
+let shiftSnapshot = null;
+
+let cart = [];
+let selectedMethod = 'tunai';
+let selectedCategory = 'all';
+let ajaxSearchResults = [];
+let searchDebounce = null;
+
+function qtyStep(satuan) {
+  const s = String(satuan || '').toLowerCase();
+  if (['kg','liter','l','ml','gram','g'].includes(s)) return 0.01;
+  return 1;
+}
+
+function formatQty(q) {
+  const n = Number(q);
+  if (Number.isInteger(n)) return String(n);
+  const t = Math.round(n * 1000) / 1000;
+  return String(t).replace(/\.?0+$/, '');
+}
+
+function buildTiersFromRaw(raw) {
+  const base = parseFloat(raw.harga_ecer != null ? raw.harga_ecer : raw.harga) || 0;
+  const tiers = [{ minQty: 1, harga: base, label: 'ecer' }];
+  const min1 = parseFloat(raw.min_qty_grosir_1 || '');
+  const h1 = parseFloat(raw.harga_jual_grosir_1 || '');
+  const min2 = parseFloat(raw.min_qty_grosir_2 || '');
+  const h2 = parseFloat(raw.harga_jual_grosir_2 || '');
+  if (!isNaN(min1) && min1 > 1 && !isNaN(h1) && h1 > 0) tiers.push({ minQty: min1, harga: h1, label: 'grosir1' });
+  if (!isNaN(min2) && min2 > 1 && !isNaN(h2) && h2 > 0) tiers.push({ minQty: min2, harga: h2, label: 'grosir2' });
+  tiers.sort((a, b) => a.minQty - b.minQty);
+  return tiers;
+}
+
+function effectivePriceForQty(item, qty) {
+  let picked = { harga: item.baseHarga, label: 'ecer', minQty: 1 };
+  (item.tiers || []).forEach(t => { if (qty >= t.minQty) picked = t; });
+  return picked;
+}
+
+function applyAutoTierPrice(item) {
+  const picked = effectivePriceForQty(item, item.qty);
+  item.harga = picked.harga;
+  item.priceLabel = picked.label;
+  item.subtotal = item.harga * item.qty;
+}
+
+function applyPriceMode(item) {
+  const mode = item.priceMode || 'auto';
+  if (mode === 'manual' && window.POS_CAN_OVERRIDE) {
+    item.priceLabel = 'manual';
+    item.subtotal = item.harga * item.qty;
+    return;
+  }
+  if (mode === 'ecer') {
+    item.harga = item.baseHarga;
+    item.priceLabel = 'ecer';
+    item.subtotal = item.harga * item.qty;
+    return;
+  }
+  applyAutoTierPrice(item);
+}
+
+function getMemberDiskonPct() {
+  const sel = document.getElementById('memberSelect');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !sel.value) return 0;
+  return parseFloat(opt.getAttribute('data-diskon') || '0') || 0;
+}
+
+function subtotalBruto() {
+  return cart.reduce((s, i) => s + (i.harga * i.qty), 0);
+}
+
+function diskonMemberAmount() {
+  return subtotalBruto() * (getMemberDiskonPct() / 100);
+}
+
+function diskonManualVal() {
+  return Math.max(0, parseFloat(document.getElementById('diskonInput').value) || 0);
+}
+
+function totalAkhir() {
+  return Math.max(0, subtotalBruto() - diskonMemberAmount() - diskonManualVal());
+}
+
+function addToCart(id, nama, harga, stok, satuan, qtyAdd, raw) {
+  const step = qtyStep(satuan);
+  const add = (qtyAdd != null && qtyAdd > 0) ? qtyAdd : step;
+  const existing = cart.find(i => i.id === id);
+  if (existing) {
+    const next = existing.qty + add;
+    if (next > stok) {
+      showToast('Stok ' + String(nama) + ' tidak cukup! (sisa: ' + stok + ' ' + String(satuan) + ')', 'error');
+      return;
+    }
+    existing.qty = next;
+    applyPriceMode(existing);
+  } else {
+    if (add > stok) {
+      showToast('Stok ' + String(nama) + ' tidak cukup! (sisa: ' + stok + ' ' + String(satuan) + ')', 'error');
+      return;
+    }
+    const tiers = buildTiersFromRaw(raw || { harga: harga });
+    const item = {
+      id, nama, harga, baseHarga: harga, stok, satuan,
+      tiers: tiers, qty: add, subtotal: harga * add,
+      isManualPrice: false, priceLabel: 'ecer', priceMode: 'auto'
+    };
+    applyPriceMode(item);
+    cart.push(item);
+  }
+  animateCard(id);
+  renderCart();
+}
+
+function animateCard(id) {
+  const card = document.querySelector(`.product-card[data-id="${id}"]`);
+  if (card) {
+    card.style.transform = 'scale(0.93)';
+    setTimeout(() => { card.style.transform = ''; }, 150);
+  }
+}
+
+function changeQty(id, dir) {
+  const item = cart.find(i => i.id === id);
+  if (!item) return;
+  const step = qtyStep(item.satuan);
+  const next = item.qty + dir * step;
+  if (next <= 0) {
+    cart = cart.filter(i => i.id !== id);
+  } else {
+    if (next > item.stok) {
+      showToast('Stok ' + String(item.nama) + ' tidak cukup!', 'error');
+      return;
+    }
+    item.qty = Math.round(next / step) * step;
+    if (item.qty < step) item.qty = step;
+    applyPriceMode(item);
+  }
+  renderCart();
+}
+
+function setCartPrice(id, val) {
+  if (!window.POS_CAN_OVERRIDE) return;
+  const item = cart.find(i => i.id === id);
+  if (!item) return;
+  let h = parseFloat(String(val).replace(',', '.'));
+  if (isNaN(h) || h < 0) { renderCart(); return; }
+  item.harga = h;
+  item.isManualPrice = true;
+  item.priceMode = 'manual';
+  item.priceLabel = 'manual';
+  item.subtotal = item.harga * item.qty;
+  renderCart();
+}
+
+function setPriceMode(id, mode) {
+  const item = cart.find(i => i.id === id);
+  if (!item) return;
+  const m = String(mode || '').toLowerCase();
+  if (m === 'manual' && !window.POS_CAN_OVERRIDE) return;
+  item.priceMode = (m === 'ecer' || m === 'manual') ? m : 'auto';
+  item.isManualPrice = item.priceMode === 'manual';
+  if (item.priceMode !== 'manual') item.harga = item.baseHarga;
+  applyPriceMode(item);
+  renderCart();
+}
+
+function removeItem(id) {
+  cart = cart.filter(i => i.id !== id);
+  renderCart();
+}
+
+function clearCart() {
+  if (cart.length === 0) return;
+  if (!confirm('Kosongkan keranjang?')) return;
+  cart = [];
+  renderCart();
+}
+
+function holdCart() {
+  if (cart.length === 0) {
+    showToast('Keranjang kosong', 'warning');
+    return;
+  }
+  const payload = {
+    cart,
+    diskon: diskonManualVal(),
+    memberId: document.getElementById('memberSelect').value,
+    catatan: document.getElementById('catatanInput').value,
+    method: selectedMethod,
+    at: Date.now()
+  };
+  try {
+    localStorage.setItem(POS_HOLD_KEY, JSON.stringify(payload));
+    showToast('Keranjang ditahan', 'success');
+    cart = [];
+    document.getElementById('diskonInput').value = 0;
+    document.getElementById('memberSelect').value = '';
+    document.getElementById('catatanInput').value = '';
+    renderCart();
+  } catch (e) {
+    showToast('Tidak bisa menyimpan (penyimpanan penuh?)', 'error');
+  }
+}
+
+function recallCart() {
+  let raw;
+  try {
+    raw = localStorage.getItem(POS_HOLD_KEY);
+  } catch (e) { return; }
+  if (!raw) {
+    showToast('Tidak ada keranjang tertahan', 'info');
+    return;
+  }
+  let payload;
+  try { payload = JSON.parse(raw); } catch (e) { return; }
+  if (cart.length > 0 && !confirm('Ganti keranjang aktif dengan yang tertahan?')) return;
+  cart = (payload.cart || []).map(i => ({
+    ...i,
+    tiers: i.tiers || buildTiersFromRaw(i),
+    baseHarga: (i.baseHarga != null ? i.baseHarga : i.harga),
+    priceMode: i.priceMode || (i.isManualPrice ? 'manual' : 'auto'),
+    subtotal: (i.harga || 0) * (i.qty || 0)
+  }));
+  cart.forEach(i => applyPriceMode(i));
+  document.getElementById('diskonInput').value = payload.diskon || 0;
+  document.getElementById('memberSelect').value = payload.memberId || '';
+  document.getElementById('catatanInput').value = payload.catatan || '';
+  if (payload.method) {
+    const b = document.querySelector('#payModal .method-btn[data-method="' + payload.method + '"]');
+    if (b) setMethod(payload.method, b);
+  }
+  renderCart();
+  showToast('Keranjang diambil', 'success');
+}
+
+function openPayModal() {
+  if (cart.length === 0) return;
+  if (!shiftOpen) {
+    showToast('Buka shift terlebih dahulu sebelum checkout.', 'warning');
+    document.getElementById('shiftOpenModal').classList.add('active');
+    return;
+  }
+  updateTotals();
+  calcChange();
+  document.getElementById('payModal').classList.add('active');
+  setTimeout(function() {
+    const el = document.getElementById('bayarInput');
+    if (el && document.getElementById('cashSection').style.display !== 'none') el.focus();
+  }, 120);
+}
+
+function closePayModal() {
+  document.getElementById('payModal').classList.remove('active');
+}
+
+function renderCart() {
+  const itemsEl = document.getElementById('cartItems');
+  const emptyEl = document.getElementById('cartEmpty');
+  const openPayBtn = document.getElementById('openPayModalBtn');
+
+  if (cart.length === 0) {
+    itemsEl.style.display = 'none';
+    emptyEl.style.display = 'flex';
+    if (openPayBtn) openPayBtn.disabled = true;
+    closePayModal();
+    updateTotals();
+    return;
+  }
+
+  itemsEl.style.display = 'block';
+  emptyEl.style.display = 'none';
+  if (openPayBtn) openPayBtn.disabled = !shiftOpen;
+
+  const priceCell = (item) => {
+    const sid = String(item.id);
+    const hq = String(item.harga);
+    const modeSelect =
+      '<label class="cart-price-mode"><span>Mode</span>' +
+      '<select class="form-control cart-price-mode-select" onchange="setPriceMode(' + sid + ', this.value)">' +
+      '<option value="auto"' + ((item.priceMode || 'auto') === 'auto' ? ' selected' : '') + '>Auto grosir</option>' +
+      '<option value="ecer"' + ((item.priceMode || '') === 'ecer' ? ' selected' : '') + '>Paksa ecer</option>' +
+      (window.POS_CAN_OVERRIDE ? '<option value="manual"' + ((item.priceMode || '') === 'manual' ? ' selected' : '') + '>Manual</option>' : '') +
+      '</select></label>';
+    if (!window.POS_CAN_OVERRIDE) {
+      const lbl = item.priceLabel === 'grosir2' ? 'G2' : (item.priceLabel === 'grosir1' ? 'G1' : 'ecer');
+      return '<div class="cart-item-price">' + formatRupiah(item.harga) + ' <span class="cart-item-unit">/ ' + escapeHtml(String(item.satuan)) + '</span>' +
+        ' <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">[' + lbl + ']</span></div>' + modeSelect;
+    }
+    const manualField = (item.priceMode === 'manual')
+      ? ('<label class="cart-price-field"><span class="cart-price-label">Harga Manual</span>' +
+      '<input type="number" class="form-control cart-price-input" min="0" step="100" value="' + hq + '" ' +
+      'onchange="setCartPrice(' + sid + ', this.value)" title="Harga jual (admin)" inputmode="numeric"></label>')
+      : '<div class="cart-item-price">' + formatRupiah(item.harga) + ' <span class="cart-item-unit">/ ' + escapeHtml(String(item.satuan)) + '</span></div>';
+    return '<div class="cart-price-stack">' + manualField + modeSelect + '</div>';
+  };
+
+  itemsEl.innerHTML = cart.map(item => {
+    const sid = String(item.id);
+    const po = window.POS_CAN_OVERRIDE ? ' cart-item--override' : '';
+    return '<div class="cart-item' + po + '" id="cart-item-' + sid + '">' +
+      '<div class="cart-item-head">' +
+        '<div class="cart-item-name">' + escapeHtml(item.nama) + '</div>' +
+        '<div class="cart-item-subtotal">' + formatRupiah(item.harga * item.qty) + '</div>' +
+      '</div>' +
+      '<div class="cart-item-foot">' +
+        '<div class="cart-item-meta">' + priceCell(item) +
+          (item.priceMode === 'auto' ? '<div class="cart-auto-label">Auto: ' + (item.priceLabel === 'grosir2' ? 'G2' : (item.priceLabel === 'grosir1' ? 'G1' : 'ecer')) + '</div>' : '') +
+        '</div>' +
+        '<div class="cart-item-qty" role="group" aria-label="Jumlah">' +
+          '<button type="button" class="qty-btn remove" onclick="removeItem(' + sid + ')" title="Hapus">🗑</button>' +
+          '<button type="button" class="qty-btn" onclick="changeQty(' + sid + ',-1)" title="Kurangi">−</button>' +
+          '<span class="qty-display">' + formatQty(item.qty) + '</span>' +
+          '<button type="button" class="qty-btn" onclick="changeQty(' + sid + ',1)" title="Tambah">+</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  updateTotals();
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function updateTotals() {
+  const bruto = subtotalBruto();
+  const dm = diskonMemberAmount();
+  const manual = diskonManualVal();
+  const total = Math.max(0, bruto - dm - manual);
+
+  document.getElementById('subtotalDisplay').textContent = formatRupiah(bruto);
+  const dmRow = document.getElementById('diskonMemberRow');
+  if (dm > 0.001) {
+    dmRow.style.display = 'flex';
+    document.getElementById('diskonMemberDisplay').textContent = '− ' + formatRupiah(dm);
+  } else {
+    dmRow.style.display = 'none';
+  }
+  document.getElementById('totalDisplay').textContent = formatRupiah(total);
+  const payTot = document.getElementById('payModalTotal');
+  if (payTot) payTot.textContent = formatRupiah(total);
+
+  if (total > 0) {
+    const multiples = [1, 2, 5, 10].map(m => Math.ceil(total / (m * 10000)) * m * 10000)
+      .filter((v, i, a) => a.indexOf(v) === i).slice(0, 4);
+    document.getElementById('quickCash').innerHTML = multiples.map(v =>
+      '<button type="button" class="pos-quick-cash-btn" onclick="setQuickCash(' + v + ')">' + formatRupiahShort(v) + '</button>'
+    ).join('');
+  } else {
+    document.getElementById('quickCash').innerHTML = '';
+  }
+  calcChange();
+}
+
+function setQuickCash(val) {
+  document.getElementById('bayarInput').value = val;
+  calcChange();
+}
+
+function recalculate() { updateTotals(); }
+
+function calcChange() {
+  const total = totalAkhir();
+  const bayar = parseFloat(document.getElementById('bayarInput').value) || 0;
+  const kembalian = bayar - total;
+  document.querySelectorAll('#changeDisplay .change-value').forEach(s => {
+    s.textContent = formatRupiah(Math.max(0, kembalian));
+  });
+  document.getElementById('checkoutBtn').disabled = cart.length === 0 || !shiftOpen ||
+    ((selectedMethod === 'tunai' || selectedMethod === 'transfer' || selectedMethod === 'qris') && kembalian < 0);
+}
+
+function setMethod(method, btn) {
+  selectedMethod = method;
+  document.querySelectorAll('#payModal .method-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const cashSection = document.getElementById('cashSection');
+  const dueRow = document.getElementById('debtDueRow');
+  if (method === 'kredit') {
+    cashSection.style.display = 'none';
+    document.getElementById('bayarInput').value = 0;
+    if (dueRow) dueRow.style.display = 'block';
+  } else {
+    cashSection.style.display = 'block';
+    if (dueRow) dueRow.style.display = 'none';
+  }
+  calcChange();
+}
+
+function filterProductGrid(q) {
+  q = q.toLowerCase().trim();
+  let cat = selectedCategory;
+  document.querySelectorAll('#productGrid .product-card').forEach(card => {
+    const name = card.dataset.name || '';
+    const barcode = card.dataset.barcode || '';
+    const c = String(card.dataset.cat || '0');
+    const textOk = !q || name.includes(q) || barcode.includes(q);
+    const catOk = cat === 'all' || c === String(cat);
+    card.style.display = (textOk && catOk) ? '' : 'none';
+  });
+}
+
+function renderAjaxPanel(list) {
+  const panel = document.getElementById('ajaxSearchPanel');
+  if (!list.length) {
+    panel.classList.remove('visible');
+    panel.innerHTML = '';
+    return;
+  }
+  panel.innerHTML = list.map((p, idx) => {
+    const img = p.gambar
+      ? '<img src="/static/' + String(p.gambar).replace(/[^a-zA-Z0-9._\-\/]/g, '') + '" alt="">'
+      : '<span style="font-size:24px;width:40px;text-align:center;">📦</span>';
+    return '<button type="button" class="pos-search-row" data-idx="' + idx + '">' +
+      img +
+      '<div style="flex:1;text-align:left;">' +
+        '<div style="font-weight:600;">' + escapeHtml(p.nama) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);">' + formatRupiah(p.harga) + ' · stok ' + p.stok + ' ' + escapeHtml(String(p.satuan)) + '</div>' +
+      '</div>' +
+    '</button>';
+  }).join('');
+  panel.classList.add('visible');
+  panel.querySelectorAll('.pos-search-row').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = list[parseInt(btn.dataset.idx, 10)];
+      if (p) {
+        addToCart(p.id, p.nama, p.harga, p.stok, p.satuan, null, p);
+        document.getElementById('searchInput').value = '';
+        panel.classList.remove('visible');
+        panel.innerHTML = '';
+        ajaxSearchResults = [];
+        filterProductGrid('');
+      }
+    });
+  });
+}
+
+async function runAjaxSearch(q) {
+  if (q.length < 2) {
+    ajaxSearchResults = [];
+    renderAjaxPanel([]);
+    return;
+  }
+  try {
+    const res = await fetch('/pos/search-products?q=' + encodeURIComponent(q));
+    const data = await res.json();
+    ajaxSearchResults = data;
+    renderAjaxPanel(data);
+  } catch (e) {
+    ajaxSearchResults = [];
+    renderAjaxPanel([]);
+  }
+}
+
+function applyStockUpdates(updates) {
+  if (!updates || !updates.length) return;
+  const map = {};
+  updates.forEach(u => { map[u.id] = u.stok; });
+  document.querySelectorAll('.product-card').forEach(card => {
+    const id = parseInt(card.dataset.id, 10);
+    if (map[id] === undefined) return;
+    const st = map[id];
+    card.dataset.stok = String(st);
+    const sat = card.dataset.satuan || 'pcs';
+    const stockEl = card.querySelector('.product-stock');
+    if (stockEl) {
+      const disp = Number.isInteger(st) ? st : parseFloat(Number(st).toFixed(3));
+      stockEl.textContent = 'Stok: ' + disp + ' ' + sat;
+      const smin = parseFloat(card.dataset.stokMin || '0');
+      stockEl.classList.toggle('low', st <= smin);
+    }
+    if (st <= 0) card.style.display = 'none';
+  });
+  cart.forEach(item => {
+    if (map[item.id] !== undefined) item.stok = map[item.id];
+  });
+}
+
+async function refreshMembersSelect() {
+  try {
+    const res = await fetch('/pos/members');
+    const list = await res.json();
+    const sel = document.getElementById('memberSelect');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="" data-diskon="0">— Transaksi umum (bukan member) —</option>';
+    list.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.setAttribute('data-diskon', m.diskon_persen || 0);
+      o.textContent = m.nama + ' (' + m.telepon + ') — ⭐ ' + m.poin +
+        (m.diskon_persen ? ' — diskon ' + m.diskon_persen + '%' : '');
+      sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
+  } catch (e) {}
+}
+
+function posReceiptHref(id) {
+  return {{ url_for('receipt.view_receipt', id=888888888)|tojson }}.replace('888888888', String(id));
+}
+
+async function loadRecentTransactions() {
+  try {
+    const res = await fetch('/pos/recent-transactions');
+    const rows = await res.json();
+    const box = document.getElementById('posRecent');
+    const list = document.getElementById('posRecentList');
+    if (!rows.length) {
+      box.style.display = 'none';
+      return;
+    }
+    box.style.display = 'block';
+    list.innerHTML = rows.map(r =>
+      '<div class="pos-recent-item">' +
+        '<div>' +
+          '<a href="' + posReceiptHref(r.id) + '" target="_blank">' + escapeHtml(r.nomor) + '</a>' +
+          '<span style="color:var(--text-muted);margin-left:6px;">' + escapeHtml(String(r.created_at)) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<span style="font-weight:600;">' + formatRupiah(r.total) + '</span>' +
+          '<button type="button" class="btn btn-outline btn-sm" onclick="repeatTransaction(' + r.id + ')" title="Ulangi item ke keranjang">↻</button>' +
+        '</div>' +
+      '</div>'
+    ).join('');
+  } catch (e) {}
+}
+
+async function repeatTransaction(tid) {
+  try {
+    const res = await fetch('/pos/transaction/' + tid + '/items');
+    const items = await res.json();
+    if (!items.length) {
+      showToast('Tidak ada baris yang bisa diulang', 'warning');
+      return;
+    }
+    if (cart.length > 0 && !confirm('Gabungkan dengan keranjang sekarang?')) return;
+    items.forEach(it => {
+      addToCart(it.id, it.nama, it.harga, it.stok, it.satuan, it.qty, it);
+    });
+    showToast('Item dimasukkan ke keranjang', 'success');
+  } catch (e) {
+    showToast('Gagal memuat transaksi', 'error');
+  }
+}
+
+function focusSearch() {
+  const el = document.getElementById('searchInput');
+  if (el) setTimeout(() => el.focus(), 100);
+}
+
+function csrfHeaders() {
+  const csrf = document.querySelector('meta[name="csrf-token"]');
+  const h = { 'Content-Type': 'application/json' };
+  if (csrf) h['X-CSRFToken'] = csrf.getAttribute('content') || '';
+  return h;
+}
+
+function applyShiftStripUI() {
+  const textEl = document.getElementById('posShiftStripText');
+  const btnOpen = document.getElementById('btnOpenShift');
+  const btnClose = document.getElementById('btnCloseShift');
+  if (!textEl || !btnOpen || !btnClose) return;
+  if (shiftOpen && shiftSnapshot) {
+    textEl.innerHTML = '<span class="text-success fw-bold">Shift terbuka</span> · dibuka ' +
+      (shiftSnapshot.opened_at ? String(shiftSnapshot.opened_at).replace('T', ' ').slice(0, 16) : '') +
+      ' · saldo awal ' + formatRupiah(shiftSnapshot.opening_float || 0);
+    btnOpen.style.display = 'none';
+    btnClose.style.display = '';
+  } else {
+    textEl.innerHTML = '<span class="text-warning fw-bold">Shift belum dibuka</span> — checkout dinonaktifkan sampai Anda membuka shift.';
+    btnOpen.style.display = '';
+    btnClose.style.display = 'none';
+  }
+}
+
+async function refreshShiftStatus() {
+  try {
+    const res = await fetch('/shifts/api/status');
+    const data = await res.json();
+    shiftOpen = !!data.open;
+    shiftSnapshot = data.shift || null;
+    applyShiftStripUI();
+    const openPayBtn = document.getElementById('openPayModalBtn');
+    if (openPayBtn && cart.length > 0) openPayBtn.disabled = !shiftOpen;
+    calcChange();
+  } catch (e) {
+    const textEl = document.getElementById('posShiftStripText');
+    if (textEl) textEl.textContent = 'Gagal memuat status shift.';
+  }
+}
+
+function closeShiftOpenModal() {
+  document.getElementById('shiftOpenModal').classList.remove('active');
+}
+function openShiftOpenModal() {
+  document.getElementById('shiftOpeningFloat').value = '0';
+  document.getElementById('shiftNoteOpen').value = '';
+  document.getElementById('shiftOpenModal').classList.add('active');
+}
+
+async function submitOpenShift() {
+  const btn = document.getElementById('shiftOpenSubmit');
+  const opening = parseFloat(document.getElementById('shiftOpeningFloat').value);
+  if (isNaN(opening) || opening < 0) {
+    showToast('Saldo awal tidak valid.', 'error');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const res = await fetch('/shifts/api/open', {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: JSON.stringify({
+        opening_float: opening,
+        note_open: document.getElementById('shiftNoteOpen').value || null
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      closeShiftOpenModal();
+      showToast('Shift dibuka.', 'success');
+      await refreshShiftStatus();
+      renderCart();
+    } else {
+      showToast(data.message || 'Gagal buka shift', 'error');
+    }
+  } catch (e) {
+    showToast('Gagal terhubung ke server.', 'error');
+  }
+  btn.disabled = false;
+}
+
+function closeShiftCloseModal() {
+  document.getElementById('shiftCloseModal').classList.remove('active');
+}
+
+function updateShiftClosePreview() {
+  const expEl = document.getElementById('shiftCloseExpected');
+  const prevEl = document.getElementById('shiftClosePreview');
+  if (!shiftSnapshot || shiftSnapshot.expected_cash == null) {
+    if (prevEl) prevEl.textContent = 'Selisih: —';
+    return;
+  }
+  const expected = parseFloat(shiftSnapshot.expected_cash) || 0;
+  if (expEl) expEl.textContent = formatRupiah(expected);
+  const counted = parseFloat(document.getElementById('shiftClosingCounted').value);
+  if (isNaN(counted)) {
+    if (prevEl) prevEl.textContent = 'Selisih: —';
+    return;
+  }
+  const v = counted - expected;
+  if (prevEl) {
+    prevEl.textContent = 'Selisih: ' + formatRupiah(v) + (v === 0 ? ' (pas)' : '');
+    prevEl.className = v === 0 ? 'text-success' : (v > 0 ? 'text-warning' : 'text-danger');
+    prevEl.style.fontSize = '13px';
+    prevEl.style.marginTop = '8px';
+  }
+}
+
+async function openShiftCloseModal() {
+  await refreshShiftStatus();
+  if (!shiftOpen || !shiftSnapshot) {
+    showToast('Tidak ada shift terbuka.', 'info');
+    return;
+  }
+  document.getElementById('shiftClosingCounted').value = String(Math.round(shiftSnapshot.expected_cash || 0));
+  document.getElementById('shiftNoteClose').value = '';
+  document.getElementById('shiftCloseExpected').textContent = formatRupiah(shiftSnapshot.expected_cash || 0);
+  updateShiftClosePreview();
+  document.getElementById('shiftCloseModal').classList.add('active');
+}
+
+async function submitCloseShift() {
+  const counted = parseFloat(document.getElementById('shiftClosingCounted').value);
+  if (isNaN(counted) || counted < 0) {
+    showToast('Jumlah uang fisik tidak valid.', 'error');
+    return;
+  }
+  if (!confirm('Tutup shift sekarang? Setelah tutup Anda harus buka shift lagi untuk checkout.')) return;
+  const btn = document.getElementById('shiftCloseSubmit');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/shifts/api/close', {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: JSON.stringify({
+        closing_counted: counted,
+        note_close: document.getElementById('shiftNoteClose').value || null
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      closeShiftCloseModal();
+      showToast('Shift ditutup.', 'success');
+      await refreshShiftStatus();
+      renderCart();
+    } else {
+      showToast(data.message || 'Gagal tutup shift', 'error');
+    }
+  } catch (e) {
+    showToast('Gagal terhubung ke server.', 'error');
+  }
+  btn.disabled = false;
+}
+
+document.getElementById('searchInput').addEventListener('input', function() {
+  const v = this.value;
+  filterProductGrid(v);
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => runAjaxSearch(v.trim()), 280);
+});
+
+document.getElementById('searchInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (ajaxSearchResults.length > 0) {
+      const p = ajaxSearchResults[0];
+      addToCart(p.id, p.nama, p.harga, p.stok, p.satuan, null, p);
+      this.value = '';
+      document.getElementById('ajaxSearchPanel').classList.remove('visible');
+      document.getElementById('ajaxSearchPanel').innerHTML = '';
+      ajaxSearchResults = [];
+      filterProductGrid('');
+    }
+  }
+});
+
+document.getElementById('memberSelect').addEventListener('change', () => updateTotals());
+
+document.querySelectorAll('#categoryBar .pos-cat-chip').forEach(chip => {
+  chip.addEventListener('click', function() {
+    document.querySelectorAll('#categoryBar .pos-cat-chip').forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    selectedCategory = this.getAttribute('data-cat') || 'all';
+    filterProductGrid(document.getElementById('searchInput').value);
+  });
+});
+
+async function checkout() {
+  if (cart.length === 0) return;
+  const total = totalAkhir();
+  const bayar = (selectedMethod === 'kredit') ? 0 : (parseFloat(document.getElementById('bayarInput').value) || 0);
+  const catatan = document.getElementById('catatanInput').value;
+  const memberId = document.getElementById('memberSelect').value;
+
+  if (selectedMethod !== 'kredit' && bayar < total) {
+    showToast('Uang bayar kurang!', 'error');
+    return;
+  }
+  if (selectedMethod === 'kredit' && !memberId) {
+    showToast('Transaksi kredit wajib memilih member!', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('checkoutBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Memproses...';
+
+  const payloadItems = cart.map(i => {
+    const o = { id: i.id, qty: i.qty, price_mode: i.priceMode || 'auto' };
+    if (window.POS_CAN_OVERRIDE && o.price_mode === 'manual') o.harga = i.harga;
+    return o;
+  });
+
+  try {
+    const csrf = document.querySelector('meta[name="csrf-token"]');
+    const res = await fetch('/pos/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf ? csrf.getAttribute('content') : '',
+      },
+      body: JSON.stringify({
+        items: payloadItems,
+        bayar: bayar,
+        metode_bayar: selectedMethod,
+        diskon: diskonManualVal(),
+        catatan: catatan,
+        member_id: memberId || null,
+        debt_jatuh_tempo: (selectedMethod === 'kredit' && document.getElementById('debtJatuhTempo') && document.getElementById('debtJatuhTempo').value)
+          ? document.getElementById('debtJatuhTempo').value
+          : null
+      })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      applyStockUpdates(data.stock_updates);
+      closePayModal();
+      showSuccessModal(data);
+      cart = [];
+      renderCart();
+      document.getElementById('diskonInput').value = 0;
+      document.getElementById('bayarInput').value = '';
+      document.getElementById('catatanInput').value = '';
+      refreshMembersSelect();
+      loadRecentTransactions();
+    } else {
+      showToast(data.message || 'Transaksi gagal!', 'error');
+    }
+  } catch (e) {
+    showToast('Gagal terhubung ke server!', 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '🧾 Proses pembayaran';
+}
+
+function showSuccessModal(data) {
+  document.getElementById('successNomor').textContent = '# ' + data.nomor;
+  document.getElementById('successTotal').textContent = formatRupiah(data.total);
+  document.getElementById('successBayar').textContent = formatRupiah(data.bayar);
+  document.getElementById('successKembalian').textContent = formatRupiah(data.kembalian);
+
+  const btnCetak = document.getElementById('btnCetakStruk');
+  if (btnCetak && data.transaction_id) {
+    btnCetak.href = posReceiptHref(data.transaction_id);
+  }
+
+  document.getElementById('successChangeRow').style.display = data.kembalian > 0 ? 'flex' : 'none';
+
+  const pointRow = document.getElementById('successPointRow');
+  if (data.poin > 0) {
+    document.getElementById('successPoint').textContent = '⭐ +' + data.poin;
+    pointRow.style.display = 'flex';
+  } else {
+    pointRow.style.display = 'none';
+  }
+
+  document.getElementById('successModal').classList.add('active');
+}
+
+function closeSuccessModal() {
+  document.getElementById('successModal').classList.remove('active');
+  focusSearch();
+}
+
+function formatRupiahShort(num) {
+  if (num >= 1000000) return 'Rp ' + (num / 1000000).toFixed(0) + 'jt';
+  if (num >= 1000) return 'Rp ' + (num / 1000).toFixed(0) + 'rb';
+  return 'Rp ' + num;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const bo = document.getElementById('btnOpenShift');
+  const bc = document.getElementById('btnCloseShift');
+  if (bo) bo.addEventListener('click', openShiftOpenModal);
+  if (bc) bc.addEventListener('click', openShiftCloseModal);
+
+  const grid = document.getElementById('productGrid');
+  if (grid) {
+    grid.addEventListener('click', function(e) {
+      const card = e.target.closest('.pos-product-add');
+      if (!card || !grid.contains(card)) return;
+      const id = parseInt(card.dataset.id, 10);
+      const nama = card.getAttribute('data-nama') || '';
+      const harga = parseFloat(card.dataset.harga || '0');
+      const stok = parseFloat(card.dataset.stok || '0');
+      const satuan = card.getAttribute('data-satuan') || 'pcs';
+      const raw = {
+        harga: harga,
+        harga_ecer: parseFloat(card.dataset.hargaEcer || card.dataset.harga || '0'),
+        min_qty_grosir_1: card.dataset.minG1 || '',
+        harga_jual_grosir_1: card.dataset.hargaG1 || '',
+        min_qty_grosir_2: card.dataset.minG2 || '',
+        harga_jual_grosir_2: card.dataset.hargaG2 || '',
+      };
+      addToCart(id, nama, harga, stok, satuan, null, raw);
+    });
+  }
+  const cd = document.getElementById('changeDisplay');
+  if (cd && !cd.querySelector('.change-value')) {
+    cd.innerHTML = '<span class="change-label">💵 Kembalian</span><span class="change-value">Rp 0</span>';
+  }
+  document.getElementById('cashSection').style.display = 'block';
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('payModal').classList.contains('active')) closePayModal();
+    if (document.getElementById('shiftOpenModal').classList.contains('active')) closeShiftOpenModal();
+    if (document.getElementById('shiftCloseModal').classList.contains('active')) closeShiftCloseModal();
+  });
+  loadRecentTransactions();
+  refreshShiftStatus();
+  focusSearch();
+});
+</script>
+{% endblock %}

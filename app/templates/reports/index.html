@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block title %}Laporan Penjualan{% endblock %}
+{% block page_title %}📋 Laporan Penjualan{% endblock %}
+{% block page_sub %}{{ 'Harian: ' + tanggal if mode == 'harian' else 'Bulanan: ' + bulan }}{% endblock %}
+
+{% block content %}
+<div class="page-shell report-page">
+<!-- Filter -->
+<div class="card report-filter-card mb-3">
+  <form method="GET" class="filter-bar-inline report-filter-form">
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Mode</label>
+      <select name="mode" class="form-control" onchange="this.form.submit()">
+        <option value="harian" {{ 'selected' if mode=='harian' }}>📅 Harian</option>
+        <option value="bulanan" {{ 'selected' if mode=='bulanan' }}>📆 Bulanan</option>
+      </select>
+    </div>
+    {% if mode == 'harian' %}
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Tanggal</label>
+      <input type="date" name="tanggal" class="form-control" value="{{ tanggal }}">
+    </div>
+    {% else %}
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Bulan</label>
+      <input type="month" name="bulan" class="form-control" value="{{ bulan }}">
+    </div>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">🔍 Tampilkan</button>
+  </form>
+</div>
+
+<!-- Stat Cards: grid 3×2 -->
+<section class="report-kpi-board" aria-label="Ringkasan penjualan">
+  <div class="stats-grid report-sales-stats">
+    <div class="stat-card warning" title="Jumlah subtotal baris sebelum diskon nota / member">
+      <div class="stat-icon warning">📊</div>
+      <div class="stat-info">
+        <div class="stat-value">Rp {{ "{:,.0f}".format(total_omset_kotor).replace(",",".") }}</div>
+        <div class="stat-label">Omset kotor</div>
+        <div class="stat-sublabel">Subtotal barang (sebelum diskon) · {{ total_transaksi }} transaksi</div>
+      </div>
+    </div>
+    <div class="stat-card stat-card--diskon" title="Total potongan harga di nota">
+      <div class="stat-icon stat-icon--diskon">🏷️</div>
+      <div class="stat-info">
+        <div class="stat-value">Rp {{ "{:,.0f}".format(total_diskon_nota).replace(",",".") }}</div>
+        <div class="stat-label">Diskon nota</div>
+        <div class="stat-sublabel">Manual + diskon member</div>
+      </div>
+    </div>
+    <div class="stat-card primary">
+      <div class="stat-icon primary">💰</div>
+      <div class="stat-info">
+        <div class="stat-value">Rp {{ "{:,.0f}".format(total_penjualan).replace(",",".") }}</div>
+        <div class="stat-label">Penjualan bersih</div>
+        <div class="stat-sublabel">Setelah diskon (yang dibayar)</div>
+      </div>
+    </div>
+    <div class="stat-card danger" title="Perkiraan: Σ qty × harga beli master produk">
+      <div class="stat-icon danger">📦</div>
+      <div class="stat-info">
+        <div class="stat-value">Rp {{ "{:,.0f}".format(total_hpp).replace(",",".") }}</div>
+        <div class="stat-label">HPP (estimasi)</div>
+        <div class="stat-sublabel">Berdasarkan harga beli saat ini</div>
+      </div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-icon success">📈</div>
+      <div class="stat-info">
+        <div class="stat-value {% if total_laba_kotor < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(total_laba_kotor).replace(",",".") }}</div>
+        <div class="stat-label">Laba kotor</div>
+        <div class="stat-sublabel">Penjualan bersih − HPP</div>
+      </div>
+    </div>
+    <div class="stat-card danger">
+      <div class="stat-icon danger">💸</div>
+      <div class="stat-info">
+        <div class="stat-value">Rp {{ "{:,.0f}".format(total_biaya_operasional).replace(",",".") }}</div>
+        <div class="stat-label">Biaya operasional</div>
+        <div class="stat-sublabel">Beban operasional periode ini</div>
+      </div>
+    </div>
+    <div class="stat-card primary">
+      <div class="stat-icon primary">🧮</div>
+      <div class="stat-info">
+        <div class="stat-value {% if laba_setelah_operasional < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(laba_setelah_operasional).replace(",",".") }}</div>
+        <div class="stat-label">Laba setelah operasional</div>
+        <div class="stat-sublabel">Laba kotor − biaya operasional</div>
+      </div>
+    </div>
+  </div>
+  <p class="report-sales-hint">HPP/laba kotor bersifat perkiraan (harga beli dari master produk saat ini). Biaya operasional diambil dari modul Biaya Operasional pada periode yang sama.</p>
+</section>
+
+<div style="margin-top:4px;">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">💳 Ringkasan Metode Pembayaran</div>
+    </div>
+    <div class="table-wrapper report-table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Metode</th>
+            <th>Jumlah transaksi</th>
+            <th>Total penjualan</th>
+            <th>Kontribusi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payment_summary_rows %}
+          {% set pct = ((p.total / total_penjualan) * 100) if total_penjualan > 0 else 0 %}
+          <tr>
+            <td>
+              <span class="badge badge-{{ 'primary' if p.metode == 'tunai' else ('info' if p.metode == 'transfer' else ('success' if p.metode == 'qris' else 'warning')) }}">
+                {{ p.metode|upper }}
+              </span>
+            </td>
+            <td>{{ p.count }}</td>
+            <td class="fw-bold">Rp {{ "{:,.0f}".format(p.total).replace(",",".") }}</td>
+            <td>{{ "{:,.2f}".format(pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);">📭 Belum ada transaksi pada periode ini</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:4px;">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🧾 Detail Transaksi</div>
+    </div>
+    <div class="table-wrapper report-table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>No. Transaksi</th><th>Kasir</th><th>Metode</th><th>Total</th><th>Waktu</th></tr>
+        </thead>
+        <tbody>
+          {% for t in transactions %}
+          <tr>
+            <td style="font-family:monospace;color:var(--primary-light);font-weight:600;">{{ t.nomor }}</td>
+            <td>{{ t.user.nama if t.user else '—' }}</td>
+            <td>
+              <span class="badge badge-{{ 'primary' if t.metode_bayar=='tunai' else ('info' if t.metode_bayar=='transfer' else 'success') }}">
+                {{ t.metode_bayar|upper }}
+              </span>
+            </td>
+            <td class="fw-bold">Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</td>
+            <td class="text-muted">{{ t.created_at.strftime('%d/%m %H:%M') }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted);">📭 Tidak ada transaksi</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}

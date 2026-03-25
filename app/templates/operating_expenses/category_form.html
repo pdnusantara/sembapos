@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Edit kategori{% endblock %}
+{% block page_title %}Edit kategori{% endblock %}
+{% block page_sub %}{{ category.nama }}{% endblock %}
+
+{% block content %}
+<div class="page-shell opex-page">
+<div class="card form-card-narrow">
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="form-group">
+      <label class="form-label">Nama *</label>
+      <input type="text" name="nama" class="form-control" required maxlength="120" value="{{ category.nama }}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Deskripsi</label>
+      <input type="text" name="deskripsi" class="form-control" value="{{ category.deskripsi or '' }}" placeholder="Opsional">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Urutan tampil</label>
+      <input type="number" name="sort_order" class="form-control" value="{{ category.sort_order }}" step="1">
+    </div>
+    <div class="form-actions-row">
+      <button type="submit" class="btn btn-primary">Simpan</button>
+      <a href="{{ url_for('operating_expenses.categories') }}" class="btn btn-outline">Batal</a>
+    </div>
+  </form>
+</div>
+</div>
+{% endblock %}

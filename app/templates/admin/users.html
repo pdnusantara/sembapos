@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+{% block title %}Manajemen User{% endblock %}
+{% block page_title %}👥 Manajemen Pengguna{% endblock %}
+{% block page_sub %}{{ total_users }} pengguna terdaftar{% if total_pages > 1 %} · halaman {{ page }}/{{ total_pages }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="card mb-3 admin-users-filter-card">
+  <form method="GET" class="product-filter-form admin-users-filter" action="{{ url_for('admin.users') }}">
+    <div class="form-group admin-users-filter__field">
+      <label class="form-label" for="users-q">Cari</label>
+      <input type="text" id="users-q" name="q" class="form-control" placeholder="Nama atau username..." value="{{ q }}" autocomplete="off">
+    </div>
+    <div class="form-group admin-users-filter__field">
+      <label class="form-label" for="users-role">Role</label>
+      <select id="users-role" name="role" class="form-control">
+        <option value="" {% if not filter_role %}selected{% endif %}>Semua</option>
+        <option value="admin" {% if filter_role == 'admin' %}selected{% endif %}>Admin</option>
+        <option value="kasir" {% if filter_role == 'kasir' %}selected{% endif %}>Kasir</option>
+      </select>
+    </div>
+    <div class="form-group admin-users-filter__field">
+      <label class="form-label" for="users-branch">Cabang</label>
+      <select id="users-branch" name="branch_id" class="form-control">
+        <option value="" {% if not filter_branch %}selected{% endif %}>Semua</option>
+        <option value="none" {% if filter_branch == 'none' %}selected{% endif %}>Tanpa cabang</option>
+        {% for b in branches %}
+        <option value="{{ b.id }}" {% if filter_branch == (b.id|string) %}selected{% endif %}>{{ b.nama }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group admin-users-filter__field">
+      <label class="form-label" for="users-status">Status</label>
+      <select id="users-status" name="status" class="form-control">
+        <option value="" {% if not filter_status %}selected{% endif %}>Semua</option>
+        <option value="active" {% if filter_status == 'active' %}selected{% endif %}>Aktif</option>
+        <option value="inactive" {% if filter_status == 'inactive' %}selected{% endif %}>Nonaktif</option>
+      </select>
+    </div>
+    <div class="admin-users-filter__actions">
+      <button type="submit" class="btn btn-primary">Terapkan</button>
+      {% if q or filter_role or filter_branch or filter_status %}
+      <a href="{{ url_for('admin.users') }}" class="btn btn-outline">Reset</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<div class="layout-two-col layout-two-col--wide admin-users-layout">
+  <div class="card admin-users-list-card">
+    <div class="table-wrapper table-sticky admin-table-responsive" style="max-height:none;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Nama</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Cabang</th>
+            <th>Login terakhir</th>
+            <th>Hak akses</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr {% if user.id == current_user.id %}class="table-row-self"{% endif %}>
+            <td data-label="Nama">
+              <div style="font-weight:600;">{{ user.nama }}</div>
+              {% if user.id == current_user.id %}
+              <span class="badge badge-info" style="font-size:10px;margin-top:4px;display:inline-block;">Anda</span>
+              {% endif %}
+            </td>
+            <td data-label="Username" style="font-family:monospace;color:var(--primary-light);">{{ user.username }}</td>
+            <td data-label="Role">
+              {% if user.role == 'superadmin' %}
+              <span class="badge badge-primary">⭐ Super Admin</span>
+              {% elif user.role == 'admin' %}
+              <span class="badge badge-primary">🛡️ Admin</span>
+              {% else %}
+              <span class="badge badge-warning">💼 Kasir</span>
+              {% endif %}
+            </td>
+            <td data-label="Cabang">{{ user.branch.nama if user.branch else '—' }}</td>
+            <td data-label="Login terakhir" class="text-muted" style="font-size:12px;">
+              {% if user.last_login %}
+              {{ user.last_login.strftime('%d/%m/%Y %H:%M') }}
+              {% else %}
+              —
+              {% endif %}
+            </td>
+            <td data-label="Hak akses" style="font-size:12px;">
+              <span class="badge badge-info" style="font-size:10px;">{{ perm_summary_for(user) }}</span>
+            </td>
+            <td data-label="Status"><span class="badge {{ 'badge-success' if user.aktif else 'badge-danger' }}">{{ '✅ Aktif' if user.aktif else '⛔ Nonaktif' }}</span></td>
+            <td data-label="Aksi">
+              <div class="user-row-actions">
+                <a href="{{ url_for('admin.edit_user', id=user.id) }}" class="btn btn-outline btn-sm">✏️ Edit</a>
+                <form method="POST" action="{{ url_for('admin.toggle_user', id=user.id) }}" style="display:inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <button type="submit" class="btn btn-outline btn-sm" {{ 'disabled' if user.id == current_user.id }}>
+                    {{ '⛔ Nonaktifkan' if user.aktif else '✅ Aktifkan' }}
+                  </button>
+                </form>
+                {% if user.id != current_user.id %}
+                <form class="user-row-actions__force" method="POST" action="{{ url_for('admin.force_logout_user', id=user.id) }}" style="display:inline;" onsubmit="return confirm('Paksa pengguna ini logout dari semua perangkat?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <button type="submit" class="btn btn-outline btn-sm" title="Invalidasi sesi login">🚪 Logout paksa</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="admin-table-empty">Tidak ada pengguna pada filter ini.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="pagination admin-users-pagination" style="margin-top:12px;padding:0 12px 12px;">
+      {% if page > 1 %}
+      <a class="page-btn" href="{{ url_for('admin.users', page=page-1, q=q, role=filter_role, branch_id=filter_branch, status=filter_status) }}">«</a>
+      {% endif %}
+      <span class="text-muted" style="font-size:13px;">Halaman {{ page }} / {{ total_pages }}</span>
+      {% if page < total_pages %}
+      <a class="page-btn" href="{{ url_for('admin.users', page=page+1, q=q, role=filter_role, branch_id=filter_branch, status=filter_status) }}">»</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card admin-users-add-card">
+    <div class="card-header"><div class="card-title">➕ Tambah Pengguna</div></div>
+    <form method="POST" action="{{ url_for('admin.add_user') }}" class="admin-users-add-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="form-group">
+        <label class="form-label">Nama lengkap *</label>
+        <input type="text" name="nama" class="form-control" required placeholder="Nama pengguna" minlength="2">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Username *</label>
+        <input type="text" name="username" class="form-control" required placeholder="huruf_angka_3_50" autocomplete="off" pattern="[a-zA-Z0-9_]{3,50}" title="3–50 karakter: huruf, angka, underscore">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password *</label>
+        <input type="password" name="password" class="form-control" required placeholder="Minimal 8 karakter" minlength="8" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Konfirmasi password *</label>
+        <input type="password" name="password_confirm" class="form-control" required placeholder="Ulangi password" minlength="8" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role *</label>
+        <select name="role" class="form-control">
+          <option value="kasir">💼 Kasir</option>
+          <option value="admin">🛡️ Admin</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cabang</label>
+        <select name="branch_id" class="form-control">
+          <option value="">— Semua cabang —</option>
+          {% for b in branches %}
+          <option value="{{ b.id }}">{{ b.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="margin-top:16px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:13px;">
+          <input type="checkbox" name="use_custom_perms" value="1" id="addUseCustomPerm">
+          Batasi hak akses modul
+        </label>
+        <p class="text-muted" style="font-size:11px;margin-top:6px;">Biarkan kosong untuk akses penuh semua modul (default).</p>
+      </div>
+      <fieldset id="addPermFieldset" class="perm-fieldset" disabled style="opacity:0.45;margin-bottom:16px;">
+        {% for key, label in PERMISSION_MODULES %}
+        <label class="perm-check">
+          <input type="checkbox" name="perm" value="{{ key }}" checked>
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+      <script>
+      (function(){
+        var u = document.getElementById('addUseCustomPerm');
+        var f = document.getElementById('addPermFieldset');
+        if (!u || !f) return;
+        function sync() {
+          f.disabled = !u.checked;
+          f.style.opacity = u.checked ? '1' : '0.45';
+        }
+        u.addEventListener('change', sync);
+        sync();
+      })();
+      </script>
+      <button type="submit" class="btn btn-primary btn-block">💾 Tambah pengguna</button>
+    </form>
+  </div>
+</div>
+
+<div class="card mt-3 admin-users-audit-card">
+  <div class="card-header"><div class="card-title">📋 Log aktivitas (25 terakhir)</div></div>
+  <div class="table-wrapper admin-table-responsive admin-table-responsive--audit">
+    <table class="table">
+      <thead>
+        <tr><th>Waktu</th><th>Aksi</th><th>Oleh</th><th>Sasaran</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for row in audit_logs %}
+        <tr>
+          <td data-label="Waktu" style="font-size:12px;white-space:nowrap;">{{ row.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td data-label="Aksi">
+            {% if row.action == 'user_created' %}<span class="badge badge-success">Buat</span>
+            {% elif row.action == 'user_updated' %}<span class="badge badge-info">Ubah</span>
+            {% elif row.action == 'user_toggled' %}<span class="badge badge-warning">Aktif/nonaktif</span>
+            {% elif row.action == 'password_reset' %}<span class="badge badge-primary">Password</span>
+            {% elif row.action == 'force_logout' %}<span class="badge badge-danger">Logout paksa</span>
+            {% else %}<span class="badge">{{ row.action }}</span>{% endif %}
+          </td>
+          <td data-label="Oleh">{{ row.actor.nama if row.actor else '—' }}</td>
+          <td data-label="Sasaran">{{ row.target.nama if row.target else '—' }}</td>
+          <td data-label="Detail" class="text-muted admin-audit-detail" style="font-size:12px;max-width:240px;">{{ row.detail or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="admin-table-empty">Belum ada log.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Shift kasir{% endblock %}
+{% block page_title %}🕐 Shift kasir{% endblock %}
+{% block page_sub %}Laporan buka/tutup laci per kasir &amp; cabang{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+  <div class="card mb-3">
+    <form method="GET" class="opex-toolbar" style="flex-wrap:wrap;gap:12px;align-items:flex-end;">
+      <div class="form-group">
+        <label class="form-label">Dari</label>
+        <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sampai</label>
+        <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+      </div>
+      {% if current_user.role != 'kasir' %}
+      <div class="form-group">
+        <label class="form-label">Cabang</label>
+        <select name="branch_id" class="form-control">
+          <option value="">Semua</option>
+          {% for b in branches %}
+          <option value="{{ b.id }}" {{ 'selected' if branch_id_param == (b.id|string) else '' }}>{{ b.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kasir</label>
+        <select name="user_id" class="form-control">
+          <option value="">Semua</option>
+          {% for u in users %}
+          <option value="{{ u.id }}" {{ 'selected' if user_id_param == (u.id|string) else '' }}>{{ u.nama }} ({{ u.username }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="opex-toolbar-actions">
+        <button type="submit" class="btn btn-primary">Tampilkan</button>
+        <a href="{{ url_for('shifts.index') }}" class="btn btn-outline">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Daftar shift</div>
+      <span class="text-muted" style="font-size:13px;">Maks. 500 baris — urut buka terbaru</span>
+    </div>
+    <div class="table-wrapper" style="overflow-x:auto;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Buka</th>
+            <th>Status</th>
+            <th>Cabang</th>
+            <th>Kasir</th>
+            <th>Saldo awal</th>
+            <th>Tutup / selisih</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in shifts %}
+          <tr>
+            <td>{{ s.opened_at.strftime('%d/%m/%Y %H:%M') if s.opened_at else '—' }}</td>
+            <td>
+              {% if s.status == 'open' %}
+              <span class="text-success fw-bold">Terbuka</span>
+              {% else %}
+              <span class="text-muted">Tutup</span>
+              {% endif %}
+            </td>
+            <td>{{ s.branch.nama if s.branch else '—' }}</td>
+            <td>{{ s.user.nama if s.user else '—' }}</td>
+            <td>Rp {{ "{:,.0f}".format(s.opening_float or 0).replace(",",".") }}</td>
+            <td>
+              {% if s.status == 'closed' and s.closed_at %}
+              {{ s.closed_at.strftime('%d/%m %H:%M') }}
+              {% if s.variance is not none %}
+              <br><span class="{{ 'text-success' if s.variance == 0 else ('text-warning' if s.variance > 0 else 'text-danger') }}">Selisih Rp {{ "{:,.0f}".format(s.variance).replace(",",".") }}</span>
+              {% endif %}
+              {% else %}
+              —
+              {% endif %}
+            </td>
+            <td><a href="{{ url_for('shifts.detail', sid=s.id) }}" class="btn btn-sm btn-outline">Detail</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Tidak ada shift pada periode ini.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

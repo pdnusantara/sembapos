@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retur {{ sr.nomor }}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 360px; margin: 16px auto; padding: 8px; font-size: 13px; }
+    h1 { font-size: 1.1rem; margin: 0 0 8px; }
+    .muted { color: #666; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; padding: 4px 0; border-bottom: 1px solid #eee; }
+    .tot { font-weight: 700; margin-top: 10px; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>
+  <h1>NOTA RETUR</h1>
+  <div class="muted">{{ sr.branch.nama if sr.branch else '' }}</div>
+  <div><strong>{{ sr.nomor }}</strong></div>
+  <div class="muted">{{ sr.created_at.strftime('%d/%m/%Y %H:%M') if sr.created_at else '' }}</div>
+  <div class="muted">Nota asli: {{ sr.source_transaction.nomor if sr.source_transaction else '—' }}</div>
+  <div>Metode: {{ sr.metode_pengembalian }} · {{ sr.jenis }}</div>
+
+  <table>
+    <thead><tr><th>Item</th><th>Qty</th><th>Sub</th></tr></thead>
+    <tbody>
+      {% for it in sr.items %}
+      <tr>
+        <td>{{ it.source_line.nama_produk if it.source_line else '—' }}</td>
+        <td>{{ it.qty_retur }}</td>
+        <td>Rp {{ "{:,.0f}".format(it.subtotal).replace(",",".") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="tot">Total retur: Rp {{ "{:,.0f}".format(sr.total_retur or 0).replace(",",".") }}</div>
+  {% if sr.replacement_transaction %}
+  <p class="muted">Tukar → {{ sr.replacement_transaction.nomor }}</p>
+  {% endif %}
+  {% if sr.alasan %}<p>Alasan: {{ sr.alasan }}</p>{% endif %}
+  <script>window.onload = function() { window.print(); };</script>
+</body>
+</html>

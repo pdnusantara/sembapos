@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+{% block title %}Hutang Piutang{% endblock %}
+{% block page_title %}Hutang &amp; piutang{% endblock %}
+{% block page_sub %}Kelola hutang pelanggan — cepat, satu layar{% endblock %}
+
+{% block content %}
+<div class="debts-page">
+  <section class="debts-hero" aria-label="Ringkasan piutang">
+    <div class="debts-hero__main">
+      <span class="debts-hero__eyebrow">Total sisa belum lunas</span>
+      <p class="debts-hero__amount">Rp {{ "{:,.0f}".format(total_piutang).replace(",",".") }}</p>
+      <p class="debts-hero__hint">Akumulasi seluruh hutang aktif di tenant ini</p>
+    </div>
+    {% if member_summary %}
+    <div class="debts-hero__chips" aria-label="Pelanggan dengan sisa hutang terbesar">
+      <span class="debts-hero__chips-label">Terbanyak</span>
+      <div class="debts-hero__chips-scroll">
+        {% for row in member_summary[:8] %}
+        <a href="{{ url_for('members.detail', id=row.id) }}" class="debts-chip">{{ row.nama }} · Rp {{ "{:,.0f}".format(row.total_sisa).replace(",",".") }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  <div class="debts-toolbar card">
+    <form method="GET" class="debts-toolbar__form" id="debtsFilterForm">
+      <div class="debts-toolbar__row debts-toolbar__row--search">
+        <div class="debts-search">
+          <label class="visually-hidden" for="debts-q">Cari</label>
+          <span class="debts-search__icon" aria-hidden="true">🔎</span>
+          <input type="text" id="debts-q" name="q" class="form-control debts-search__input" placeholder="Nama, HP, no. transaksi, keterangan…" value="{{ q }}" autocomplete="off">
+          <button type="submit" class="btn btn-primary debts-search__submit">Cari</button>
+        </div>
+        <div class="debts-toolbar__actions">
+          {% if current_user.role in ('superadmin', 'admin') %}
+          <button type="button" class="btn debts-btn-manual" id="openDebtManualModal" title="Tambah piutang tanpa POS">
+            <span class="debts-btn-manual__icon" aria-hidden="true">＋</span>
+            Piutang manual
+          </button>
+          <a href="{{ url_for('debts.export_csv', q=q, status=status, date_from=date_from, date_to=date_to, overdue=overdue, sort=sort) }}" class="btn btn-outline debts-btn-export">Export CSV</a>
+          {% endif %}
+        </div>
+      </div>
+
+      <details class="debts-filter-details" {% if date_from or date_to or overdue == '1' or sort != 'created_desc' or status != 'belum_lunas' %}open{% endif %}>
+        <summary class="debts-filter-details__summary">
+          <span>Filter &amp; urutan</span>
+          <span class="debts-filter-details__chev" aria-hidden="true"></span>
+        </summary>
+        <div class="debts-filter-grid">
+          <div class="form-group">
+            <label class="form-label" for="debts-status">Status</label>
+            <select name="status" id="debts-status" class="form-control">
+              <option value="belum_lunas" {{ 'selected' if status=='belum_lunas' }}>Belum lunas</option>
+              <option value="lunas" {{ 'selected' if status=='lunas' }}>Lunas</option>
+              <option value="all" {{ 'selected' if status=='all' }}>Semua</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="debts-from">Dari tanggal</label>
+            <input type="date" name="date_from" id="debts-from" class="form-control" value="{{ date_from }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="debts-to">Sampai tanggal</label>
+            <input type="date" name="date_to" id="debts-to" class="form-control" value="{{ date_to }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="debts-sort">Urutkan</label>
+            <select name="sort" id="debts-sort" class="form-control">
+              <option value="created_desc" {{ 'selected' if sort=='created_desc' }}>Terbaru</option>
+              <option value="sisa_desc" {{ 'selected' if sort=='sisa_desc' }}>Sisa terbesar</option>
+              <option value="jatuh_tempo_asc" {{ 'selected' if sort=='jatuh_tempo_asc' }}>Jatuh tempo</option>
+            </select>
+          </div>
+          <div class="form-group debts-filter-overdue">
+            <label class="form-label debts-filter-overdue__label" for="debts-overdue">Jatuh tempo</label>
+            <label class="debts-checkbox">
+              <input type="checkbox" name="overdue" id="debts-overdue" value="1" {% if overdue=='1' %}checked{% endif %} {% if status != 'belum_lunas' %}disabled title="Hanya untuk filter belum lunas"{% endif %}>
+              <span>Hanya lewat jatuh tempo</span>
+            </label>
+          </div>
+          <div class="form-group debts-filter-actions">
+            <span class="form-label debts-filter-actions__spacer">&nbsp;</span>
+            <div class="debts-filter-actions__btns">
+              <button type="submit" class="btn btn-primary">Terapkan filter</button>
+              {% if q or date_from or date_to or overdue or sort != 'created_desc' or status != 'belum_lunas' %}
+              <a href="{{ url_for('debts.index') }}" class="btn btn-outline">Reset semua</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </details>
+    </form>
+  </div>
+
+  <div class="card debts-list-card">
+    <div class="debts-list-card__head">
+      <div>
+        <h2 class="debts-list-card__title">Daftar hutang</h2>
+        <p class="debts-list-card__meta">{{ total_count }} entri{% if total_pages > 1 %} · halaman {{ page }} dari {{ total_pages }}{% endif %}</p>
+      </div>
+    </div>
+    <div class="table-wrapper debts-table-wrap">
+      <table class="table debts-table">
+        <thead>
+          <tr>
+            <th>Pelanggan</th>
+            <th>No. transaksi</th>
+            <th>Tanggal</th>
+            <th>Jatuh tempo</th>
+            <th class="debts-num">Awal</th>
+            <th class="debts-num">Sisa</th>
+            <th>Status</th>
+            <th class="debts-col-actions">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in debts %}
+          <tr class="{% if d.status == 'belum_lunas' and d.jatuh_tempo and d.jatuh_tempo < now %}debts-row--overdue{% endif %}">
+            <td>
+              <div class="debts-cell-name">{{ d.member.nama }}</div>
+              {% if d.keterangan %}
+              <div class="debts-cell-note">{{ d.keterangan }}</div>
+              {% endif %}
+            </td>
+            <td class="debts-cell-mono">
+              {% if d.transaction %}
+              {{ d.transaction.nomor }}
+              {% if d.transaction.metode_bayar == 'manual_hutang' %}
+              <span class="badge badge-info debts-badge-manual">manual</span>
+              {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ d.created_at.strftime('%d/%m/%Y') }}</td>
+            <td>
+              {% if d.jatuh_tempo %}
+                {% if d.status == 'belum_lunas' and d.jatuh_tempo < now %}
+                <span class="badge badge-danger">{{ d.jatuh_tempo.strftime('%d/%m/%Y') }}</span>
+                {% else %}
+                <span class="text-muted">{{ d.jatuh_tempo.strftime('%d/%m/%Y') }}</span>
+                {% endif %}
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="debts-num">Rp {{ "{:,.0f}".format(d.jumlah).replace(",",".") }}</td>
+            <td class="debts-num debts-num--sisa">Rp {{ "{:,.0f}".format(d.sisa).replace(",",".") }}</td>
+            <td>
+              <span class="badge {{ 'badge-success' if d.status=='lunas' else 'badge-danger' }} debts-status-pill">
+                {{ 'Lunas' if d.status=='lunas' else 'Belum lunas' }}
+              </span>
+            </td>
+            <td>
+              <div class="debts-row-actions">
+                <a href="{{ url_for('debts.detail', id=d.id) }}" class="btn btn-primary btn-sm debts-act debts-act--pay">Bayar</a>
+                <a href="{{ url_for('debts.member_history', member_id=d.member_id) }}" class="btn btn-outline btn-sm debts-act">Riwayat</a>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="debts-empty">
+              <div class="debts-empty__icon" aria-hidden="true">📭</div>
+              <p class="debts-empty__title">Belum ada data</p>
+              <p class="debts-empty__text">Ubah filter atau tambah piutang manual untuk mulai mencatat.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if total_pages > 1 %}
+    <div class="debts-pagination">
+      {% if page > 1 %}
+      <a class="page-btn" href="{{ url_for('debts.index', page=page-1, q=q, status=status, date_from=date_from, date_to=date_to, overdue=overdue, sort=sort) }}" aria-label="Halaman sebelumnya">«</a>
+      {% endif %}
+      <span class="debts-pagination__info">{{ page }} / {{ total_pages }}</span>
+      {% if page < total_pages %}
+      <a class="page-btn" href="{{ url_for('debts.index', page=page+1, q=q, status=status, date_from=date_from, date_to=date_to, overdue=overdue, sort=sort) }}" aria-label="Halaman berikutnya">»</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if current_user.role in ('superadmin', 'admin') %}
+<div class="modal-overlay" id="debtManualModal" role="dialog" aria-modal="true" aria-labelledby="debtManualTitle">
+  <div class="modal debt-manual-modal">
+    <div class="debt-manual-modal__head">
+      <div>
+        <h2 id="debtManualTitle" class="modal-title debt-manual-modal__title">Piutang manual</h2>
+        <p class="debt-manual-modal__sub">Tanpa item POS — pembukuan khusus (tidak masuk omzet penjualan).</p>
+      </div>
+      <button type="button" class="pos-pay-modal-close" id="closeDebtManualModal" aria-label="Tutup">×</button>
+    </div>
+    {% if members_for_manual %}
+    <form method="POST" action="{{ url_for('debts.manual_add') }}" class="debt-manual-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="form-group">
+        <label class="form-label" for="manual_member_id">Pelanggan *</label>
+        <select name="member_id" id="manual_member_id" class="form-control" required>
+          <option value="">Pilih member…</option>
+          {% for m in members_for_manual %}
+          <option value="{{ m.id }}">{{ m.nama }} · {{ m.telepon }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="manual_jumlah">Jumlah (Rp) *</label>
+        <input type="number" name="jumlah" id="manual_jumlah" class="form-control" required min="1" step="1" placeholder="500000">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="manual_jatuh_tempo">Jatuh tempo (opsional)</label>
+        <input type="date" name="jatuh_tempo" id="manual_jatuh_tempo" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="manual_keterangan">Keterangan</label>
+        <input type="text" name="keterangan" id="manual_keterangan" class="form-control" placeholder="Contoh: Nota bon tukang">
+      </div>
+      <div class="debt-manual-form__footer">
+        <button type="button" class="btn btn-outline" id="closeDebtManualModal2">Batal</button>
+        <button type="submit" class="btn btn-primary debt-manual-form__submit">Simpan piutang</button>
+      </div>
+    </form>
+    {% else %}
+    <div class="debt-manual-empty">
+      <p>Belum ada <strong>member aktif</strong>. Tambahkan member dulu agar bisa mencatat piutang manual.</p>
+      <a href="{{ url_for('members.add') }}" class="btn btn-primary">Tambah member</a>
+      <button type="button" class="btn btn-outline debt-manual-empty__close" id="closeDebtManualModal3">Tutup</button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var od = document.getElementById('debts-overdue');
+  var st = document.getElementById('debts-status');
+  if (od && st) {
+    function syncOverdue() {
+      var dis = st.value !== 'belum_lunas';
+      od.disabled = dis;
+      if (dis) od.checked = false;
+    }
+    st.addEventListener('change', syncOverdue);
+    syncOverdue();
+  }
+
+  var modal = document.getElementById('debtManualModal');
+  if (!modal) return;
+
+  function openModal() {
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    var first = modal.querySelector('select, input, button.btn-primary');
+    if (first && first.focus) setTimeout(function () { first.focus(); }, 50);
+  }
+  function closeModal() {
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  var openBtn = document.getElementById('openDebtManualModal');
+  if (openBtn) openBtn.addEventListener('click', openModal);
+
+  ['closeDebtManualModal', 'closeDebtManualModal2', 'closeDebtManualModal3'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', closeModal);
+  });
+
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
+  });
+})();
+</script>
+{% endblock %}

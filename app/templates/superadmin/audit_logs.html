@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Log Super Admin{% endblock %}
+{% block page_title %}📜 Log aktivitas Super Admin{% endblock %}
+{% block page_sub %}{{ total }} entri{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.index'), false),
+  ('Log audit', '', true),
+]) }}
+<div class="page-list-toolbar page-list-toolbar--end mb-3">
+  <a href="{{ url_for('superadmin.index') }}" class="btn btn-outline">← Daftar tenant</a>
+</div>
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Waktu</th>
+          <th>Aktor</th>
+          <th>Aksi</th>
+          <th>Tenant</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td class="text-muted" style="white-space:nowrap;">{{ log.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ log.actor.nama if log.actor else log.actor_user_id }}</td>
+          <td><code style="font-size:11px;">{{ log.action }}</code></td>
+          <td>
+            {% if log.target_tenant %}
+            <a href="{{ url_for('superadmin.view_tenant', id=log.target_tenant_id) }}">{{ log.target_tenant.nama }}</a>
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-size:12px;color:var(--text-muted);max-width:280px;word-break:break-word;">{{ log.detail or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted);">Belum ada log</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if total_pages > 1 %}
+  <div style="padding:12px 16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+    {% if page > 1 %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.audit_logs', page=page-1) }}">← Sebelumnya</a>
+    {% endif %}
+    <span class="text-muted" style="align-self:center;font-size:13px;">Halaman {{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.audit_logs', page=page+1) }}">Berikutnya →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

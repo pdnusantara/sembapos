@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+{% block title %}Riwayat Transaksi{% endblock %}
+{% block page_title %}Riwayat transaksi{% endblock %}
+{% block page_sub %}Filter periode, retur, cabang, status — ringkasan total nota vs retur vs netto{% endblock %}
+
+{% block content %}
+<div class="tx2-page">
+  <section class="tx2-shell" aria-label="Ringkasan & filter transaksi">
+    <div class="tx2-top">
+      <div class="tx2-stats tx2-stats--rich">
+        <article class="tx2-stat tx2-stat--accent-slate">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">📋</span>
+            <span class="tx2-stat-label">Transaksi</span>
+          </div>
+          <div class="tx2-stat-value">{{ total_count }}</div>
+        </article>
+        <article class="tx2-stat tx2-stat--accent-violet">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">💰</span>
+            <span class="tx2-stat-label">Total nota (kotor)</span>
+          </div>
+          <div class="tx2-stat-value">Rp {{ "{:,.0f}".format(sum_total).replace(",",".") }}</div>
+          <p class="tx2-stat-hint">Sesuai total di nota jual (belum dikurangi retur).</p>
+        </article>
+        <article class="tx2-stat tx2-stat--accent-amber">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">↩️</span>
+            <span class="tx2-stat-label">Total retur</span>
+          </div>
+          <div class="tx2-stat-value">Rp {{ "{:,.0f}".format(sum_returns).replace(",",".") }}</div>
+          <p class="tx2-stat-hint">Retur untuk nota yang sesuai filter.</p>
+        </article>
+        <article class="tx2-stat tx2-stat--accent-mint">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">✨</span>
+            <span class="tx2-stat-label">Perkiraan netto</span>
+          </div>
+          <div class="tx2-stat-value">Rp {{ "{:,.0f}".format(sum_net).replace(",",".") }}</div>
+          <p class="tx2-stat-hint">Total nota dikurangi total retur.</p>
+        </article>
+        <article class="tx2-stat tx2-stat--accent-sky">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">📊</span>
+            <span class="tx2-stat-label">Rata-rata netto / nota</span>
+          </div>
+          <div class="tx2-stat-value">Rp {{ "{:,.0f}".format(avg_nota_net).replace(",",".") }}</div>
+        </article>
+      </div>
+    </div>
+
+    <nav class="tx2-chips" aria-label="Periode cepat">
+      <div class="tx2-chips-track">
+        <a href="{{ chip_today }}" class="tx2-chip{% if is_preset_today %} is-active{% endif %}">Hari ini</a>
+        <a href="{{ chip_7 }}" class="tx2-chip{% if is_preset_7 %} is-active{% endif %}">7 hari</a>
+        <a href="{{ chip_30 }}" class="tx2-chip{% if is_preset_30 %} is-active{% endif %}">30 hari</a>
+      </div>
+    </nav>
+
+    <form method="GET" action="{{ url_for('transactions.index') }}" class="tx2-form">
+      <div class="tx2-grid{% if current_user.role != 'kasir' %} tx2-grid--admin{% endif %}">
+        <div class="tx2-field tx2-field--period">
+          <label for="tx2-df">Periode</label>
+          <div class="tx2-period">
+            <input type="date" id="tx2-df" name="date_from" class="form-control tx2-control" value="{{ date_from }}">
+            <span class="tx2-period-sep">→</span>
+            <input type="date" id="tx2-dt" name="date_to" class="form-control tx2-control" value="{{ date_to }}">
+          </div>
+        </div>
+        {% if current_user.role != 'kasir' %}
+        <div class="tx2-field">
+          <label for="tx2-branch">Cabang</label>
+          <select id="tx2-branch" name="branch_id" class="form-control tx2-control">
+            <option value="" {% if not filter_branch %}selected{% endif %}>Semua</option>
+            {% for b in branches %}
+            <option value="{{ b.id }}" {% if filter_branch == (b.id|string) %}selected{% endif %}>{{ b.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <div class="tx2-field">
+          <label for="tx2-status">Status</label>
+          <select id="tx2-status" name="status" class="form-control tx2-control">
+            <option value="" {% if not filter_status %}selected{% endif %}>Semua</option>
+            <option value="selesai" {% if filter_status == 'selesai' %}selected{% endif %}>Selesai</option>
+            <option value="batal" {% if filter_status == 'batal' %}selected{% endif %}>Batal</option>
+          </select>
+        </div>
+        <div class="tx2-field">
+          <label for="tx2-retur">Retur</label>
+          <select id="tx2-retur" name="retur" class="form-control tx2-control">
+            <option value="" {% if not filter_retur %}selected{% endif %}>Semua nota</option>
+            <option value="ada" {% if filter_retur == 'ada' %}selected{% endif %}>Punya retur</option>
+            <option value="tidak" {% if filter_retur == 'tidak' %}selected{% endif %}>Tanpa retur</option>
+          </select>
+        </div>
+        <div class="tx2-field tx2-field--search">
+          <label for="tx2-q">Cari</label>
+          <input type="search" id="tx2-q" name="q" class="form-control tx2-control" placeholder="Nomor atau catatan..." value="{{ q }}" autocomplete="off">
+        </div>
+        <div class="tx2-actions">
+          <button type="submit" class="btn btn-primary tx2-apply">Terapkan</button>
+          <a href="{{ url_for('transactions.index') }}" class="tx2-reset">Reset</a>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <section class="tx2-list">
+    <div class="card tx2-card">
+      <div class="tx2-head">
+        <h3>Daftar transaksi</h3>
+        {% if total_pages > 1 %}
+        <span>Halaman {{ page }} / {{ total_pages }}</span>
+        {% endif %}
+      </div>
+
+      <div class="table-wrapper tx2-table-wrap">
+        <table class="table tx2-table">
+          <thead>
+            <tr>
+              <th>No. transaksi</th>
+              <th>Waktu</th>
+              <th>Status</th>
+              <th>Cabang</th>
+              <th>Kasir</th>
+              <th>Member</th>
+              <th>Metode</th>
+              <th>Total / netto</th>
+              <th>Retur</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transactions %}
+            <tr>
+              <td><span class="tx2-num">{{ t.nomor }}</span></td>
+              <td class="tx2-time">{{ t.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+              <td>
+                <span class="badge {{ 'badge-danger' if t.status == 'batal' else 'badge-success' }}">
+                  {{ 'Batal' if t.status == 'batal' else 'Selesai' }}
+                </span>
+              </td>
+              <td>{{ t.branch.nama if t.branch else '—' }}</td>
+              <td>{{ t.user.nama if t.user else '—' }}</td>
+              <td>{{ t.member.nama if t.member else '—' }}</td>
+              <td>
+                <span class="badge badge-{{ 'primary' if t.metode_bayar == 'tunai' else ('info' if t.metode_bayar == 'transfer' else 'success') }}">
+                  {{ t.metode_bayar|upper }}
+                </span>
+              </td>
+              <td class="tx2-total">
+                {% set ret_sum_row = (t.sales_returns|map(attribute='total_retur')|sum) if t.sales_returns else 0 %}
+                {% set net_row = [0, (t.total or 0) - ret_sum_row]|max %}
+                <div><span class="text-muted" style="font-size:11px;">Nota</span> <strong>Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</strong></div>
+                {% if t.sales_returns and ret_sum_row > 0 %}
+                <div style="font-size:12px;margin-top:4px;color:var(--text-muted);">Retur −Rp {{ "{:,.0f}".format(ret_sum_row).replace(",",".") }}</div>
+                <div style="font-size:13px;font-weight:700;color:var(--primary-light, #a5b4fc);">Net Rp {{ "{:,.0f}".format(net_row).replace(",",".") }}</div>
+                {% endif %}
+              </td>
+              <td>
+                {% if t.sales_returns %}
+                {% set ret_count = t.sales_returns|length %}
+                {% set ret_sum = t.sales_returns|map(attribute='total_retur')|sum %}
+                {% if perm('returns') %}
+                <a href="{{ url_for('transactions.detail', id=t.id) }}#retur" class="badge badge-warning" style="text-decoration:none;" title="Lihat retur di detail">↩ {{ ret_count }} · Rp {{ "{:,.0f}".format(ret_sum).replace(",",".") }}</a>
+                {% else %}
+                <span class="badge badge-warning" title="Ada retur">↩ {{ ret_count }}</span>
+                {% endif %}
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="tx2-row-actions">
+                  <a href="{{ url_for('transactions.detail', id=t.id) }}" class="btn btn-outline btn-sm">Detail</a>
+                  {% if t.status == 'selesai' %}
+                  <a href="{{ url_for('receipt.view_receipt', id=t.id) }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Struk</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="10" class="admin-table-empty">
+                Belum ada transaksi untuk filter ini.
+                <a href="{{ url_for('transactions.index') }}" class="btn btn-outline btn-sm" style="margin-left:12px;">Reset filter</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tx2-mobile-list">
+        {% for t in transactions %}
+        <article class="tx2-mobile-item">
+          <div class="tx2-mobile-head">
+            <div>
+              <div class="tx2-num">{{ t.nomor }}</div>
+              <div class="tx2-time">{{ t.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+            </div>
+            <div class="tx2-mobile-total">
+              {% set ret_sum_row = (t.sales_returns|map(attribute='total_retur')|sum) if t.sales_returns else 0 %}
+              {% set net_row = [0, (t.total or 0) - ret_sum_row]|max %}
+              <div>Nota Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</div>
+              {% if t.sales_returns and ret_sum_row > 0 %}
+              <div style="font-size:12px;font-weight:600;color:var(--primary-light, #a5b4fc);">Net Rp {{ "{:,.0f}".format(net_row).replace(",",".") }}</div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="tx2-mobile-meta">
+            <span class="badge {{ 'badge-danger' if t.status == 'batal' else 'badge-success' }}">{{ 'Batal' if t.status == 'batal' else 'Selesai' }}</span>
+            <span class="badge badge-{{ 'primary' if t.metode_bayar == 'tunai' else ('info' if t.metode_bayar == 'transfer' else 'success') }}">{{ t.metode_bayar|upper }}</span>
+            <span class="tx2-mobile-line">Cabang: {{ t.branch.nama if t.branch else '—' }}</span>
+            <span class="tx2-mobile-line">Kasir: {{ t.user.nama if t.user else '—' }}</span>
+            <span class="tx2-mobile-line">Member: {{ t.member.nama if t.member else '—' }}</span>
+            {% if t.sales_returns %}
+            {% set ret_count = t.sales_returns|length %}
+            {% set ret_sum = t.sales_returns|map(attribute='total_retur')|sum %}
+            <span class="tx2-mobile-line">Retur: ↩ {{ ret_count }}{% if perm('returns') %} · Rp {{ "{:,.0f}".format(ret_sum).replace(",",".") }}{% endif %}</span>
+            {% endif %}
+          </div>
+          <div class="tx2-row-actions">
+            <a href="{{ url_for('transactions.detail', id=t.id) }}" class="btn btn-outline btn-sm">Detail</a>
+            {% if t.status == 'selesai' %}
+            <a href="{{ url_for('receipt.view_receipt', id=t.id) }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Struk</a>
+            {% endif %}
+          </div>
+        </article>
+        {% else %}
+        <div class="admin-table-empty">Belum ada transaksi untuk filter ini.</div>
+        {% endfor %}
+      </div>
+
+      {% if total_pages > 1 %}
+      <nav class="tx2-pager" aria-label="Navigasi halaman">
+        {% if page > 1 %}
+        <a class="page-btn" href="{{ url_for('transactions.index') }}{% if qs_base %}?{{ qs_base }}&{% else %}?{% endif %}page={{ page - 1 }}">« Sebelumnya</a>
+        {% endif %}
+        <span class="text-muted">{{ page }} / {{ total_pages }}</span>
+        {% if page < total_pages %}
+        <a class="page-btn" href="{{ url_for('transactions.index') }}{% if qs_base %}?{{ qs_base }}&{% else %}?{% endif %}page={{ page + 1 }}">Berikutnya »</a>
+        {% endif %}
+      </nav>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

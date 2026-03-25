@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% block title %}Retur {{ trx.nomor }}{% endblock %}
+{% block page_title %}↩️ Retur dari {{ trx.nomor }}{% endblock %}
+{% block page_sub %}Pilih qty per baris · opsional tukar barang{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+  <div class="mb-3">
+    <a href="{{ url_for('transactions.detail', id=trx.id) }}" class="btn btn-outline btn-sm">← Kembali ke transaksi</a>
+  </div>
+
+  {% if not shift %}
+  <div class="card mb-3" style="border-color:var(--warning, #f59e0b);">
+    <div class="card-body" style="font-size:14px;">
+      <strong>Shift belum dibuka.</strong> Retur biasa tetap bisa diproses. Untuk <strong>tukar barang</strong> (penjualan pengganti) wajib buka shift di halaman POS.
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post" class="card mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-header"><div class="card-title">Barang diretur</div></div>
+    <div class="table-wrapper" style="overflow-x:auto;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Produk</th>
+            <th>Harga</th>
+            <th>Qty jual</th>
+            <th>Sudah retur</th>
+            <th>Qty retur</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in items_meta %}
+          {% set it = row.ti %}
+          <tr>
+            <td style="font-weight:600;">{{ it.nama_produk }}</td>
+            <td class="text-muted">Rp {{ "{:,.0f}".format(it.harga).replace(",",".") }}</td>
+            <td>{{ it.qty }}</td>
+            <td class="text-muted">{{ row.returned }}</td>
+            <td style="max-width:120px;">
+              {% if row.available > 0 %}
+              <input type="number" class="form-control" name="qty_{{ it.id }}" min="0" max="{{ row.available }}" step="0.001" value="" placeholder="0">
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="form-group">
+        <label class="form-label">Alasan (opsional)</label>
+        <input type="text" name="alasan" class="form-control" placeholder="Contoh: rusak, salah item">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Catatan (opsional)</label>
+        <textarea name="catatan" class="form-control" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Metode pengembalian</label>
+        <select name="metode_pengembalian" id="metodePengembalian" class="form-control">
+          {% for m in refund_methods %}
+          <option value="{{ m }}">{{ m }}</option>
+          {% endfor %}
+        </select>
+        <p class="text-muted" style="font-size:12px;margin-top:6px;">Untuk nota kredit dengan sisa hutang, sistem memakai <strong>potong hutang</strong> otomatis.</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Jenis</label>
+        <select name="jenis" id="jenisRetur" class="form-control">
+          <option value="retur">Retur saja</option>
+          <option value="tukar">Tukar barang (retur + jual pengganti)</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="panelTukar" class="card-body" style="display:none;border-top:1px solid var(--border);">
+      <div class="card-title mb-2">Produk pengganti</div>
+      <p class="text-muted" style="font-size:13px;">Tambah baris produk yang dijual sebagai pengganti. Pembayaran mengikuti metode di bawah.</p>
+      <div id="replRows"></div>
+      <button type="button" class="btn btn-outline btn-sm mt-2" id="btnAddRepl">+ Tambah produk</button>
+
+      {% if trx.member %}
+      <div class="form-check mt-3">
+        <input type="checkbox" name="use_source_member" value="1" id="useMember" checked>
+        <label for="useMember">Gunakan member nota asli ({{ trx.member.nama }})</label>
+      </div>
+      {% endif %}
+
+      <div class="form-group mt-3">
+        <label class="form-label">Metode bayar pengganti</label>
+        <select name="repl_metode" id="replMetode" class="form-control">
+          <option value="tunai">Tunai</option>
+          <option value="transfer">Transfer</option>
+          <option value="qris">QRIS</option>
+          <option value="kredit">Kredit</option>
+        </select>
+      </div>
+      <div class="form-group" id="replBayarRow">
+        <label class="form-label">Uang bayar (pengganti)</label>
+        <input type="number" name="repl_bayar" class="form-control" min="0" step="1" value="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Diskon manual pengganti (Rp)</label>
+        <input type="number" name="repl_diskon" class="form-control" min="0" step="1" value="0">
+      </div>
+      <div class="form-group" id="replJtRow" style="display:none;">
+        <label class="form-label">Jatuh tempo hutang (opsional)</label>
+        <input type="date" name="repl_jatuh_tempo" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Catatan transaksi pengganti</label>
+        <input type="text" name="repl_catatan" class="form-control" placeholder="Tukar dari retur {{ trx.nomor }}">
+      </div>
+    </div>
+
+    <div class="card-body">
+      <button type="submit" class="btn btn-primary" onclick="return confirm('Simpan retur ini?');">Simpan retur</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function() {
+  const PRODUCTS = {{ products_tukar|tojson }};
+  const jenis = document.getElementById('jenisRetur');
+  const panel = document.getElementById('panelTukar');
+  const rowsEl = document.getElementById('replRows');
+  const replMetode = document.getElementById('replMetode');
+  const replBayarRow = document.getElementById('replBayarRow');
+  const replJtRow = document.getElementById('replJtRow');
+
+  function togglePanel() {
+    panel.style.display = (jenis.value === 'tukar') ? 'block' : 'none';
+  }
+  jenis.addEventListener('change', togglePanel);
+  togglePanel();
+
+  function toggleReplPay() {
+    const k = replMetode.value === 'kredit';
+    replBayarRow.style.display = k ? 'none' : 'block';
+    replJtRow.style.display = k ? 'block' : 'none';
+  }
+  replMetode.addEventListener('change', toggleReplPay);
+  toggleReplPay();
+
+  function addRow() {
+    const wrap = document.createElement('div');
+    wrap.className = 'form-row-repl';
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:8px;';
+    const sel = document.createElement('select');
+    sel.name = 'repl_id';
+    sel.className = 'form-control';
+    sel.style.flex = '1';
+    sel.style.minWidth = '200px';
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.textContent = '— Pilih produk —';
+    sel.appendChild(opt0);
+    PRODUCTS.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.nama + ' (stok ' + p.stok + ')';
+      sel.appendChild(o);
+    });
+    const qty = document.createElement('input');
+    qty.type = 'number';
+    qty.name = 'repl_qty';
+    qty.className = 'form-control';
+    qty.style.width = '100px';
+    qty.min = '0.001';
+    qty.step = 'any';
+    qty.placeholder = 'Qty';
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'btn btn-outline btn-sm';
+    rm.textContent = 'Hapus';
+    rm.onclick = function() { wrap.remove(); };
+    wrap.appendChild(sel);
+    wrap.appendChild(qty);
+    wrap.appendChild(rm);
+    rowsEl.appendChild(wrap);
+  }
+  document.getElementById('btnAddRepl').addEventListener('click', addRow);
+  if (PRODUCTS.length) addRow();
+})();
+</script>
+{% endblock %}

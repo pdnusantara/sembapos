@@ -1,0 +1,95 @@
+{% extends 'base.html' if not is_pdf else 'receipt/pdf_base.html' %}
+{% block title %}Struk - {{ trx.nomor }}{% endblock %}
+
+{% block content %}
+<div style="font-family:monospace;max-width:320px;margin:0 auto;padding:20px;background:#fff;color:#000;">
+  <div style="text-align:center;margin-bottom:20px;border-bottom:1px dashed #000;padding-bottom:10px;">
+    <h3 style="margin:0 0 5px 0;">{{ trx.tenant.nama }}</h3>
+    <div style="font-size:12px;">{{ trx.branch.nama }}</div>
+    <div style="font-size:12px;">{{ trx.branch.alamat }}</div>
+    <div style="font-size:12px;">Telp: {{ trx.branch.telepon }}</div>
+  </div>
+  
+  <div style="font-size:12px;margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;">
+      <span>No: {{ trx.nomor }}</span>
+      <span>{{ trx.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;">
+      <span>Kasir: {{ trx.user.nama }}</span>
+    </div>
+    {% if trx.member %}
+    <div style="display:flex;justify-content:space-between;">
+      <span>Member: {{ trx.member.nama }}</span>
+    </div>
+    {% endif %}
+  </div>
+  
+  <div style="border-top:1px dashed #000;border-bottom:1px dashed #000;padding:10px 0;margin-bottom:10px;font-size:12px;">
+    {% for item in trx.items %}
+    <div style="margin-bottom:5px;">
+      <div>{{ item.nama_produk }}</div>
+      <div style="display:flex;justify-content:space-between;">
+        <span>{{ item.qty | int }} x {{ "{:,.0f}".format(item.harga).replace(",",".") }}</span>
+        <span>{{ "{:,.0f}".format(item.subtotal).replace(",",".") }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  
+  <div style="font-size:12px;margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;">
+      <span>Subtotal</span>
+      <span>{{ "{:,.0f}".format(trx.subtotal).replace(",",".") }}</span>
+    </div>
+    {% if trx.diskon > 0 %}
+    <div style="display:flex;justify-content:space-between;">
+      <span>Diskon</span>
+      <span>-{{ "{:,.0f}".format(trx.diskon).replace(",",".") }}</span>
+    </div>
+    {% endif %}
+    <div style="display:flex;justify-content:space-between;font-weight:bold;margin-top:5px;font-size:14px;">
+      <span>Total</span>
+      <span>{{ "{:,.0f}".format(trx.total).replace(",",".") }}</span>
+    </div>
+    
+    <div style="border-top:1px dashed #000;margin-top:10px;padding-top:10px;">
+      <div style="display:flex;justify-content:space-between;">
+        <span>Bayar ({{ trx.metode_bayar|upper }})</span>
+        <span>{{ "{:,.0f}".format(trx.bayar).replace(",",".") }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span>Kembalian</span>
+        <span>{{ "{:,.0f}".format(trx.kembalian).replace(",",".") }}</span>
+      </div>
+    </div>
+  </div>
+  
+  <div style="text-align:center;font-size:12px;border-top:1px dashed #000;padding-top:10px;">
+    <i>Terima Kasih Atas Kunjungan Anda</i>
+  </div>
+  
+  {% if not is_pdf %}
+  <div style="margin-top:30px;display:flex;gap:10px;justify-content:center;" class="no-print">
+    <button onclick="window.print()" style="padding:8px 16px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;">🖨️ Cetak</button>
+    <a href="{{ url_for('receipt.download_pdf', id=trx.id) }}" target="_blank" style="padding:8px 16px;background:#2196F3;color:#fff;text-decoration:none;border-radius:4px;">📄 Cetak PDF</a>
+    <a href="{{ url_for('pos.index') }}" style="padding:8px 16px;background:#757575;color:#fff;text-decoration:none;border-radius:4px;">Kembali</a>
+  </div>
+  {% endif %}
+  
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff; margin:0; padding:0; }
+    }
+  </style>
+  
+  {% if auto_print %}
+  <script>
+    window.onload = function() {
+      window.print();
+    }
+  </script>
+  {% endif %}
+</div>
+{% endblock %}

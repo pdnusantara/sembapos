@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Retur penjualan{% endblock %}
+{% block page_title %}↩️ Retur penjualan{% endblock %}
+{% block page_sub %}Nota retur terhubung transaksi asli · stok otomatis kembali{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+  <div class="card mb-3">
+    <form method="GET" class="opex-toolbar" style="flex-wrap:wrap;gap:12px;align-items:flex-end;">
+      <div class="form-group">
+        <label class="form-label">Dari</label>
+        <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sampai</label>
+        <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+      </div>
+      {% if current_user.role != 'kasir' %}
+      <div class="form-group">
+        <label class="form-label">Cabang</label>
+        <select name="branch_id" class="form-control">
+          <option value="">Semua</option>
+          {% for b in branches %}
+          <option value="{{ b.id }}" {{ 'selected' if branch_id_param == (b.id|string) else '' }}>{{ b.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="form-group">
+        <label class="form-label">Nomor retur</label>
+        <input type="search" name="q" class="form-control" value="{{ q }}" placeholder="RET-...">
+      </div>
+      <div class="opex-toolbar-actions">
+        <button type="submit" class="btn btn-primary">Tampilkan</button>
+        <a href="{{ url_for('returns.index') }}" class="btn btn-outline">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Daftar retur</div>
+      <span class="text-muted" style="font-size:13px;">Maks. 500</span>
+    </div>
+    <div class="table-wrapper" style="overflow-x:auto;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Nomor</th>
+            <th>Nota asli</th>
+            <th>Jenis</th>
+            <th>Nilai</th>
+            <th>Cabang</th>
+            <th>User</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else '—' }}</td>
+            <td style="font-weight:600;">{{ r.nomor }}</td>
+            <td>
+              {% if r.source_transaction %}
+              <a href="{{ url_for('transactions.detail', id=r.source_transaction.id) }}">{{ r.source_transaction.nomor }}</a>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ r.jenis }}</td>
+            <td>Rp {{ "{:,.0f}".format(r.total_retur or 0).replace(",",".") }}</td>
+            <td class="text-muted">{{ r.branch.nama if r.branch else '—' }}</td>
+            <td class="text-muted">{{ r.user.nama if r.user else '—' }}</td>
+            <td>
+              <a href="{{ url_for('returns.detail', rid=r.id) }}" class="btn btn-sm btn-outline">Detail</a>
+              <a href="{{ url_for('returns.print_return', rid=r.id) }}" target="_blank" class="btn btn-sm btn-outline">Cetak</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Belum ada retur pada periode ini.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Super Admin — Paket Tenant{% endblock %}
+{% block page_title %}📦 Paket langganan tenant{% endblock %}
+{% block page_sub %}Modul, kuota cabang &amp; user, harga referensi{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.index'), false),
+  ('Paket tenant', '', true),
+]) }}
+<div class="page-list-toolbar mb-3" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+  <a href="{{ url_for('superadmin.paket_add') }}" class="btn btn-primary">➕ Tambah paket</a>
+  <a href="{{ url_for('superadmin.index') }}" class="btn btn-outline">← Daftar tenant</a>
+</div>
+
+<div class="card mb-3" style="border-style:dashed;opacity:0.95;">
+  <div style="padding:14px 16px;font-size:13px;color:var(--text-muted);line-height:1.55;">
+    <strong style="color:var(--text-light);">Modul</strong><br>
+    Jika semua modul dicentang saat edit paket (atau kosong), tenant mendapat akses modul sesuai hak per user. Jika dibatasi, irisan dengan izin user tetap berlaku.
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Daftar paket</div>
+    <div style="font-size:12px;color:var(--text-muted);">{{ packages|length }} definisi</div>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Paket</th>
+          <th>Kode</th>
+          <th>Cabang / User</th>
+          <th>Harga / bln</th>
+          <th>Harga / thn</th>
+          <th>Modul</th>
+          <th>Tenant</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in packages %}
+        {% set n = tenant_count_by_paket.get(p.id, 0) %}
+        {% set lim_c = p.max_cabang >= unlimited_threshold %}
+        {% set lim_u = p.max_user >= unlimited_threshold %}
+        <tr>
+          <td>
+            <strong style="color:var(--text-light);">{{ p.nama }}</strong>
+            {% if p.deskripsi %}<div style="font-size:11px;color:var(--text-muted);margin-top:4px;max-width:280px;">{{ p.deskripsi }}</div>{% endif %}
+          </td>
+          <td><span class="badge badge-info">{{ p.kode }}</span></td>
+          <td style="font-size:13px;white-space:nowrap;">
+            {% if lim_c %}∞{% else %}{{ p.max_cabang }}{% endif %} cab ·
+            {% if lim_u %}∞{% else %}{{ p.max_user }}{% endif %} user
+          </td>
+          <td style="font-size:13px;">Rp {{ "{:,.0f}".format(p.harga_bulanan).replace(",",".") }}</td>
+          <td style="font-size:13px;">Rp {{ "{:,.0f}".format(p.harga_tahunan).replace(",",".") }}</td>
+          <td style="font-size:12px;max-width:200px;">
+            {% if not p.modules_json or not p.modules_json.strip() %}
+            <span class="text-muted">Semua modul</span>
+            {% else %}
+            <span class="badge badge-warning" style="font-size:10px;">Terbatas</span>
+            {% endif %}
+          </td>
+          <td>{{ n }}</td>
+          <td>
+            <span class="badge {{ 'badge-success' if p.aktif else 'badge-danger' }}">
+              {{ 'Aktif' if p.aktif else 'Nonaktif' }}
+            </span>
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <a href="{{ url_for('superadmin.paket_edit', id=p.id) }}" class="btn btn-outline btn-sm">✏️</a>
+              <form method="POST" action="{{ url_for('superadmin.paket_toggle', id=p.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm">{{ '⏸️' if p.aktif else '▶️' }}</button>
+              </form>
+              {% if n == 0 %}
+              <form method="POST" action="{{ url_for('superadmin.paket_delete', id=p.id) }}" style="display:inline;" onsubmit="return confirm('Hapus paket {{ p.kode }}?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger);">🗑️</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:32px;">Belum ada paket. Tambah atau jalankan ulang aplikasi untuk seed default.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><div class="card-title">Legenda modul</div></div>
+  <div style="padding:12px 16px;font-size:12px;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:8px;">
+    {% for code, label in permission_modules %}
+    <span><code style="font-size:11px;">{{ code }}</code> — {{ label }}</span>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

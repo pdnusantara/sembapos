@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Purchase Orders{% endblock %}
+{% block page_title %}📥 Purchase Orders (Pembelian){% endblock %}
+{% block page_sub %}{{ pos|length }} riwayat pesanan{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="page-list-toolbar">
+    <div style="color:var(--text-muted);font-size:14px;flex:1;min-width:200px;">Riwayat pemesanan stok ke supplier</div>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('purchases.add') }}" class="btn btn-primary">➕ Buat PO Baru</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr><th>Nomor PO</th><th>Supplier</th><th>Tanggal Pesan</th><th>Total</th><th>Status</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+        {% for po in pos %}
+        <tr>
+          <td><div style="font-family:monospace;font-weight:600;color:var(--primary-light);">{{ po.nomor }}</div></td>
+          <td>{{ po.supplier.nama }}</td>
+          <td>{{ po.tanggal_pesan.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td style="font-weight:600;">Rp {{ "{:,.0f}".format(po.total).replace(",",".") }}</td>
+          <td>
+            <span class="badge {{ 'badge-warning' if po.status == 'dipesan' else ('badge-success' if po.status == 'diterima' else 'badge-danger') }}">
+              {{ po.status|upper }}
+            </span>
+          </td>
+          <td>
+            <a href="{{ url_for('purchases.detail', id=po.id) }}" class="btn btn-outline btn-sm">👁️ Detail</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">📭 Belum ada riwayat Purchase Order</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if supplier else 'Tambah' }} Supplier{% endblock %}
+{% block page_title %}🏭 {{ 'Edit Supplier' if supplier else 'Tambah Supplier Baru' }}{% endblock %}
+
+{% block content %}
+<div style="max-width:600px;">
+  <div class="card">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="grid-2">
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Nama Perusahaan/Toko *</label>
+          <input type="text" name="nama" class="form-control" required value="{{ supplier.nama if supplier else '' }}" placeholder="PT Indofood / Toko Maju">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nama Kontak Person</label>
+          <input type="text" name="kontak" class="form-control" value="{{ supplier.kontak if supplier else '' }}" placeholder="Pak Budi">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telepon/WhatsApp</label>
+          <input type="text" name="telepon" class="form-control" value="{{ supplier.telepon if supplier else '' }}" placeholder="08xxx">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" value="{{ supplier.email if supplier else '' }}" placeholder="supplier@email.com">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Alamat Lengkap</label>
+          <input type="text" name="alamat" class="form-control" value="{{ supplier.alamat if supplier else '' }}" placeholder="Jalan Raya...">
+        </div>
+        
+        {% if supplier %}
+        <div class="form-group" style="grid-column:1/-1;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" name="aktif" value="1" {% if supplier.aktif %}checked{% endif %}>
+            <span>Supplier Aktif</span>
+          </label>
+        </div>
+        {% endif %}
+      </div>
+      
+      <div style="display:flex;gap:12px;margin-top:16px;">
+        <button type="submit" class="btn btn-primary">💾 Simpan</button>
+        <a href="{{ url_for('suppliers.index') }}" class="btn btn-outline">✕ Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+
+# Environment & data lokal
+.env
+*.db
+*.sqlite3
+instance/
+
+# Upload produk (dibuat runtime; jangan commit gambar toko)
+app/static/uploads/products/*
+!app/static/uploads/products/.gitkeep
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Flask / pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build / dist
+*.egg-info/
+dist/
+build/

@@ -1,0 +1,521 @@
+{% extends 'base.html' %}
+{% block title %}Laporan Produk & Kategori{% endblock %}
+{% block page_title %}📈 Laporan Produk & Kategori{% endblock %}
+{% block page_sub %}Periode {{ date_from }} s/d {{ date_to }}{% endblock %}
+
+{% block content %}
+<div class="page-shell report-page">
+  <div class="card report-filter-card mb-3">
+    <form method="GET" class="filter-bar-inline report-filter-form report-breakdown-filter">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <input type="hidden" name="q_produk" value="{{ q_produk }}">
+      <input type="hidden" name="q_kategori" value="{{ q_kategori }}">
+      <input type="hidden" name="sort_produk" value="{{ sort_produk }}">
+      <input type="hidden" name="sort_kategori" value="{{ sort_kategori }}">
+      <input type="hidden" name="dir_produk" value="{{ dir_produk }}">
+      <input type="hidden" name="dir_kategori" value="{{ dir_kategori }}">
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Dari tanggal</label>
+        <input type="date" name="date_from" class="form-control" value="{{ date_from }}" required>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Sampai tanggal</label>
+        <input type="date" name="date_to" class="form-control" value="{{ date_to }}" required>
+      </div>
+
+      {% if current_user.role != 'kasir' %}
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Cabang</label>
+        <select name="branch_id" class="form-control">
+          <option value="">Semua cabang</option>
+          {% for b in branches %}
+          <option value="{{ b.id }}" {{ 'selected' if selected_branch_id and selected_branch_id|int == b.id else '' }}>{{ b.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Maks. baris</label>
+        <select name="limit" class="form-control">
+          {% for n in [20, 50, 100, 200, 500] %}
+          <option value="{{ n }}" {{ 'selected' if row_limit == n else '' }}>{{ n }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Mode HPP</label>
+        <select name="hpp_mode" class="form-control">
+          <option value="master" {{ 'selected' if hpp_mode == 'master' else '' }}>Harga beli master</option>
+          <option value="snapshot" {{ 'selected' if hpp_mode == 'snapshot' else '' }}>Snapshot transaksi</option>
+        </select>
+      </div>
+
+      <button type="submit" class="btn btn-primary">🔍 Tampilkan</button>
+    </form>
+  </div>
+
+  <div class="report-tabs" role="tablist" aria-label="Tab laporan penjualan breakdown">
+    <a href="{{ url_for('reports.sales_breakdown') }}?{{ tab_produk_qs }}" class="report-tab {{ 'active' if tab == 'produk' else '' }}" role="tab" aria-selected="{{ 'true' if tab == 'produk' else 'false' }}">
+      📦 Per Produk
+    </a>
+    <a href="{{ url_for('reports.sales_breakdown') }}?{{ tab_kategori_qs }}" class="report-tab {{ 'active' if tab == 'kategori' else '' }}" role="tab" aria-selected="{{ 'true' if tab == 'kategori' else 'false' }}">
+      🏷️ Per Kategori
+    </a>
+  </div>
+
+  {% if hpp_mode_note %}
+  <div class="alert alert-warning">
+    <span>⚠️</span>
+    <span>{{ hpp_mode_note }}</span>
+  </div>
+  {% endif %}
+
+  <div class="report-alert-grid">
+    <div class="card report-alert-card {{ 'warn' if alerts.negative_margin_count > 0 else 'ok' }}">
+      <div class="card-title">⚠️ Produk margin negatif</div>
+      <p class="report-alert-value">{{ alerts.negative_margin_count }}</p>
+      {% if alerts.negative_margin_top %}
+      <p class="report-alert-meta">
+        Contoh: {{ alerts.negative_margin_top[0].nama_produk }}
+      </p>
+      {% else %}
+      <p class="report-alert-meta">Tidak ada produk dengan margin negatif di data saat ini.</p>
+      {% endif %}
+    </div>
+    <div class="card report-alert-card {{ 'warn' if alerts.sharp_drop_count > 0 else 'ok' }}">
+      <div class="card-title">📉 Kategori turun tajam</div>
+      <p class="report-alert-value">{{ alerts.sharp_drop_count }}</p>
+      {% if alerts.sharp_drop_top %}
+      <p class="report-alert-meta">
+        Terbesar: {{ alerts.sharp_drop_top[0].nama_kategori }} ({{ "{:,.2f}".format(alerts.sharp_drop_top[0].change_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%)
+      </p>
+      {% else %}
+      <p class="report-alert-meta">Belum ada kategori yang turun ≥ 30% dibanding periode sebelumnya.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if tab == 'produk' %}
+  <section class="report-tab-panel">
+    <div class="card report-mini-filter-card">
+      <form method="GET" class="report-mini-filter">
+        <input type="hidden" name="tab" value="produk">
+        <input type="hidden" name="date_from" value="{{ date_from }}">
+        <input type="hidden" name="date_to" value="{{ date_to }}">
+        <input type="hidden" name="limit" value="{{ row_limit }}">
+        <input type="hidden" name="branch_id" value="{{ selected_branch_id }}">
+        <input type="hidden" name="hpp_mode" value="{{ hpp_mode }}">
+        <input type="hidden" name="q_kategori" value="{{ q_kategori }}">
+        <input type="hidden" name="sort_kategori" value="{{ sort_kategori }}">
+        <input type="hidden" name="dir_kategori" value="{{ dir_kategori }}">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Cari produk</label>
+          <input type="text" name="q_produk" class="form-control" value="{{ q_produk }}" placeholder="Nama produk...">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Urutkan</label>
+          <select name="sort_produk" class="form-control">
+            <option value="omzet" {{ 'selected' if sort_produk == 'omzet' else '' }}>Omzet</option>
+            <option value="margin" {{ 'selected' if sort_produk == 'margin' else '' }}>Margin</option>
+            <option value="qty" {{ 'selected' if sort_produk == 'qty' else '' }}>Qty</option>
+            <option value="hpp" {{ 'selected' if sort_produk == 'hpp' else '' }}>HPP</option>
+            <option value="nama" {{ 'selected' if sort_produk == 'nama' else '' }}>Nama</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Arah</label>
+          <select name="dir_produk" class="form-control">
+            <option value="desc" {{ 'selected' if dir_produk == 'desc' else '' }}>Terbesar → kecil</option>
+            <option value="asc" {{ 'selected' if dir_produk == 'asc' else '' }}>Kecil → terbesar</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-secondary">Terapkan</button>
+      </form>
+    </div>
+
+    <div class="stats-grid report-breakdown-stats">
+      <div class="stat-card primary">
+        <div class="stat-icon primary">💰</div>
+        <div class="stat-info">
+          <div class="stat-value">Rp {{ "{:,.0f}".format(produk_totals.omzet).replace(",", ".") }}</div>
+          <div class="stat-label">Omzet produk</div>
+          <div class="stat-sublabel">Akumulasi baris produk (maks {{ row_limit }} baris)</div>
+        </div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-icon warning">🧮</div>
+        <div class="stat-info">
+          <div class="stat-value">{{ "{:,.2f}".format(produk_totals.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</div>
+          <div class="stat-label">Qty terjual</div>
+          <div class="stat-sublabel">Total kuantitas item terjual</div>
+        </div>
+      </div>
+      <div class="stat-card {{ 'success' if produk_totals.margin >= 0 else 'danger' }}">
+        <div class="stat-icon {{ 'success' if produk_totals.margin >= 0 else 'danger' }}">📈</div>
+        <div class="stat-info">
+          <div class="stat-value">Rp {{ "{:,.0f}".format(produk_totals.margin).replace(",", ".") }}</div>
+          <div class="stat-label">Margin kotor (estimasi)</div>
+          <div class="stat-sublabel">{{ "{:,.2f}".format(produk_totals.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card report-chart-card">
+      <div class="card-header">
+        <div class="card-title">📊 Top 10 Produk by Omzet</div>
+      </div>
+      <div class="report-chart-wrap">
+        <canvas id="salesTopChart"></canvas>
+      </div>
+    </div>
+
+    <div class="report-insights-grid">
+      <div class="card report-insight-card">
+        <div class="card-title">🚀 Top performer omzet</div>
+        {% if produk_insights.top %}
+        <p class="report-insight-name">{{ produk_insights.top.label }}</p>
+        <p class="report-insight-meta">Omzet Rp {{ "{:,.0f}".format(produk_insights.top.omzet).replace(",", ".") }} · Qty {{ "{:,.2f}".format(produk_insights.top.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</p>
+        {% else %}
+        <p class="text-muted">Belum ada data.</p>
+        {% endif %}
+      </div>
+      <div class="card report-insight-card">
+        <div class="card-title">🐢 Bottom performer omzet</div>
+        {% if produk_insights.bottom %}
+        <p class="report-insight-name">{{ produk_insights.bottom.label }}</p>
+        <p class="report-insight-meta">Omzet Rp {{ "{:,.0f}".format(produk_insights.bottom.omzet).replace(",", ".") }} · Qty {{ "{:,.2f}".format(produk_insights.bottom.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</p>
+        {% else %}
+        <p class="text-muted">Belum ada pembanding yang valid.</p>
+        {% endif %}
+      </div>
+      <div class="card report-insight-card">
+        <div class="card-title">🏆 Margin terbaik</div>
+        {% if produk_insights.best_margin %}
+        <p class="report-insight-name">{{ produk_insights.best_margin.label }}</p>
+        <p class="report-insight-meta">Margin Rp {{ "{:,.0f}".format(produk_insights.best_margin.margin).replace(",", ".") }} ({{ "{:,.2f}".format(produk_insights.best_margin.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%)</p>
+        {% else %}
+        <p class="text-muted">Belum ada data.</p>
+        {% endif %}
+      </div>
+      <div class="card report-insight-card">
+        <div class="card-title">⚠️ Margin terendah</div>
+        {% if produk_insights.worst_margin %}
+        <p class="report-insight-name">{{ produk_insights.worst_margin.label }}</p>
+        <p class="report-insight-meta">Margin Rp {{ "{:,.0f}".format(produk_insights.worst_margin.margin).replace(",", ".") }} ({{ "{:,.2f}".format(produk_insights.worst_margin.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%)</p>
+        {% else %}
+        <p class="text-muted">Belum ada pembanding yang valid.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📦 Detail Penjualan Per Produk</div>
+      </div>
+      <div class="table-wrapper report-table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Produk</th>
+              <th>Qty</th>
+              <th>Omzet</th>
+              <th>HPP Est.</th>
+              <th>Margin</th>
+              <th>Margin %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in produk_rows %}
+            <tr class="report-row-clickable" onclick="window.location='{{ url_for('reports.sales_breakdown', tab='produk', date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, q_produk=q_produk, q_kategori=q_kategori, sort_produk=sort_produk, sort_kategori=sort_kategori, dir_produk=dir_produk, dir_kategori=dir_kategori, detail_type='produk', detail_key=row.produk_key) }}'">
+              <td>{{ row.rank }}</td>
+              <td>{{ row.nama_produk }}</td>
+              <td>{{ "{:,.2f}".format(row.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(row.omzet).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(row.hpp).replace(",", ".") }}</td>
+              <td class="{{ 'text-success' if row.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(row.margin).replace(",", ".") }}</td>
+              <td class="{{ 'text-success' if row.margin_pct >= 0 else 'text-danger' }}">{{ "{:,.2f}".format(row.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted);">📭 Tidak ada data produk pada periode ini</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if detail_type == 'produk' and detail_rows %}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🔎 {{ detail_title }}</div>
+      </div>
+      <div class="table-wrapper report-table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>No. Transaksi</th>
+              <th>Kasir</th>
+              <th>Qty</th>
+              <th>Omzet</th>
+              <th>HPP</th>
+              <th>Margin</th>
+              <th>Waktu</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in detail_rows %}
+            <tr>
+              <td><a href="{{ url_for('transactions.detail', id=d.transaction_id) }}" class="report-drill-link">{{ d.nomor }}</a></td>
+              <td>{{ d.kasir_nama }}</td>
+              <td>{{ "{:,.2f}".format(d.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(d.omzet).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(d.hpp).replace(",", ".") }}</td>
+              <td class="{{ 'text-success' if d.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(d.margin).replace(",", ".") }}</td>
+              <td>{{ d.created_at.strftime('%d/%m/%Y %H:%M') if d.created_at else '-' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% else %}
+  <section class="report-tab-panel">
+    <div class="card report-mini-filter-card">
+      <form method="GET" class="report-mini-filter">
+        <input type="hidden" name="tab" value="kategori">
+        <input type="hidden" name="date_from" value="{{ date_from }}">
+        <input type="hidden" name="date_to" value="{{ date_to }}">
+        <input type="hidden" name="limit" value="{{ row_limit }}">
+        <input type="hidden" name="branch_id" value="{{ selected_branch_id }}">
+        <input type="hidden" name="hpp_mode" value="{{ hpp_mode }}">
+        <input type="hidden" name="q_produk" value="{{ q_produk }}">
+        <input type="hidden" name="sort_produk" value="{{ sort_produk }}">
+        <input type="hidden" name="dir_produk" value="{{ dir_produk }}">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Cari kategori</label>
+          <input type="text" name="q_kategori" class="form-control" value="{{ q_kategori }}" placeholder="Nama kategori...">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Urutkan</label>
+          <select name="sort_kategori" class="form-control">
+            <option value="omzet" {{ 'selected' if sort_kategori == 'omzet' else '' }}>Omzet</option>
+            <option value="margin" {{ 'selected' if sort_kategori == 'margin' else '' }}>Margin</option>
+            <option value="qty" {{ 'selected' if sort_kategori == 'qty' else '' }}>Qty</option>
+            <option value="hpp" {{ 'selected' if sort_kategori == 'hpp' else '' }}>HPP</option>
+            <option value="nama" {{ 'selected' if sort_kategori == 'nama' else '' }}>Nama</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Arah</label>
+          <select name="dir_kategori" class="form-control">
+            <option value="desc" {{ 'selected' if dir_kategori == 'desc' else '' }}>Terbesar → kecil</option>
+            <option value="asc" {{ 'selected' if dir_kategori == 'asc' else '' }}>Kecil → terbesar</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-secondary">Terapkan</button>
+      </form>
+    </div>
+
+    <div class="stats-grid report-breakdown-stats">
+      <div class="stat-card primary">
+        <div class="stat-icon primary">💰</div>
+        <div class="stat-info">
+          <div class="stat-value">Rp {{ "{:,.0f}".format(kategori_totals.omzet).replace(",", ".") }}</div>
+          <div class="stat-label">Omzet kategori</div>
+          <div class="stat-sublabel">Akumulasi kategori (maks {{ row_limit }} baris)</div>
+        </div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-icon warning">🧮</div>
+        <div class="stat-info">
+          <div class="stat-value">{{ "{:,.2f}".format(kategori_totals.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</div>
+          <div class="stat-label">Qty terjual</div>
+          <div class="stat-sublabel">Total kuantitas item terjual</div>
+        </div>
+      </div>
+      <div class="stat-card {{ 'success' if kategori_totals.margin >= 0 else 'danger' }}">
+        <div class="stat-icon {{ 'success' if kategori_totals.margin >= 0 else 'danger' }}">📈</div>
+        <div class="stat-info">
+          <div class="stat-value">Rp {{ "{:,.0f}".format(kategori_totals.margin).replace(",", ".") }}</div>
+          <div class="stat-label">Margin kotor (estimasi)</div>
+          <div class="stat-sublabel">{{ "{:,.2f}".format(kategori_totals.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card report-chart-card">
+      <div class="card-header">
+        <div class="card-title">📊 Top 10 Kategori by Omzet</div>
+      </div>
+      <div class="report-chart-wrap">
+        <canvas id="salesTopChart"></canvas>
+      </div>
+    </div>
+
+    <div class="report-insights-grid">
+      <div class="card report-insight-card">
+        <div class="card-title">🚀 Top kategori omzet</div>
+        {% if kategori_insights.top %}
+        <p class="report-insight-name">{{ kategori_insights.top.label }}</p>
+        <p class="report-insight-meta">Omzet Rp {{ "{:,.0f}".format(kategori_insights.top.omzet).replace(",", ".") }} · Qty {{ "{:,.2f}".format(kategori_insights.top.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</p>
+        {% else %}
+        <p class="text-muted">Belum ada data.</p>
+        {% endif %}
+      </div>
+      <div class="card report-insight-card">
+        <div class="card-title">🐢 Bottom kategori omzet</div>
+        {% if kategori_insights.bottom %}
+        <p class="report-insight-name">{{ kategori_insights.bottom.label }}</p>
+        <p class="report-insight-meta">Omzet Rp {{ "{:,.0f}".format(kategori_insights.bottom.omzet).replace(",", ".") }} · Qty {{ "{:,.2f}".format(kategori_insights.bottom.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</p>
+        {% else %}
+        <p class="text-muted">Belum ada pembanding yang valid.</p>
+        {% endif %}
+      </div>
+      <div class="card report-insight-card">
+        <div class="card-title">🏆 Margin kategori terbaik</div>
+        {% if kategori_insights.best_margin %}
+        <p class="report-insight-name">{{ kategori_insights.best_margin.label }}</p>
+        <p class="report-insight-meta">Margin Rp {{ "{:,.0f}".format(kategori_insights.best_margin.margin).replace(",", ".") }} ({{ "{:,.2f}".format(kategori_insights.best_margin.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%)</p>
+        {% else %}
+        <p class="text-muted">Belum ada data.</p>
+        {% endif %}
+      </div>
+      <div class="card report-insight-card">
+        <div class="card-title">⚠️ Margin kategori terendah</div>
+        {% if kategori_insights.worst_margin %}
+        <p class="report-insight-name">{{ kategori_insights.worst_margin.label }}</p>
+        <p class="report-insight-meta">Margin Rp {{ "{:,.0f}".format(kategori_insights.worst_margin.margin).replace(",", ".") }} ({{ "{:,.2f}".format(kategori_insights.worst_margin.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%)</p>
+        {% else %}
+        <p class="text-muted">Belum ada pembanding yang valid.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🏷️ Detail Penjualan Per Kategori</div>
+      </div>
+      <div class="table-wrapper report-table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Kategori</th>
+              <th>Qty</th>
+              <th>Omzet</th>
+              <th>HPP Est.</th>
+              <th>Margin</th>
+              <th>Margin %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in kategori_rows %}
+            <tr class="report-row-clickable" onclick="window.location='{{ url_for('reports.sales_breakdown', tab='kategori', date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, q_produk=q_produk, q_kategori=q_kategori, sort_produk=sort_produk, sort_kategori=sort_kategori, dir_produk=dir_produk, dir_kategori=dir_kategori, detail_type='kategori', detail_key=row.kategori_key) }}'">
+              <td>{{ row.rank }}</td>
+              <td>{{ row.nama_kategori }}</td>
+              <td>{{ "{:,.2f}".format(row.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(row.omzet).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(row.hpp).replace(",", ".") }}</td>
+              <td class="{{ 'text-success' if row.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(row.margin).replace(",", ".") }}</td>
+              <td class="{{ 'text-success' if row.margin_pct >= 0 else 'text-danger' }}">{{ "{:,.2f}".format(row.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted);">📭 Tidak ada data kategori pada periode ini</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if detail_type == 'kategori' and detail_rows %}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🔎 {{ detail_title }}</div>
+      </div>
+      <div class="table-wrapper report-table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>No. Transaksi</th>
+              <th>Kasir</th>
+              <th>Produk</th>
+              <th>Qty</th>
+              <th>Omzet</th>
+              <th>HPP</th>
+              <th>Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in detail_rows %}
+            <tr>
+              <td><a href="{{ url_for('transactions.detail', id=d.transaction_id) }}" class="report-drill-link">{{ d.nomor }}</a></td>
+              <td>{{ d.kasir_nama }}</td>
+              <td>{{ d.nama_produk }}</td>
+              <td>{{ "{:,.2f}".format(d.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(d.omzet).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(d.hpp).replace(",", ".") }}</td>
+              <td class="{{ 'text-success' if d.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(d.margin).replace(",", ".") }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(() => {
+  const labels = {{ chart_labels | tojson }};
+  const omzetData = {{ chart_omzet | tojson }};
+  const marginData = {{ chart_margin | tojson }};
+  const el = document.getElementById('salesTopChart');
+  if (!el || !labels.length) return;
+  new Chart(el, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Omzet',
+          data: omzetData,
+          backgroundColor: 'rgba(108, 99, 255, 0.55)',
+          borderColor: 'rgba(108, 99, 255, 0.95)',
+          borderWidth: 1
+        },
+        {
+          label: 'Margin',
+          data: marginData,
+          backgroundColor: 'rgba(0, 212, 170, 0.45)',
+          borderColor: 'rgba(0, 212, 170, 0.95)',
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: true } },
+        y: { beginAtZero: true }
+      },
+      plugins: {
+        legend: { display: true }
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

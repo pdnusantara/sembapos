@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}Riwayat Hutang Member{% endblock %}
+{% block page_title %}📜 Riwayat Hutang Member{% endblock %}
+{% block page_sub %}{{ member.nama }}{% endblock %}
+
+{% block content %}
+<div class="stats-grid" style="margin-bottom:16px;">
+  <div class="stat-card danger">
+    <div class="stat-info">
+      <div class="stat-value" style="font-size:16px;">Rp {{ "{:,.0f}".format(total_sisa).replace(",",".") }}</div>
+      <div class="stat-label">Sisa hutang aktif</div>
+    </div>
+  </div>
+  <div class="stat-card warning">
+    <div class="stat-info">
+      <div class="stat-value" style="font-size:16px;">Rp {{ "{:,.0f}".format(total_awal).replace(",",".") }}</div>
+      <div class="stat-label">Total hutang tercatat</div>
+    </div>
+  </div>
+  <div class="stat-card success">
+    <div class="stat-info">
+      <div class="stat-value" style="font-size:16px;">Rp {{ "{:,.0f}".format(total_bayar).replace(",",".") }}</div>
+      <div class="stat-label">Total sudah dibayar</div>
+    </div>
+  </div>
+</div>
+
+<div class="layout-two-col layout-two-col--wide">
+  <div class="card">
+    <div class="card-header"><div class="card-title">Daftar tagihan member</div></div>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>No. transaksi</th>
+            <th>Jatuh tempo</th>
+            <th>Awal</th>
+            <th>Sisa</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in debts %}
+          <tr>
+            <td>{{ d.created_at.strftime('%d/%m/%Y') }}</td>
+            <td style="font-family:monospace;font-size:12px;">{{ d.transaction.nomor if d.transaction else '—' }}</td>
+            <td>
+              {% if d.jatuh_tempo %}
+                {% if d.status == 'belum_lunas' and d.jatuh_tempo < now %}
+                <span class="badge badge-danger">{{ d.jatuh_tempo.strftime('%d/%m/%Y') }}</span>
+                {% else %}
+                <span class="text-muted">{{ d.jatuh_tempo.strftime('%d/%m/%Y') }}</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td>Rp {{ "{:,.0f}".format(d.jumlah).replace(",",".") }}</td>
+            <td style="font-weight:700;color:var(--danger);">Rp {{ "{:,.0f}".format(d.sisa).replace(",",".") }}</td>
+            <td><span class="badge {{ 'badge-success' if d.status=='lunas' else 'badge-danger' }}">{{ d.status|replace('_',' ')|upper }}</span></td>
+            <td><a href="{{ url_for('debts.detail', id=d.id) }}" class="btn btn-outline btn-sm">Detail</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="admin-table-empty">Belum ada data hutang untuk member ini.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Riwayat pembayaran</div></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      {% for p in payments %}
+      <div style="padding:10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.02);">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <div style="font-weight:700;">Rp {{ "{:,.0f}".format(p.jumlah).replace(",",".") }}</div>
+          <div class="text-muted" style="font-size:11px;">{{ p.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+        </div>
+        <div class="text-muted" style="font-size:11px;margin-top:2px;">{{ p.metode_bayar|upper }} · {% if p.recorder %}{{ p.recorder.nama }}{% else %}—{% endif %}</div>
+        {% if p.catatan %}<div style="font-size:12px;margin-top:4px;">{{ p.catatan }}</div>{% endif %}
+      </div>
+      {% else %}
+      <div class="text-muted" style="font-size:12px;text-align:center;padding:12px;">Belum ada pembayaran.</div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+      <a href="{{ url_for('members.detail', id=member.id) }}" class="btn btn-outline btn-sm">👤 Profil member</a>
+      <a href="{{ url_for('debts.index') }}" class="btn btn-outline btn-sm">← Kembali daftar hutang</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+{% block title %}Laporan Pembelian{% endblock %}
+{% block page_title %}📥 Laporan Pembelian{% endblock %}
+{% block page_sub %}Alur jelas: pilih filter, lihat ringkasan, cek PO dan detail barang{% endblock %}
+
+{% block content %}
+{% macro po_status_badge(st) -%}
+  <span class="badge {% if st=='diterima' %}badge-success{% elif st=='batal' %}badge-danger{% elif st=='dipesan' %}badge-info{% else %}badge-warning{% endif %}">
+    {{ st|replace('_',' ')|upper }}
+  </span>
+{%- endmacro %}
+
+<div class="tx2-page">
+  <section class="tx2-shell" aria-label="Filter laporan pembelian">
+    <div class="tx2-top">
+      <div class="tx2-stats">
+        <article class="tx2-stat tx2-stat--wide">
+          <div class="tx2-stat-value">Rp {{ "{:,.0f}".format(total_nilai).replace(",",".") }}</div>
+          <div class="tx2-stat-label">Total nilai pembelian</div>
+        </article>
+        <article class="tx2-stat">
+          <div class="tx2-stat-value">{{ jumlah_po }}</div>
+          <div class="tx2-stat-label">Jumlah PO</div>
+        </article>
+        <article class="tx2-stat">
+          <div class="tx2-stat-value">{{ supplier_unik }}</div>
+          <div class="tx2-stat-label">Supplier terlibat</div>
+        </article>
+      </div>
+      <a href="{{ url_for('reports.pembelian_export_csv') }}{% if qs_base %}?{{ qs_base }}{% endif %}" class="tx2-export" download>
+        <span aria-hidden="true">⬇</span> Export CSV
+      </a>
+    </div>
+
+    <form method="GET" action="{{ url_for('reports.pembelian') }}" class="tx2-form">
+      <div class="tx2-grid{% if current_user.role != 'kasir' %} tx2-grid--admin{% endif %}">
+        <div class="tx2-field tx2-field--period">
+          <label for="po-date-from">Periode</label>
+          <div class="tx2-period">
+            <input type="date" id="po-date-from" name="date_from" class="form-control tx2-control" value="{{ date_from }}">
+            <span class="tx2-period-sep">→</span>
+            <input type="date" id="po-date-to" name="date_to" class="form-control tx2-control" value="{{ date_to }}">
+          </div>
+        </div>
+
+        <div class="tx2-field">
+          <label for="po-tanggal-ref">Acuan tanggal</label>
+          <select id="po-tanggal-ref" name="tanggal_ref" class="form-control tx2-control">
+            <option value="pesan" {{ 'selected' if tanggal_ref == 'pesan' }}>Tanggal pesan</option>
+            <option value="terima" {{ 'selected' if tanggal_ref == 'terima' }}>Tanggal terima</option>
+          </select>
+        </div>
+
+        <div class="tx2-field">
+          <label for="po-status">Status PO</label>
+          <select id="po-status" name="status" class="form-control tx2-control">
+            <option value="" {{ 'selected' if not status }}>Semua status</option>
+            <option value="draft" {{ 'selected' if status == 'draft' }}>Draft</option>
+            <option value="dipesan" {{ 'selected' if status == 'dipesan' }}>Dipesan</option>
+            <option value="diterima" {{ 'selected' if status == 'diterima' }}>Diterima</option>
+            <option value="batal" {{ 'selected' if status == 'batal' }}>Batal</option>
+          </select>
+        </div>
+
+        <div class="tx2-field">
+          <label for="po-supplier">Supplier</label>
+          <select id="po-supplier" name="supplier_id" class="form-control tx2-control">
+            <option value="">Semua supplier</option>
+            {% for s in suppliers %}
+            <option value="{{ s.id }}" {% if supplier_id and supplier_id|int == s.id %}selected{% endif %}>{{ s.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {% if current_user.role != 'kasir' %}
+        <div class="tx2-field">
+          <label for="po-branch">Cabang</label>
+          <select id="po-branch" name="branch_id" class="form-control tx2-control">
+            <option value="">Semua cabang</option>
+            {% for b in branches %}
+            <option value="{{ b.id }}" {% if branch_id_param and branch_id_param|int == b.id %}selected{% endif %}>{{ b.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
+        <div class="tx2-field tx2-field--search">
+          <label for="po-q">Cari nomor PO</label>
+          <input type="search" id="po-q" name="q" class="form-control tx2-control" value="{{ q_nomor }}" placeholder="Contoh: PO-2026-001">
+        </div>
+
+        <div class="tx2-actions">
+          <button type="submit" class="btn btn-primary tx2-apply">Terapkan filter</button>
+          <a href="{{ url_for('reports.pembelian') }}" class="tx2-reset">Reset</a>
+        </div>
+      </div>
+    </form>
+
+    <div style="margin-top:14px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:rgba(0,0,0,0.18);font-size:12px;color:var(--text-muted);line-height:1.45;">
+      <strong style="color:var(--text-light);font-size:12px;">Cara baca halaman ini:</strong>
+      pilih filter di atas, lihat ringkasan supplier, lalu cek tabel PO. Klik tombol <strong>Detail barang</strong> pada PO untuk melihat item di popup.
+    </div>
+  </section>
+
+  <section class="layout-split-2-1" style="gap:16px;align-items:stretch;">
+    <div class="card tx2-card">
+      <div class="tx2-head">
+        <h3>Ringkasan per supplier</h3>
+        <span>{{ supplier_rows|length }} supplier</span>
+      </div>
+      <div class="table-wrapper tx2-table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Supplier</th>
+              <th>Jumlah PO</th>
+              <th>Total nilai</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in supplier_rows %}
+            <tr>
+              <td class="fw-semibold">{{ row.nama }}</td>
+              <td>{{ row.jumlah_po }}</td>
+              <td class="tx2-total">Rp {{ "{:,.0f}".format(row.total_nilai or 0).replace(",",".") }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="3" class="admin-table-empty">Belum ada data supplier untuk filter ini.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;gap:12px;">
+      <div>
+        <div class="card-title" style="margin-bottom:10px;">Rata-rata per PO</div>
+        <div style="font-size:26px;font-weight:800;color:var(--text-light);line-height:1.2;">Rp {{ "{:,.0f}".format(rata_po).replace(",",".") }}</div>
+        <p class="text-muted" style="margin-top:8px;font-size:12px;">Nilai ini membantu melihat besaran pembelian rata-rata pada periode aktif.</p>
+      </div>
+      <div style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.03);">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;">Catatan penting</div>
+        <div style="margin-top:6px;font-size:12px;color:var(--text-muted);line-height:1.45;">
+          Saat memilih acuan <strong>tanggal terima</strong>, hanya PO yang sudah diterima yang masuk laporan.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card tx2-card">
+    <div class="tx2-head">
+      <h3>Daftar Purchase Order</h3>
+      <span>{{ pos|length }} data</span>
+    </div>
+    <div class="table-wrapper tx2-table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>No. PO</th>
+            <th>Supplier</th>
+            <th>Cabang</th>
+            <th>Status</th>
+            <th>Tanggal pesan</th>
+            <th>Tanggal terima</th>
+            <th>User</th>
+            <th>Total</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pos %}
+          {% set item_count = (po_items_map.get(p.id) or [])|length %}
+          <tr>
+            <td><a href="{{ url_for('purchases.detail', id=p.id) }}" class="tx2-num">{{ p.nomor }}</a></td>
+            <td>{{ p.supplier.nama if p.supplier else '—' }}</td>
+            <td>{{ branches_map.get(p.branch_id).nama if branches_map.get(p.branch_id) else '—' }}</td>
+            <td>{{ po_status_badge(p.status) }}</td>
+            <td class="tx2-time">{{ p.tanggal_pesan.strftime('%d/%m/%Y %H:%M') if p.tanggal_pesan else '—' }}</td>
+            <td class="tx2-time">{{ p.tanggal_terima.strftime('%d/%m/%Y %H:%M') if p.tanggal_terima else '—' }}</td>
+            <td>{{ users_map.get(p.user_id).nama if users_map.get(p.user_id) else '—' }}</td>
+            <td class="tx2-total">Rp {{ "{:,.0f}".format(p.total or 0).replace(",",".") }}</td>
+            <td>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm js-open-po-items"
+                data-po-id="{{ p.id }}"
+                data-po-nomor="{{ p.nomor }}"
+                {% if not item_count %}disabled{% endif %}
+              >
+                Detail barang{% if item_count %} ({{ item_count }}){% endif %}
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="admin-table-empty">Tidak ada PO pada filter ini.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="modal-overlay" id="poItemsModal" onclick="if(event.target===this){closePoItemsModal();}">
+  <div class="modal" style="max-width:860px;width:min(95vw,860px);padding:0;overflow:hidden;">
+    <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;background:rgba(108,99,255,0.08);">
+      <div>
+        <div class="modal-title" style="margin:0;font-size:18px;">Detail Barang PO</div>
+        <div id="poItemsModalSub" class="text-muted" style="font-size:12px;margin-top:4px;">-</div>
+      </div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="closePoItemsModal()">Tutup</button>
+    </div>
+    <div style="padding:14px 16px;">
+      {% if line_items_limited %}
+      <div class="alert alert-warning" style="margin-bottom:12px;">
+        <span>⚠️</span>
+        <span>Detail item dibatasi {{ line_items_limit }} baris total sesuai filter aktif. Untuk data penuh, gunakan Export CSV.</span>
+      </div>
+      {% endif %}
+      <div class="table-wrapper" style="max-height:56vh;overflow:auto;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Produk</th>
+              <th>Harga beli</th>
+              <th>Qty pesan</th>
+              <th>Qty terima</th>
+              <th>Subtotal</th>
+            </tr>
+          </thead>
+          <tbody id="poItemsBody">
+            <tr><td colspan="5" class="admin-table-empty">Pilih PO lalu klik Detail barang.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const poItemsMap = {{ po_items_map|tojson }};
+  const poItemsModal = document.getElementById('poItemsModal');
+  const poItemsBody = document.getElementById('poItemsBody');
+  const poItemsModalSub = document.getElementById('poItemsModalSub');
+
+  function formatQty(v) {
+    const n = Number(v || 0);
+    return Number.isInteger(n) ? String(n) : n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function openPoItemsModal(poId, nomorPo) {
+    const items = poItemsMap[String(poId)] || [];
+    poItemsModalSub.textContent = `${nomorPo} - ${items.length} item`;
+
+    if (!items.length) {
+      poItemsBody.innerHTML = '<tr><td colspan="5" class="admin-table-empty">Tidak ada item untuk PO ini.</td></tr>';
+      poItemsModal.classList.add('active');
+      return;
+    }
+
+    const rows = items.map((it) => {
+      return `
+        <tr>
+          <td class="fw-semibold">${it.nama_produk || '-'}</td>
+          <td>${formatRupiah(it.harga_beli || 0)}</td>
+          <td>${formatQty(it.qty_pesan)}</td>
+          <td>${formatQty(it.qty_terima)}</td>
+          <td class="tx2-total">${formatRupiah(it.subtotal || 0)}</td>
+        </tr>
+      `;
+    }).join('');
+    poItemsBody.innerHTML = rows;
+    poItemsModal.classList.add('active');
+  }
+
+  function closePoItemsModal() {
+    poItemsModal.classList.remove('active');
+  }
+
+  document.querySelectorAll('.js-open-po-items').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      openPoItemsModal(btn.dataset.poId, btn.dataset.poNomor);
+    });
+  });
+</script>
+{% endblock %}

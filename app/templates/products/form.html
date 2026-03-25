@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Produk{% endblock %}
+{% block page_title %}{{ '📦 Tambah' if not product else '✏️ Edit' }} Produk{% endblock %}
+{% block page_sub %}{{ product.nama if product else 'Produk baru' }}{% endblock %}
+
+{% block content %}
+<div style="max-width:720px;">
+  <div class="card">
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="grid-2">
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Nama Produk *</label>
+          <input type="text" name="nama" class="form-control" value="{{ product.nama if product else '' }}" required placeholder="Contoh: Beras Premium 5kg">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kategori</label>
+          <select name="category_id" class="form-control">
+            <option value="">— Pilih Kategori —</option>
+            {% for cat in categories %}
+            <option value="{{ cat.id }}" {{ 'selected' if product and product.category_id == cat.id }}>{{ cat.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Supplier default</label>
+          <select name="supplier_id" class="form-control">
+            <option value="">— Tidak ada —</option>
+            {% for s in suppliers %}
+            <option value="{{ s.id }}" {{ 'selected' if product and product.supplier_id == s.id }}>{{ s.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Barcode / Kode Produk</label>
+          <input type="text" name="barcode" class="form-control" value="{{ product.barcode if product else '' }}" placeholder="Unik per toko, opsional">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Satuan *</label>
+          <select name="satuan" class="form-control">
+            {% for s in ['pcs','kg','gram','liter','ml','dus','karung','lusin','botol','pak'] %}
+            <option value="{{ s }}" {{ 'selected' if product and product.satuan == s }}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Harga Beli (Rp)</label>
+          <input type="number" name="harga_beli" class="form-control" value="{{ product.harga_beli|int if product else 0 }}" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Harga Jual (Rp) *</label>
+          <input type="number" name="harga_jual" class="form-control" value="{{ product.harga_jual|int if product else '' }}" min="0" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Min qty Grosir 1</label>
+          <input type="number" name="min_qty_grosir_1" class="form-control" value="{{ product.min_qty_grosir_1 if product and product.min_qty_grosir_1 else '' }}" min="2" step="0.01" placeholder="Contoh: 5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Harga Grosir 1 (Rp)</label>
+          <input type="number" name="harga_jual_grosir_1" class="form-control" value="{{ product.harga_jual_grosir_1|int if product and product.harga_jual_grosir_1 else '' }}" min="0" placeholder="Harga saat qty >= Grosir 1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Min qty Grosir 2</label>
+          <input type="number" name="min_qty_grosir_2" class="form-control" value="{{ product.min_qty_grosir_2 if product and product.min_qty_grosir_2 else '' }}" min="2" step="0.01" placeholder="Contoh: 10">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Harga Grosir 2 (Rp)</label>
+          <input type="number" name="harga_jual_grosir_2" class="form-control" value="{{ product.harga_jual_grosir_2|int if product and product.harga_jual_grosir_2 else '' }}" min="0" placeholder="Harga saat qty >= Grosir 2">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <div style="font-size:12px;color:var(--text-muted);background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+            💡 Jika salah satu kolom min qty / harga grosir dikosongkan, tier tersebut dianggap nonaktif.
+            Min qty Grosir 2 harus lebih besar dari Grosir 1.
+          </div>
+        </div>
+        {% if not product %}
+        <div class="form-group">
+          <label class="form-label">Stok Awal</label>
+          <input type="number" name="stok" class="form-control" value="0" min="0" step="0.1">
+        </div>
+        {% endif %}
+        <div class="form-group">
+          <label class="form-label">Stok Minimum (peringatan)</label>
+          <input type="number" name="stok_minimum" class="form-control" value="{{ product.stok_minimum|int if product else 5 }}" min="0">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Gambar produk</label>
+          <input type="file" name="gambar" class="form-control" accept="image/png,image/jpeg,image/webp,image/gif">
+          {% if product and product.gambar %}
+          <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <img src="{{ url_for('static', filename=product.gambar) }}" alt="" style="max-height:80px;border-radius:8px;border:1px solid var(--border);">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-muted);">
+              <input type="checkbox" name="hapus_gambar" value="1" style="width:16px;height:16px;accent-color:var(--danger);">
+              Hapus gambar
+            </label>
+          </div>
+          {% endif %}
+        </div>
+        {% if product %}
+        <div class="form-group" style="grid-column:1/-1;">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" name="aktif" {{ 'checked' if product.aktif }} style="width:18px;height:18px;accent-color:var(--primary);">
+            <span class="form-label" style="margin:0;">Produk Aktif</span>
+          </label>
+        </div>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
+        <button type="submit" class="btn btn-primary">💾 Simpan Produk</button>
+        <a href="{{ url_for('products.index') }}" class="btn btn-outline">✕ Batal</a>
+        {% if product %}
+        <a href="{{ url_for('products.stock_history', id=product.id) }}" class="btn btn-outline">📜 Riwayat stok</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

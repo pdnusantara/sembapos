@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Transaksi {{ trx.nomor }}{% endblock %}
+{% block page_title %}🧾 {{ trx.nomor }}{% endblock %}
+{% block page_sub %}{{ trx.created_at.strftime('%d/%m/%Y %H:%M') }} · {{ trx.branch.nama if trx.branch else '—' }}{% endblock %}
+
+{% block content %}
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+  <a href="{{ url_for('transactions.index') }}" class="btn btn-outline">← Kembali ke riwayat</a>
+  {% if trx.status == 'selesai' %}
+  <a href="{{ url_for('receipt.view_receipt', id=trx.id) }}" target="_blank" rel="noopener" class="btn btn-primary">🖨️ Cetak struk</a>
+  {% endif %}
+  {% if trx.status == 'selesai' and perm('returns') %}
+  <a href="{{ url_for('returns.create_from_transaction', tid=trx.id) }}" class="btn btn-outline">↩️ Retur / tukar</a>
+  {% endif %}
+</div>
+
+{% if returns_list %}
+<div class="card mb-3" id="retur">
+  <div class="card-header"><div class="card-title">Retur terkait</div></div>
+  <ul style="margin:0;padding:12px 16px;list-style:none;font-size:14px;">
+    {% for r in returns_list %}
+    <li style="margin-bottom:8px;">
+      <a href="{{ url_for('returns.detail', rid=r.id) }}">{{ r.nomor }}</a>
+      <span class="text-muted"> · {{ r.jenis }} · Rp {{ "{:,.0f}".format(r.total_retur or 0).replace(",",".") }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="layout-split-equal" style="align-items:start;">
+  <div class="card">
+    <div class="card-header"><div class="card-title">Ringkasan</div></div>
+    <div style="padding:4px 0;display:flex;flex-direction:column;gap:10px;font-size:14px;">
+      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Status</span>
+        {% if trx.status == 'batal' %}<span class="badge badge-danger">Batal</span>{% else %}<span class="badge badge-success">Selesai</span>{% endif %}
+      </div>
+      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Kasir</span><span>{{ trx.user.nama if trx.user else '—' }}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Metode</span><span class="badge badge-{{ 'primary' if trx.metode_bayar=='tunai' else ('info' if trx.metode_bayar=='transfer' else 'success') }}">{{ trx.metode_bayar|upper }}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Subtotal</span><span>Rp {{ "{:,.0f}".format(trx.subtotal).replace(",",".") }}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Diskon</span><span>Rp {{ "{:,.0f}".format(trx.diskon).replace(",",".") }}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;font-weight:700;"><span>Total</span><span style="color:var(--primary-light);">Rp {{ "{:,.0f}".format(trx.total).replace(",",".") }}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Bayar</span><span>Rp {{ "{:,.0f}".format(trx.bayar).replace(",",".") }}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Kembalian</span><span>Rp {{ "{:,.0f}".format(trx.kembalian).replace(",",".") }}</span></div>
+      {% if trx.member %}
+      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Member</span><span>{{ trx.member.nama }} · {{ trx.member.telepon }}</span></div>
+      {% endif %}
+      {% if trx.catatan %}
+      <div style="padding-top:8px;border-top:1px solid var(--border);">
+        <div class="text-muted" style="font-size:12px;margin-bottom:4px;">Catatan</div>
+        <div style="white-space:pre-wrap;">{{ trx.catatan }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Item ({{ trx.items|length }})</div></div>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th></tr>
+        </thead>
+        <tbody>
+          {% for it in trx.items %}
+          <tr>
+            <td style="font-weight:600;">{{ it.nama_produk }}</td>
+            <td class="text-muted">Rp {{ "{:,.0f}".format(it.harga).replace(",",".") }}</td>
+            <td>{{ it.qty }}</td>
+            <td style="font-weight:600;">Rp {{ "{:,.0f}".format(it.subtotal).replace(",",".") }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">Tidak ada item</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

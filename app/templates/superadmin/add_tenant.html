@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Tambah Tenant{% endblock %}
+{% block page_title %}🏢 Tambah Tenant Baru{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.index'), false),
+  ('Tambah tenant', '', true),
+]) }}
+<div style="max-width:600px;">
+  <div class="card">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="grid-2">
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Nama Toko / Usaha *</label>
+          <input type="text" name="nama" class="form-control" required placeholder="Contoh: Toko Makmur Jaya">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kode Unik *</label>
+          <input type="text" name="kode" class="form-control" required placeholder="MAKMUR" style="text-transform:uppercase;">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Akan dipakai sebagai prefix username admin</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Paket langganan</label>
+          <select name="paket_id" id="paket" class="form-control" required>
+            {% for p in packages %}
+            <option value="{{ p.id }}" data-kode="{{ p.kode }}">{{ p.nama }} — max {{ p.max_cabang }} cab / {{ p.max_user }} user{% if p.harga_bulanan %} · Rp {{ "{:,.0f}".format(p.harga_bulanan).replace(",",".") }}/bln{% endif %}</option>
+            {% else %}
+            <option value="" disabled>Tidak ada paket aktif — buat di menu Paket tenant</option>
+            {% endfor %}
+          </select>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><a href="{{ url_for('superadmin.paket_index') }}">Kelola definisi paket</a></div>
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Berlangganan sampai (opsional)</label>
+          <input type="date" name="tanggal_expired" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" placeholder="toko@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telepon</label>
+          <input type="text" name="telepon" class="form-control" placeholder="08xxx">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Cabang</label>
+          <input type="number" name="max_cabang" id="maxCabang" class="form-control" value="3" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max User</label>
+          <input type="number" name="max_user" id="maxUser" class="form-control" value="5" min="1">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Alamat</label>
+          <input type="text" name="alamat" class="form-control" placeholder="Alamat toko">
+        </div>
+      </div>
+      <div style="background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.2);border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--text-muted);">
+        ℹ️ Sistem membuat <strong>Cabang Utama</strong> dan akun <strong>Admin</strong> dengan password default. Username &amp; password admin hanya ditampilkan <strong>sekali</strong> di halaman detail tenant setelah dibuat — harap disimpan.
+      </div>
+      <div style="display:flex;gap:12px;">
+        <button type="submit" class="btn btn-primary">✅ Buat Tenant</button>
+        <a href="{{ url_for('superadmin.index') }}" class="btn btn-outline">✕ Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+const PAKET_KUOTA = {{ paket_kuota | tojson }};
+function syncKuota() {
+  const sel = document.getElementById('paket');
+  const opt = sel.options[sel.selectedIndex];
+  const kode = (opt && opt.getAttribute('data-kode')) ? opt.getAttribute('data-kode').toLowerCase() : 'basic';
+  const q = PAKET_KUOTA[kode] || Object.values(PAKET_KUOTA)[0];
+  document.getElementById('maxCabang').value = q[0];
+  document.getElementById('maxUser').value = q[1];
+}
+const paketEl = document.getElementById('paket');
+if (paketEl) {
+  paketEl.addEventListener('change', syncKuota);
+  syncKuota();
+}
+</script>
+{% endblock %}

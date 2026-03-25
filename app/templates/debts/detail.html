@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+{% block title %}Detail tagihan · {{ debt.member.nama }}{% endblock %}
+{% block page_title %}Detail tagihan{% endblock %}
+{% block page_sub %}{{ debt.member.nama }}{% if debt.member.telepon %} · {{ debt.member.telepon }}{% endif %}{% endblock %}
+
+{% block content %}
+{% set sisa_int = debt.sisa|int %}
+{% set jumlah_float = debt.jumlah|float %}
+{% set sisa_float = debt.sisa|float %}
+{% set terbayar = jumlah_float - sisa_float %}
+{% if jumlah_float > 0 %}
+  {% set progress_pct = (100 * terbayar / jumlah_float)|round(1) %}
+{% else %}
+  {% set progress_pct = 0 %}
+{% endif %}
+{% set is_overdue = debt.status == 'belum_lunas' and debt.jatuh_tempo and debt.jatuh_tempo < now %}
+
+<div class="debt-detail-page">
+  <nav class="debt-detail-breadcrumb" aria-label="Navigasi">
+    <a href="{{ url_for('debts.index') }}" class="debt-detail-breadcrumb__link">← Daftar hutang</a>
+    <span class="debt-detail-breadcrumb__sep" aria-hidden="true">/</span>
+    <span class="debt-detail-breadcrumb__current">Tagihan #{{ debt.id }}</span>
+  </nav>
+
+  <header class="debt-detail-hero {% if is_overdue %}debt-detail-hero--overdue{% elif debt.status == 'lunas' %}debt-detail-hero--paid{% endif %}">
+    <div class="debt-detail-hero__row">
+      <div class="debt-detail-hero__identity">
+        <h1 class="debt-detail-hero__name">{{ debt.member.nama }}</h1>
+        <p class="debt-detail-hero__meta">
+          {% if debt.transaction %}
+          <span class="debt-detail-meta-pill debt-detail-meta-pill--mono">{{ debt.transaction.nomor }}</span>
+          {% if debt.transaction.metode_bayar == 'manual_hutang' %}
+          <span class="badge badge-info debt-detail-badge-manual">Piutang manual</span>
+          {% endif %}
+          {% else %}
+          <span class="debt-detail-meta-pill">Tanpa nomor transaksi</span>
+          {% endif %}
+          <span class="debt-detail-meta-dot" aria-hidden="true">·</span>
+          <span>Hutang tercatat {{ debt.created_at.strftime('%d %b %Y') }}</span>
+        </p>
+      </div>
+      <div class="debt-detail-hero__status-wrap">
+        {% if debt.status == 'lunas' %}
+        <span class="debt-detail-status debt-detail-status--ok">Lunas</span>
+        {% else %}
+        <span class="debt-detail-status debt-detail-status--open">Belum lunas</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if is_overdue %}
+    <div class="debt-detail-alert debt-detail-alert--danger" role="status">
+      <strong>Lewat jatuh tempo</strong>
+      <span>Seharusnya dilunasi paling lambat {{ debt.jatuh_tempo.strftime('%d/%m/%Y') }}.</span>
+    </div>
+    {% elif debt.jatuh_tempo and debt.status == 'belum_lunas' %}
+    <div class="debt-detail-alert debt-detail-alert--info" role="status">
+      <strong>Jatuh tempo</strong>
+      <span>{{ debt.jatuh_tempo.strftime('%d/%m/%Y') }}</span>
+    </div>
+    {% elif debt.jatuh_tempo %}
+    <div class="debt-detail-alert debt-detail-alert--muted" role="status">
+      <strong>Jatuh tempo (referensi)</strong>
+      <span>{{ debt.jatuh_tempo.strftime('%d/%m/%Y') }} — tagihan sudah lunas</span>
+    </div>
+    {% endif %}
+
+    <div class="debt-detail-amounts">
+      <div class="debt-detail-amounts__main">
+        <span class="debt-detail-amounts__label">{% if debt.status == 'lunas' %}Telah dilunasi{% else %}Sisa yang harus dibayar{% endif %}</span>
+        <p class="debt-detail-amounts__value {% if debt.status != 'lunas' %}debt-detail-amounts__value--due{% endif %}">
+          Rp {{ "{:,.0f}".format(debt.sisa).replace(",",".") }}
+        </p>
+      </div>
+      <dl class="debt-detail-amounts__side">
+        <div class="debt-detail-kv">
+          <dt>Total hutang awal</dt>
+          <dd>Rp {{ "{:,.0f}".format(debt.jumlah).replace(",",".") }}</dd>
+        </div>
+        <div class="debt-detail-kv">
+          <dt>Sudah terbayar</dt>
+          <dd class="debt-detail-kv--ok">Rp {{ "{:,.0f}".format(terbayar).replace(",",".") }}</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="debt-detail-progress" aria-label="Progress pelunasan">
+      <div class="debt-detail-progress__track">
+        <div class="debt-detail-progress__fill" style="width: {{ [progress_pct, 100]|min }}%;"></div>
+      </div>
+      <div class="debt-detail-progress__legend">
+        <span>{{ progress_pct|int }}% terbayar</span>
+        {% if debt.status != 'lunas' %}
+        <span class="debt-detail-progress__remain">Sisa Rp {{ "{:,.0f}".format(debt.sisa).replace(",",".") }}</span>
+        {% else %}
+        <span class="debt-detail-progress__remain debt-detail-progress__remain--done">Lunas</span>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <div class="debt-detail-grid">
+    <section class="card debt-detail-panel" aria-labelledby="debt-pay-heading">
+      <div class="debt-detail-panel__head">
+        <h2 id="debt-pay-heading" class="debt-detail-panel__title">Catat pembayaran</h2>
+        <p class="debt-detail-panel__hint">Masukkan nominal lalu pilih metode. Gunakan pintasan persen untuk cicilan cepat.</p>
+      </div>
+
+      {% if debt.status == 'belum_lunas' %}
+      <form method="POST" action="{{ url_for('debts.pay', id=debt.id) }}" id="payForm" class="debt-pay-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="form-group">
+          <label class="form-label" for="payJumlah">Jumlah dibayar (Rp) *</label>
+          <input type="number" name="jumlah" id="payJumlah" class="form-control debt-pay-form__input" required min="1" max="{{ sisa_int }}" value="{{ sisa_int }}" step="1" inputmode="numeric">
+          <p class="debt-field-help">Maksimal sesuai sisa: <strong>Rp {{ "{:,.0f}".format(debt.sisa).replace(",",".") }}</strong></p>
+        </div>
+        <div class="debt-quick-pay" role="group" aria-label="Pintasan nominal">
+          <span class="debt-quick-pay__label">Pintasan</span>
+          <div class="debt-quick-pay__btns">
+            <button type="button" class="btn btn-outline btn-sm debt-quick-btn" data-frac="0.25">25%</button>
+            <button type="button" class="btn btn-outline btn-sm debt-quick-btn" data-frac="0.5">50%</button>
+            <button type="button" class="btn btn-outline btn-sm debt-quick-btn" data-frac="0.75">75%</button>
+            <button type="button" class="btn btn-outline btn-sm debt-quick-btn" data-full="1">100%</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pay-metode">Metode pembayaran</label>
+          <select name="metode_bayar" id="pay-metode" class="form-control">
+            <option value="tunai">Tunai</option>
+            <option value="transfer">Transfer bank</option>
+            <option value="qris">QRIS</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pay-catatan">Catatan</label>
+          <input type="text" name="catatan" id="pay-catatan" class="form-control" placeholder="Opsional, mis. transfer dari BCA">
+        </div>
+        <button type="submit" class="btn btn-success btn-block debt-pay-submit">Simpan pembayaran</button>
+      </form>
+      {% else %}
+      <div class="debt-detail-paid-celebrate">
+        <div class="debt-detail-paid-celebrate__icon" aria-hidden="true">✓</div>
+        <p class="debt-detail-paid-celebrate__title">Hutang ini sudah lunas</p>
+        <p class="debt-detail-paid-celebrate__text">Tidak perlu pembayaran lagi. Riwayat cicilan ada di bawah.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card debt-detail-panel debt-detail-panel--aside" aria-labelledby="debt-info-heading">
+      <div class="debt-detail-panel__head">
+        <h2 id="debt-info-heading" class="debt-detail-panel__title">Rincian tagihan</h2>
+      </div>
+
+      {% if debt.keterangan %}
+      <div class="debt-detail-note">
+        <span class="debt-detail-note__label">Keterangan</span>
+        <p class="debt-detail-note__text">{{ debt.keterangan }}</p>
+      </div>
+      {% endif %}
+
+      <dl class="debt-detail-dl">
+        <div class="debt-detail-dl__row">
+          <dt>Pelanggan</dt>
+          <dd>{{ debt.member.nama }}</dd>
+        </div>
+        {% if debt.member.telepon %}
+        <div class="debt-detail-dl__row">
+          <dt>Telepon</dt>
+          <dd><a href="tel:{{ debt.member.telepon }}">{{ debt.member.telepon }}</a></dd>
+        </div>
+        {% endif %}
+        <div class="debt-detail-dl__row">
+          <dt>Status</dt>
+          <dd>
+            {% if debt.status == 'lunas' %}
+            <span class="badge badge-success">Lunas</span>
+            {% else %}
+            <span class="badge badge-danger">Belum lunas</span>
+            {% endif %}
+          </dd>
+        </div>
+        <div class="debt-detail-dl__row">
+          <dt>Total hutang awal</dt>
+          <dd class="debt-detail-dl__num">Rp {{ "{:,.0f}".format(debt.jumlah).replace(",",".") }}</dd>
+        </div>
+        <div class="debt-detail-dl__row">
+          <dt>Sudah terbayar</dt>
+          <dd class="debt-detail-dl__num debt-detail-dl__num--ok">Rp {{ "{:,.0f}".format(terbayar).replace(",",".") }}</dd>
+        </div>
+        <div class="debt-detail-dl__row">
+          <dt>Sisa</dt>
+          <dd class="debt-detail-dl__num {% if debt.status != 'lunas' %}debt-detail-dl__num--due{% endif %}">Rp {{ "{:,.0f}".format(debt.sisa).replace(",",".") }}</dd>
+        </div>
+        <div class="debt-detail-dl__row">
+          <dt>No. transaksi</dt>
+          <dd class="debt-detail-dl__mono">{{ debt.transaction.nomor if debt.transaction else '—' }}</dd>
+        </div>
+        <div class="debt-detail-dl__row">
+          <dt>Tanggal hutang</dt>
+          <dd>{{ debt.created_at.strftime('%d/%m/%Y') }}</dd>
+        </div>
+      </dl>
+
+      <div class="debt-detail-links">
+        {% if debt.transaction %}
+        <a href="{{ url_for('receipt.view_receipt', id=debt.transaction_id) }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-block">Lihat struk / transaksi</a>
+        {% endif %}
+        <a href="{{ url_for('debts.member_history', member_id=debt.member_id) }}" class="btn btn-outline btn-block">Riwayat hutang member</a>
+        <a href="{{ url_for('members.detail', id=debt.member_id) }}" class="btn btn-outline btn-block">Profil member</a>
+      </div>
+    </section>
+  </div>
+
+  <section class="card debt-detail-timeline" aria-labelledby="debt-history-heading">
+    <h2 id="debt-history-heading" class="debt-detail-timeline__title">Riwayat pembayaran</h2>
+    <p class="debt-detail-timeline__sub">Urutan terbaru di atas. Setiap baris adalah satu pencatatan kasir/admin.</p>
+    <ul class="debt-timeline-list">
+      {% for p in debt.payments|sort(attribute='created_at', reverse=true) %}
+      <li class="debt-timeline-item">
+        <div class="debt-timeline-item__marker" aria-hidden="true"></div>
+        <div class="debt-timeline-item__body">
+          <div class="debt-timeline-item__top">
+            <span class="debt-timeline-item__amount">Rp {{ "{:,.0f}".format(p.jumlah).replace(",",".") }}</span>
+            <span class="debt-timeline-item__badge">{% if p.metode_bayar == 'tunai' %}Tunai{% elif p.metode_bayar == 'transfer' %}Transfer{% elif p.metode_bayar == 'qris' %}QRIS{% else %}{{ p.metode_bayar|replace('_',' ')|title }}{% endif %}</span>
+          </div>
+          <time class="debt-timeline-item__time" datetime="{{ p.created_at.isoformat() }}">{{ p.created_at.strftime('%d %b %Y, %H:%M') }}</time>
+          {% if p.recorder %}
+          <p class="debt-timeline-item__recorder">Dicatat oleh {{ p.recorder.nama }}</p>
+          {% endif %}
+          {% if p.catatan %}
+          <p class="debt-timeline-item__note">“{{ p.catatan }}”</p>
+          {% endif %}
+        </div>
+      </li>
+      {% else %}
+      <li class="debt-timeline-empty">Belum ada riwayat pembayaran untuk tagihan ini.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var maxPay = {{ sisa_int }};
+  var input = document.getElementById('payJumlah');
+  function setVal(n) {
+    if (!input) return;
+    n = Math.max(1, Math.min(maxPay, Math.round(n)));
+    input.value = n;
+  }
+  document.querySelectorAll('.debt-quick-btn[data-frac]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var f = parseFloat(btn.getAttribute('data-frac'), 10);
+      setVal(maxPay * f);
+    });
+  });
+  document.querySelectorAll('.debt-quick-btn[data-full]').forEach(function (btn) {
+    btn.addEventListener('click', function () { setVal(maxPay); });
+  });
+})();
+</script>
+{% endblock %}

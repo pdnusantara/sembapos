@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}Profil Member: {{ member.nama }}{% endblock %}
+{% block page_title %}👤 Profil Pelanggan{% endblock %}
+{% block page_sub %}Member sejak {{ member.created_at.strftime('%d %b %Y') }}{% endblock %}
+
+{% block content %}
+<div class="stats-inline-3">
+  <div class="stat-card primary">
+    <div class="stat-icon primary">⭐</div>
+    <div class="stat-info">
+      <div class="stat-value">{{ member.poin }}</div>
+      <div class="stat-label">Poin Terkumpul</div>
+    </div>
+  </div>
+  <div class="stat-card success">
+    <div class="stat-icon success">💰</div>
+    <div class="stat-info">
+      <div class="stat-value" style="font-size:16px;">Rp {{ "{:,.0f}".format(member.total_belanja).replace(",",".") }}</div>
+      <div class="stat-label">Total Belanja</div>
+    </div>
+  </div>
+  <div class="stat-card danger">
+    <div class="stat-icon danger">💳</div>
+    <div class="stat-info">
+      <div class="stat-value" style="font-size:16px;">Rp {{ "{:,.0f}".format(member.total_hutang).replace(",",".") }}</div>
+      <div class="stat-label">Total Hutang</div>
+    </div>
+  </div>
+</div>
+
+<div class="layout-two-col">
+  <div class="card">
+    <div class="card-header"><div class="card-title">🧾 10 Transaksi Terakhir</div></div>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr><th>No. Invoice</th><th>Tanggal</th><th>Total</th><th>Pembayaran</th></tr>
+        </thead>
+        <tbody>
+          {% for t in transactions %}
+          <tr>
+            <td><div style="font-family:monospace;font-weight:600;color:var(--primary-light);">{{ t.nomor }}</div></td>
+            <td>{{ t.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td style="font-weight:600;">Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</td>
+            <td>
+              <span class="badge {{ 'badge-info' if t.metode_bayar=='kredit' else 'badge-success' }}">
+                {{ t.metode_bayar|upper }}
+              </span>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted);">Belum ada transaksi</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">📖 Biodata Member</div></div>
+    
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--text-muted);">Nama Lengkap</div>
+      <div style="font-weight:600;font-size:16px;">{{ member.nama }}</div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--text-muted);">No. HP (WhatsApp)</div>
+      <div style="font-family:monospace;font-size:14px;">{{ member.telepon }}</div>
+    </div>
+    {% if member.email %}
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;color:var(--text-muted);">Email</div>
+      <div>{{ member.email }}</div>
+    </div>
+    {% endif %}
+    {% if member.alamat %}
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--text-muted);">Alamat</div>
+      <div style="color:var(--text-light);">{{ member.alamat }}</div>
+    </div>
+    {% endif %}
+    
+    <div style="margin-top:20px;display:flex;flex-direction:column;gap:8px;">
+      <a href="{{ url_for('members.edit', id=member.id) }}" class="btn btn-outline btn-block">✏️ Edit Profil</a>
+      <a href="{{ url_for('members.index') }}" class="btn btn-outline btn-block">← Kembali Semua Member</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

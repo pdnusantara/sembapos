@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}Riwayat Stok{% endblock %}
+{% block page_title %}📜 Riwayat Stok{% endblock %}
+{% block page_sub %}{{ product.nama }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <p style="color:var(--text-muted);margin:0;">Stok saat ini: <strong class="text-light">{{ product.stok|int if product.stok == product.stok|int else product.stok }} {{ product.satuan }}</strong></p>
+  <div class="d-flex gap-2">
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('products.stock_in', id=product.id) }}" class="btn btn-outline btn-sm">📥 Stok masuk</a>
+    <a href="{{ url_for('products.stock_adjust', id=product.id) }}" class="btn btn-outline btn-sm">⚖️ Koreksi</a>
+    {% endif %}
+    <a href="{{ url_for('products.index') }}" class="btn btn-outline btn-sm">← Daftar produk</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrapper table-sticky">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Waktu</th>
+          <th>Tipe</th>
+          <th>Qty</th>
+          <th>Sebelum</th>
+          <th>Sesudah</th>
+          <th>Keterangan</th>
+          <th>User</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in movements.items %}
+        <tr>
+          <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">{{ m.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>
+            <span class="badge {{ 'badge-success' if m.tipe == 'masuk' else 'badge-warning' }}">{{ m.tipe }}</span>
+          </td>
+          <td>{{ m.qty|int if m.qty == m.qty|int else m.qty }}</td>
+          <td class="text-muted">{{ m.stok_sebelum|int if m.stok_sebelum == m.stok_sebelum|int else m.stok_sebelum }}</td>
+          <td class="text-light">{{ m.stok_sesudah|int if m.stok_sesudah == m.stok_sesudah|int else m.stok_sesudah }}</td>
+          <td>{{ m.keterangan or '—' }}</td>
+          <td style="font-size:12px;">{{ m.user.nama if m.user else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);">Belum ada pergerakan stok.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if movements.pages > 1 %}
+<div class="pagination">
+  {% if movements.has_prev %}
+  <a href="{{ url_for('products.stock_history', id=product.id, page=movements.prev_num) }}" class="page-btn">‹</a>
+  {% endif %}
+  {% for p in movements.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+    {% if p %}
+    <a href="{{ url_for('products.stock_history', id=product.id, page=p) }}" class="page-btn {{ 'active' if p == movements.page }}">{{ p }}</a>
+    {% else %}
+    <span class="page-btn" style="cursor:default;">…</span>
+    {% endif %}
+  {% endfor %}
+  {% if movements.has_next %}
+  <a href="{{ url_for('products.stock_history', id=product.id, page=movements.next_num) }}" class="page-btn">›</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}Shift #{{ shift.id }}{% endblock %}
+{% block page_title %}Shift #{{ shift.id }}{% endblock %}
+{% block page_sub %}{{ shift.branch.nama if shift.branch else 'Cabang' }} — {{ shift.user.nama if shift.user else 'Kasir' }}{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+  <div class="mb-3">
+    <a href="{{ url_for('shifts.index') }}" class="btn btn-outline btn-sm">← Kembali ke daftar</a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header"><div class="card-title">Ringkasan</div></div>
+    <div class="card-body" style="display:grid;gap:12px;">
+      <div class="cart-row"><span>Status</span>
+        <span>{% if shift.status == 'open' %}<strong class="text-success">Terbuka</strong>{% else %}Tutup{% endif %}</span>
+      </div>
+      <div class="cart-row"><span>Dibuka</span><span>{{ shift.opened_at.strftime('%d/%m/%Y %H:%M') if shift.opened_at else '—' }}</span></div>
+      {% if shift.closed_at %}
+      <div class="cart-row"><span>Ditutup</span><span>{{ shift.closed_at.strftime('%d/%m/%Y %H:%M') }}</span></div>
+      {% endif %}
+      <div class="cart-row"><span>Saldo awal laci</span><span>Rp {{ "{:,.0f}".format(shift.opening_float or 0).replace(",",".") }}</span></div>
+      {% if shift.note_open %}
+      <div class="cart-row"><span>Catatan buka</span><span class="text-muted">{{ shift.note_open }}</span></div>
+      {% endif %}
+
+      <hr style="border-color:rgba(255,255,255,0.08);margin:8px 0;">
+      <div class="fw-bold" style="font-size:14px;">Penjualan selesai per metode</div>
+      {% for met, row in by_method.items() %}
+      <div class="cart-row">
+        <span>{{ met }}</span>
+        <span>{{ row.count }} nota — Rp {{ "{:,.0f}".format(row.sum).replace(",",".") }}</span>
+      </div>
+      {% else %}
+      <p class="text-muted">Belum ada transaksi selesai pada shift ini.</p>
+      {% endfor %}
+
+      <hr style="border-color:rgba(255,255,255,0.08);margin:8px 0;">
+      <div class="cart-row"><span>Penjualan tunai (total)</span><span>Rp {{ "{:,.0f}".format(cash_extra).replace(",",".") }}</span></div>
+      <div class="cart-row"><span>Kas diharapkan (awal + tunai)</span>
+        <span class="fw-bold">Rp {{ "{:,.0f}".format(expected_live).replace(",",".") }}</span>
+      </div>
+      {% if shift.status == 'closed' %}
+      <div class="cart-row"><span>Uang fisik dihitung</span>
+        <span>{% if shift.closing_counted is not none %}Rp {{ "{:,.0f}".format(shift.closing_counted).replace(",",".") }}{% else %}—{% endif %}</span>
+      </div>
+      <div class="cart-row"><span>Ekspektasi (saat tutup)</span>
+        <span>{% if shift.expected_cash is not none %}Rp {{ "{:,.0f}".format(shift.expected_cash).replace(",",".") }}{% else %}—{% endif %}</span>
+      </div>
+      <div class="cart-row"><span>Selisih</span>
+        <span class="fw-bold {% if shift.variance is not none and shift.variance == 0 %}text-success{% elif shift.variance is not none and shift.variance > 0 %}text-warning{% elif shift.variance is not none %}text-danger{% else %}text-muted{% endif %}">
+          {% if shift.variance is not none %}Rp {{ "{:,.0f}".format(shift.variance).replace(",",".") }}{% else %}—{% endif %}
+        </span>
+      </div>
+      {% if shift.note_close %}
+      <div class="cart-row"><span>Catatan tutup</span><span class="text-muted">{{ shift.note_close }}</span></div>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if can_close %}
+  <div class="card mb-3">
+    <div class="card-header"><div class="card-title">Tutup shift</div></div>
+    <div class="card-body">
+      <p class="text-muted" style="font-size:13px;margin-bottom:12px;">Ekspektasi tunai saat ini: <strong>Rp {{ "{:,.0f}".format(expected_live).replace(",",".") }}</strong></p>
+      <form method="post" action="{{ url_for('shifts.close_shift_form', sid=shift.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <label class="form-label">Uang fisik di laci (Rp)</label>
+          <input type="number" name="closing_counted" class="form-control" step="1" min="0" required placeholder="Hitung kas">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Catatan tutup (opsional)</label>
+          <input type="text" name="note_close" class="form-control" placeholder="Keterangan">
+        </div>
+        <button type="submit" class="btn btn-primary" onclick="return confirm('Tutup shift sekarang?');">Tutup shift</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Transaksi dalam shift</div></div>
+    <div class="table-wrapper" style="overflow-x:auto;max-height:480px;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Waktu</th>
+            <th>No.</th>
+            <th>Metode</th>
+            <th>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transactions %}
+          <tr>
+            <td>{{ t.created_at.strftime('%d/%m %H:%M') if t.created_at else '—' }}</td>
+            <td>{{ t.nomor }}</td>
+            <td>{{ t.metode_bayar or '—' }}</td>
+            <td>Rp {{ "{:,.0f}".format(t.total or 0).replace(",",".") }}</td>
+            <td><a href="{{ url_for('receipt.view_receipt', id=t.id) }}" target="_blank" class="btn btn-sm btn-outline">Struk</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px;">Tidak ada transaksi.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

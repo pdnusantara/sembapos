@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Pelanggan & Member{% endblock %}
+{% block page_title %}👤 Daftar Pelanggan{% endblock %}
+{% block page_sub %}{{ members|length }} pelanggan terdaftar{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="page-list-toolbar">
+    <form method="GET" class="page-list-search">
+      <input type="text" name="q" class="form-control" placeholder="Cari nama atau HP..." value="{{ search }}">
+      <button type="submit" class="btn btn-primary">🔍</button>
+    </form>
+    <a href="{{ url_for('members.add') }}" class="btn btn-primary">➕ Tambah Pelanggan</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr><th>Nama</th><th>No. HP</th><th>Poin</th><th>Total Belanja</th><th>Hutang</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+        {% for m in members %}
+        <tr>
+          <td><div style="font-weight:600;">{{ m.nama }}</div></td>
+          <td style="font-family:monospace;">{{ m.telepon }}</td>
+          <td>
+            <span class="badge badge-warning" style="font-weight:700;font-size:14px;">⭐ {{ m.poin }}</span>
+          </td>
+          <td class="text-muted">Rp {{ "{:,.0f}".format(m.total_belanja).replace(",",".") }}</td>
+          <td>
+            {% if m.total_hutang > 0 %}
+            <span class="badge badge-danger">Rp {{ "{:,.0f}".format(m.total_hutang).replace(",",".") }}</span>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <a href="{{ url_for('members.detail', id=m.id) }}" class="btn btn-outline btn-sm">👁️ Detail</a>
+              <a href="{{ url_for('members.edit', id=m.id) }}" class="btn btn-outline btn-sm">✏️</a>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">📭 Tidak ada data pelanggan</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

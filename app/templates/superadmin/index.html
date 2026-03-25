@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block title %}Super Admin — Manajemen Tenant{% endblock %}
+{% block page_title %}🏢 Super Admin Panel{% endblock %}
+{% block page_sub %}Kelola semua tenant platform{% endblock %}
+
+{% block content %}
+{% set inactive_suffix = '&inactive_pkg=1' if inactive_pkg_filter else '' %}
+{% if inactive_pkg_tenant_count and inactive_pkg_tenant_count > 0 %}
+<div class="alert alert-warning" style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+  <span><strong>⚠️ Paket nonaktif:</strong> {{ inactive_pkg_tenant_count }} tenant masih menempel ke paket yang dinonaktifkan. Pindahkan ke paket aktif di edit tenant.</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    {% if inactive_pkg_filter %}
+    <a href="{{ url_for('superadmin.index', q=q, sort=sort, order=order) }}" class="btn btn-outline btn-sm">Tampilkan semua tenant</a>
+    {% else %}
+    <a href="{{ url_for('superadmin.index', inactive_pkg='1', q=q, sort=sort, order=order) }}" class="btn btn-outline btn-sm">Filter tenant ini saja</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card primary">
+    <div class="stat-icon primary">🏢</div>
+    <div class="stat-info">
+      <div class="stat-value">{{ total_tenants }}</div>
+      <div class="stat-label">Total Tenant</div>
+    </div>
+  </div>
+  <div class="stat-card success">
+    <div class="stat-icon success">👥</div>
+    <div class="stat-info">
+      <div class="stat-value">{{ total_users }}</div>
+      <div class="stat-label">Total Pengguna</div>
+    </div>
+  </div>
+  <div class="stat-card warning">
+    <div class="stat-icon warning">🧾</div>
+    <div class="stat-info">
+      <div class="stat-value">{{ total_transaksi }}</div>
+      <div class="stat-label">Total Transaksi</div>
+    </div>
+  </div>
+  <div class="stat-card danger">
+    <div class="stat-icon danger">💰</div>
+    <div class="stat-info">
+      <div class="stat-value" style="font-size:16px;">Rp {{ "{:,.0f}".format(penjualan_hari_ini).replace(",",".") }}</div>
+      <div class="stat-label">Omzet Hari Ini (semua tenant)</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3" style="border-style:dashed;opacity:0.95;">
+  <div style="padding:14px 16px;font-size:13px;color:var(--text-muted);line-height:1.5;">
+    <strong style="color:var(--text-light);">💾 Backup & pemeliharaan</strong><br>
+    Cadangkan berkala file basis data (mis. <code>kasir.db</code>) dan konfigurasi server. Pemulihan dan jadwal backup dilakukan di tingkat server / hosting.
+  </div>
+</div>
+
+<div class="page-list-toolbar mb-3" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+    <a href="{{ url_for('superadmin.add_tenant') }}" class="btn btn-primary">➕ Tambah Tenant</a>
+    <a href="{{ url_for('superadmin.paket_index') }}" class="btn btn-outline">📦 Paket tenant</a>
+    {% if inactive_pkg_filter %}
+    <a href="{{ url_for('superadmin.export_csv', q=q, sort=sort, order=order, inactive_pkg='1') }}" class="btn btn-outline">⬇️ Export CSV</a>
+    {% else %}
+    <a href="{{ url_for('superadmin.export_csv', q=q, sort=sort, order=order) }}" class="btn btn-outline">⬇️ Export CSV</a>
+    {% endif %}
+    <a href="{{ url_for('superadmin.audit_logs') }}" class="btn btn-outline">📜 Log audit</a>
+  </div>
+  <form method="get" action="{{ url_for('superadmin.index') }}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="order" value="{{ order }}">
+    {% if inactive_pkg_filter %}<input type="hidden" name="inactive_pkg" value="1">{% endif %}
+    <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Cari nama, kode, email…" style="min-width:200px;">
+    <button type="submit" class="btn btn-outline btn-sm">Cari</button>
+    {% if q %}
+    <a href="{{ url_for('superadmin.index', sort=sort, order=order) }}{{ inactive_suffix }}" class="btn btn-outline btn-sm">Reset</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">📋 Daftar Tenant</div>
+    <div style="font-size:12px;color:var(--text-muted);">{{ total_filtered }} tenant{% if q %} (filter){% endif %}</div>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th><a href="{{ url_for('superadmin.index', q=q, sort='nama', order='desc' if sort=='nama' and order=='asc' else 'asc', page=1) }}{{ inactive_suffix }}" style="color:inherit;">Tenant</a></th>
+          <th><a href="{{ url_for('superadmin.index', q=q, sort='kode', order='desc' if sort=='kode' and order=='asc' else 'asc', page=1) }}{{ inactive_suffix }}" style="color:inherit;">Kode</a></th>
+          <th><a href="{{ url_for('superadmin.index', q=q, sort='paket', order='desc' if sort=='paket' and order=='asc' else 'asc', page=1) }}{{ inactive_suffix }}" style="color:inherit;">Paket</a></th>
+          <th>Cabang</th>
+          <th>User</th>
+          <th>Omzet hari ini</th>
+          <th>Status</th>
+          <th><a href="{{ url_for('superadmin.index', q=q, sort='tanggal_daftar', order='desc' if sort=='tanggal_daftar' and order=='asc' else 'asc', page=1) }}{{ inactive_suffix }}" style="color:inherit;">Terdaftar</a></th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tenants %}
+        {% set nb = t.branches|length %}
+        {% set nu = t.users|length %}
+        {% set lim_c = t.max_cabang >= unlimited_threshold %}
+        {% set lim_u = t.max_user >= unlimited_threshold %}
+        {% set warn_c = not lim_c and nb >= t.max_cabang %}
+        {% set near_c = not lim_c and not warn_c and nb >= t.max_cabang - 1 %}
+        {% set warn_u = not lim_u and nu >= t.max_user %}
+        {% set near_u = not lim_u and not warn_u and nu >= t.max_user - 1 %}
+        <tr>
+          <td>
+            <a href="{{ url_for('superadmin.view_tenant', id=t.id) }}" style="font-weight:600;color:var(--text-light);">{{ t.nama }}</a>
+            {% if t.email %}<div style="font-size:11px;color:var(--text-muted);">{{ t.email }}</div>{% endif %}
+            {% if t.tanggal_expired %}
+            <div style="font-size:10px;margin-top:2px;">
+              {% if utc_now > t.tanggal_expired %}
+              <span class="badge badge-danger" style="font-size:10px;">Kedaluwarsa</span>
+              {% else %}
+              <span class="badge badge-warning" style="font-size:10px;">Exp {{ t.tanggal_expired.strftime('%d/%m/%Y') }}</span>
+              {% endif %}
+            </div>
+            {% endif %}
+          </td>
+          <td><span class="badge badge-info">{{ t.kode }}</span></td>
+          <td>
+            <span class="badge {{ 'badge-primary' if t.paket=='pro' else ('badge-success' if t.paket=='enterprise' else 'badge-warning') }}">
+              {% if t.subscription %}{{ t.subscription.nama }}{% else %}{{ t.paket.upper() }}{% endif %}
+            </span>
+            {% if t.subscription %}<div style="font-size:10px;color:var(--text-muted);">{{ t.subscription.kode }}</div>{% endif %}
+            {% if t.subscription and not t.subscription.aktif %}<div style="margin-top:4px;"><span class="badge badge-danger" style="font-size:9px;">Paket nonaktif</span></div>{% endif %}
+          </td>
+          <td>
+            {{ nb }} / {% if lim_c %}∞{% else %}{{ t.max_cabang }}{% endif %}
+            {% if warn_c %}<span class="badge badge-danger" style="font-size:9px;margin-left:4px;">penuh</span>
+            {% elif near_c %}<span class="badge badge-warning" style="font-size:9px;margin-left:4px;">hampir</span>{% endif %}
+          </td>
+          <td>
+            {{ nu }} / {% if lim_u %}∞{% else %}{{ t.max_user }}{% endif %}
+            {% if warn_u %}<span class="badge badge-danger" style="font-size:9px;margin-left:4px;">penuh</span>
+            {% elif near_u %}<span class="badge badge-warning" style="font-size:9px;margin-left:4px;">hampir</span>{% endif %}
+          </td>
+          <td style="font-size:12px;white-space:nowrap;">Rp {{ "{:,.0f}".format(omzet_today.get(t.id, 0)).replace(",",".") }}</td>
+          <td>
+            <span class="badge {{ 'badge-success' if t.aktif else 'badge-danger' }}">
+              {{ '✅ Aktif' if t.aktif else '⛔ Nonaktif' }}
+            </span>
+          </td>
+          <td class="text-muted">{{ t.tanggal_daftar.strftime('%d/%m/%Y') }}</td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <a href="{{ url_for('superadmin.view_tenant', id=t.id) }}" class="btn btn-outline btn-sm">👁️</a>
+              <a href="{{ url_for('superadmin.edit_tenant', id=t.id) }}" class="btn btn-outline btn-sm">✏️</a>
+              <form method="POST" action="{{ url_for('superadmin.toggle_tenant', id=t.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                {% if q %}<input type="hidden" name="ret_q" value="{{ q }}">{% endif %}
+                <input type="hidden" name="ret_sort" value="{{ sort }}">
+                <input type="hidden" name="ret_order" value="{{ order }}">
+                <input type="hidden" name="ret_page" value="{{ page }}">
+                <button type="submit" class="btn btn-outline btn-sm" style="color:{{ 'var(--danger)' if t.aktif else 'var(--success)' }};">
+                  {{ '⛔' if t.aktif else '✅' }}
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted);">📭 Tidak ada tenant</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if total_pages > 1 %}
+  <div style="padding:12px 16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center;">
+    {% if page > 1 %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.index', page=page-1, q=q, sort=sort, order=order) }}{{ inactive_suffix }}">←</a>
+    {% endif %}
+    <span class="text-muted" style="font-size:13px;">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.index', page=page+1, q=q, sort=sort, order=order) }}{{ inactive_suffix }}">→</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

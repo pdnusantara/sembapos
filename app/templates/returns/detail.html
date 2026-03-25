@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}{{ sr.nomor }}{% endblock %}
+{% block page_title %}↩️ {{ sr.nomor }}{% endblock %}
+{% block page_sub %}Retur · {{ sr.created_at.strftime('%d/%m/%Y %H:%M') if sr.created_at else '' }}{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+  <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+    <a href="{{ url_for('returns.index') }}" class="btn btn-outline btn-sm">← Daftar retur</a>
+    {% if sr.source_transaction %}
+    <a href="{{ url_for('transactions.detail', id=sr.source_transaction.id) }}" class="btn btn-outline btn-sm">Nota asli</a>
+    {% endif %}
+    <a href="{{ url_for('returns.print_return', rid=sr.id) }}" target="_blank" class="btn btn-primary btn-sm">Cetak</a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header"><div class="card-title">Ringkasan</div></div>
+    <div class="card-body" style="display:flex;flex-direction:column;gap:10px;font-size:14px;">
+      <div class="cart-row"><span class="text-muted">Nilai retur</span><span class="fw-bold">Rp {{ "{:,.0f}".format(sr.total_retur or 0).replace(",",".") }}</span></div>
+      <div class="cart-row"><span class="text-muted">Metode pengembalian</span><span>{{ sr.metode_pengembalian }}</span></div>
+      <div class="cart-row"><span class="text-muted">Jenis</span><span>{{ sr.jenis }}</span></div>
+      <div class="cart-row"><span class="text-muted">Cabang</span><span>{{ sr.branch.nama if sr.branch else '—' }}</span></div>
+      <div class="cart-row"><span class="text-muted">Dicatat oleh</span><span>{{ sr.user.nama if sr.user else '—' }}</span></div>
+      {% if sr.alasan %}<div><span class="text-muted">Alasan</span><div>{{ sr.alasan }}</div></div>{% endif %}
+      {% if sr.catatan %}<div><span class="text-muted">Catatan</span><div>{{ sr.catatan }}</div></div>{% endif %}
+      {% if sr.replacement_transaction %}
+      <div class="cart-row">
+        <span class="text-muted">Transaksi tukar</span>
+        <span><a href="{{ url_for('transactions.detail', id=sr.replacement_transaction.id) }}">{{ sr.replacement_transaction.nomor }}</a></span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Baris retur</div></div>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr><th>Produk</th><th>Qty</th><th>Harga</th><th>Subtotal</th></tr>
+        </thead>
+        <tbody>
+          {% for it in sr.items %}
+          <tr>
+            <td style="font-weight:600;">{{ it.source_line.nama_produk if it.source_line else '—' }}</td>
+            <td>{{ it.qty_retur }}</td>
+            <td>Rp {{ "{:,.0f}".format(it.harga).replace(",",".") }}</td>
+            <td>Rp {{ "{:,.0f}".format(it.subtotal).replace(",",".") }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

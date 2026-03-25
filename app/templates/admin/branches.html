@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block title %}Manajemen Cabang{% endblock %}
+{% block page_title %}🏬 Manajemen Cabang{% endblock %}
+{% block page_sub %}
+  {{ branch_count_total }} cabang
+  {% if tenant and tenant.max_cabang %}· kuota {{ tenant.max_cabang }}{% endif %}
+  {% if q or filter_status %}· hasil filter{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <form method="GET" class="product-toolbar product-filter-form" style="flex-wrap:wrap;gap:10px;align-items:flex-end;">
+    <div class="form-group" style="margin:0;flex:1;min-width:180px;">
+      <label class="form-label">Cari</label>
+      <input type="text" name="q" class="form-control" placeholder="Nama, kode, alamat, telepon..." value="{{ q }}">
+    </div>
+    <div class="form-group" style="margin:0;min-width:140px;">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-control">
+        <option value="" {% if not filter_status %}selected{% endif %}>Semua</option>
+        <option value="active" {% if filter_status == 'active' %}selected{% endif %}>Aktif</option>
+        <option value="inactive" {% if filter_status == 'inactive' %}selected{% endif %}>Nonaktif</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Terapkan</button>
+    {% if q or filter_status %}
+    <a href="{{ url_for('admin.branches') }}" class="btn btn-outline">Reset</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="layout-two-col layout-two-col--wide">
+  <div class="card">
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Cabang</th>
+            <th>Kode</th>
+            <th>Pengguna</th>
+            <th>Trx hari ini</th>
+            <th>Alamat</th>
+            <th>Telepon</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in branches %}
+          {% set st = branch_stats.get(b.id, {'users': 0, 'trx_today': 0}) %}
+          <tr>
+            <td><div style="font-weight:600;">{{ b.nama }}</div></td>
+            <td><span class="badge badge-info">{{ b.kode }}</span></td>
+            <td class="text-muted">{{ st.users }}</td>
+            <td class="text-muted">{{ st.trx_today }}</td>
+            <td class="text-muted" style="max-width:200px;font-size:12px;">{{ b.alamat or '—' }}</td>
+            <td class="text-muted" style="font-size:12px;">{{ b.telepon or '—' }}</td>
+            <td><span class="badge {{ 'badge-success' if b.aktif else 'badge-danger' }}">{{ '✅ Aktif' if b.aktif else '⛔ Nonaktif' }}</span></td>
+            <td>
+              <div class="product-actions" style="flex-wrap:wrap;">
+                <a href="{{ url_for('admin.edit_branch', id=b.id) }}" class="btn btn-outline btn-sm">✏️ Edit</a>
+                <form method="POST" action="{{ url_for('admin.toggle_branch', id=b.id) }}" style="display:inline;"
+                      {% if b.aktif %}onsubmit="return confirm('Nonaktifkan cabang ini? Pastikan tidak ada pengguna aktif yang terikat.');"{% else %}onsubmit="return confirm('Aktifkan kembali cabang ini?');"{% endif %}>
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <button type="submit" class="btn btn-outline btn-sm">
+                    {{ '⛔ Nonaktifkan' if b.aktif else '✅ Aktifkan' }}
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" style="text-align:center;padding:48px;color:var(--text-muted);">
+              <div style="font-size:40px;margin-bottom:12px;">📭</div>
+              <p style="margin:0 0 8px;">Belum ada cabang{% if q or filter_status %} yang cocok dengan filter{% endif %}.</p>
+              {% if not q and not filter_status %}
+              <p class="text-muted" style="font-size:13px;">Tambahkan cabang pertama dengan formulir di samping.</p>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">➕ Tambah cabang</div></div>
+    {% if tenant and tenant.max_cabang and branch_count_total >= tenant.max_cabang %}
+    <p class="text-muted" style="padding:12px 0;font-size:13px;">Kuota cabang penuh ({{ branch_count_total }}/{{ tenant.max_cabang }}).</p>
+    {% else %}
+    <form method="POST" action="{{ url_for('admin.add_branch') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="form-group">
+        <label class="form-label">Nama cabang *</label>
+        <input type="text" name="nama" class="form-control" required minlength="2" placeholder="Contoh: Cabang Timur">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kode cabang *</label>
+        <input type="text" name="kode" class="form-control" required minlength="2" maxlength="20" placeholder="Unik per tenant, mis. TMR" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Alamat</label>
+        <input type="text" name="alamat" class="form-control" placeholder="Alamat lengkap">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Telepon</label>
+        <input type="text" name="telepon" class="form-control" placeholder="08xxx">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">💾 Tambah cabang</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><div class="card-title">📋 Log cabang (20 terakhir)</div></div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr><th>Waktu</th><th>Aksi</th><th>Oleh</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for row in audit_logs %}
+        <tr>
+          <td style="font-size:12px;white-space:nowrap;">{{ row.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>
+            {% if row.action == 'branch_created' %}<span class="badge badge-success">Buat</span>
+            {% elif row.action == 'branch_updated' %}<span class="badge badge-info">Ubah</span>
+            {% elif row.action == 'branch_toggled' %}<span class="badge badge-warning">Aktif/nonaktif</span>
+            {% else %}<span class="badge">{{ row.action }}</span>{% endif %}
+          </td>
+          <td>{{ row.actor.nama if row.actor else '—' }}</td>
+          <td class="text-muted" style="font-size:12px;">{{ row.detail or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);">Belum ada log cabang.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Edit Tenant — {{ tenant.nama }}{% endblock %}
+{% block page_title %}✏️ Edit Tenant{% endblock %}
+{% block page_sub %}{{ tenant.nama }} ({{ tenant.kode }}){% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.index'), false),
+  ('Detail tenant', url_for('superadmin.view_tenant', id=tenant.id), false),
+  ('Edit tenant', '', true),
+]) }}
+<div style="max-width:640px;">
+  <div class="card">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="form-group">
+        <label class="form-label">Kode</label>
+        <input type="text" class="form-control" value="{{ tenant.kode }}" disabled style="opacity:0.7;">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Kode tidak diubah agar konsisten dengan username admin.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Toko / Usaha *</label>
+        <input type="text" name="nama" class="form-control" required value="{{ tenant.nama }}">
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Paket</label>
+          <select name="paket_id" id="paket" class="form-control" required>
+            {% for p in packages %}
+            <option value="{{ p.id }}" data-kode="{{ p.kode }}"
+              {% if tenant.paket_id == p.id %}selected{% endif %}
+              {% if not p.aktif %}data-inactive="1"{% endif %}>
+              {{ p.nama }}{% if not p.aktif %} (nonaktif){% endif %} — {{ p.max_cabang }} cab / {{ p.max_user }} user
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Berlangganan sampai</label>
+          <input type="date" name="tanggal_expired" class="form-control"
+            value="{{ tenant.tanggal_expired.strftime('%Y-%m-%d') if tenant.tanggal_expired else '' }}">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Kosongkan jika tidak dibatasi.</div>
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" name="sync_paket_quotas" value="1" id="syncPaket">
+            Samakan max cabang & user ke default paket saat simpan
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max cabang</label>
+          <input type="number" name="max_cabang" id="maxCabang" class="form-control" min="1" value="{{ tenant.max_cabang }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max user</label>
+          <input type="number" name="max_user" id="maxUser" class="form-control" min="1" value="{{ tenant.max_user }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" value="{{ tenant.email or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telepon</label>
+          <input type="text" name="telepon" class="form-control" value="{{ tenant.telepon or '' }}">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Alamat</label>
+          <input type="text" name="alamat" class="form-control" value="{{ tenant.alamat or '' }}">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" name="aktif" value="1" {% if tenant.aktif %}checked{% endif %}>
+            Tenant aktif (bisa login)
+          </label>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <button type="submit" class="btn btn-primary">Simpan</button>
+        <a href="{{ url_for('superadmin.view_tenant', id=tenant.id) }}" class="btn btn-outline">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+const PAKET_KUOTA = {{ paket_kuota | tojson }};
+function applyPaketDefaults() {
+  const sel = document.getElementById('paket');
+  const opt = sel.options[sel.selectedIndex];
+  const kode = (opt && opt.getAttribute('data-kode')) ? opt.getAttribute('data-kode').toLowerCase() : '{{ (tenant.paket or "basic")|lower }}';
+  const q = PAKET_KUOTA[kode] || Object.values(PAKET_KUOTA)[0];
+  document.getElementById('maxCabang').value = q[0];
+  document.getElementById('maxUser').value = q[1];
+}
+const paketEl = document.getElementById('paket');
+if (paketEl) {
+  paketEl.addEventListener('change', function() {
+    if (!document.getElementById('syncPaket').checked) applyPaketDefaults();
+  });
+}
+const syncEl = document.getElementById('syncPaket');
+if (syncEl) {
+  syncEl.addEventListener('change', function() {
+    if (this.checked) applyPaketDefaults();
+  });
+}
+</script>
+{% endblock %}

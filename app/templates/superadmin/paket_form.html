@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}{% if pkg %}Edit{% else %}Tambah{% endif %} paket{% endblock %}
+{% block page_title %}{% if pkg %}✏️ Edit paket{% else %}➕ Paket baru{% endif %}{% endblock %}
+
+{% block content %}
+<div style="max-width:720px;">
+  {% if pkg %}
+  {{ bc.sa_bc([
+    ('Super Admin', url_for('superadmin.index'), false),
+    ('Paket tenant', url_for('superadmin.paket_index'), false),
+    ('Edit: ' ~ pkg.nama, '', true),
+  ]) }}
+  {% else %}
+  {{ bc.sa_bc([
+    ('Super Admin', url_for('superadmin.index'), false),
+    ('Paket tenant', url_for('superadmin.paket_index'), false),
+    ('Tambah paket', '', true),
+  ]) }}
+  {% endif %}
+
+  <div class="card mb-3" style="border-style:dashed;">
+    <div class="card-header"><div class="card-title">👁️ Pratinjau modul (default penuh per role)</div></div>
+    <div style="padding:14px 16px;font-size:13px;line-height:1.55;color:var(--text-muted);">
+      <p style="margin:0 0 10px;">Asumsi pengguna punya izin <strong>default penuh</strong> untuk rolenya (bukan daftar modul kustom). Modul di bawah <strong>tidak akan pernah bisa diakses</strong> di tenant dengan paket ini karena diblokir di tingkat paket:</p>
+      {% if not paket_preview.admin and not paket_preview.kasir %}
+      <p style="margin:0;color:var(--success);">Tidak ada pemblokiran paket — semua modul operasional mengikuti izin per pengguna.</p>
+      {% else %}
+      <div class="grid-2" style="gap:12px;">
+        <div style="padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">
+          <strong style="color:var(--text-light);">Admin</strong>
+          {% if paket_preview.admin %}
+          <ul style="margin:8px 0 0;padding-left:18px;">{% for x in paket_preview.admin %}<li>{{ x }}</li>{% endfor %}</ul>
+          {% else %}<p style="margin:8px 0 0;font-size:12px;">— tidak ada modul terblokir paket</p>{% endif %}
+        </div>
+        <div style="padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">
+          <strong style="color:var(--text-light);">Kasir</strong>
+          {% if paket_preview.kasir %}
+          <ul style="margin:8px 0 0;padding-left:18px;">{% for x in paket_preview.kasir %}<li>{{ x }}</li>{% endfor %}</ul>
+          {% else %}<p style="margin:8px 0 0;font-size:12px;">— tidak ada modul terblokir paket</p>{% endif %}
+        </div>
+      </div>
+      {% if paket_preview.admin == paket_preview.kasir and paket_preview.admin %}
+      <p style="margin:12px 0 0;font-size:12px;">Daftar sama untuk admin &amp; kasir karena default modul penuh identik di sistem ini. Jika user punya modul kustom, hasil akhir = irisan izin user dengan batas paket.</p>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Kode unik *</label>
+          <input type="text" name="kode" class="form-control" required
+            value="{{ pkg.kode if pkg else '' }}"
+            placeholder="mis. starter"
+            pattern="[a-z0-9_]{2,30}"
+            title="huruf kecil, angka, underscore"
+            style="text-transform:lowercase;">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Dipakai di kolom <code>paket</code> tenant &amp; sinkron otomatis.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nama tampilan *</label>
+          <input type="text" name="nama" class="form-control" required value="{{ pkg.nama if pkg else '' }}" placeholder="Starter">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Deskripsi</label>
+          <textarea name="deskripsi" class="form-control" rows="2" placeholder="Ringkasan untuk internal / tenant">{{ pkg.deskripsi if pkg and pkg.deskripsi else '' }}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max cabang</label>
+          <input type="number" name="max_cabang" class="form-control" min="1" value="{{ pkg.max_cabang if pkg else 3 }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max user</label>
+          <input type="number" name="max_user" class="form-control" min="1" value="{{ pkg.max_user if pkg else 5 }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Harga bulanan (Rp)</label>
+          <input type="number" name="harga_bulanan" class="form-control" min="0" step="1000" value="{{ (pkg.harga_bulanan if pkg else 0)|int }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Harga tahunan (Rp)</label>
+          <input type="number" name="harga_tahunan" class="form-control" min="0" step="1000" value="{{ (pkg.harga_tahunan if pkg else 0)|int }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Urutan sort</label>
+          <input type="number" name="sort_order" class="form-control" value="{{ pkg.sort_order if pkg else 0 }}">
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:24px;">
+            <input type="checkbox" name="aktif" value="1" {% if not pkg or pkg.aktif %}checked{% endif %}>
+            Paket aktif (bisa dipilih tenant baru)
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:8px;">
+        <label class="form-label">Modul yang diizinkan untuk tenant paket ini</label>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">
+          Centang semua = tidak membatasi (sama dengan paket penuh). Sebagian = tenant hanya bisa modul yang ada di irisan dengan izin user.
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid var(--border);">
+          {% for code, label in permission_modules %}
+          {% if code != 'dashboard' %}
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" name="perm" value="{{ code }}"
+              {% if not pkg or not selected_modules or code in selected_modules %}checked{% endif %}>
+            {{ label }}
+          </label>
+          {% endif %}
+          {% endfor %}
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:10px;color:var(--text-muted);cursor:pointer;">
+          <input type="checkbox" id="toggleAllMods">
+          Pilih / lepas semua modul (kecuali dashboard — selalu ada)
+        </label>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;">
+        <button type="submit" class="btn btn-primary">Simpan</button>
+        <a href="{{ url_for('superadmin.paket_index') }}" class="btn btn-outline">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function() {
+  const boxes = document.querySelectorAll('input[name="perm"]');
+  const master = document.getElementById('toggleAllMods');
+  if (!master || !boxes.length) return;
+  function allChecked() {
+    return Array.from(boxes).every(function(b) { return b.checked; });
+  }
+  master.checked = allChecked();
+  master.addEventListener('change', function() {
+    boxes.forEach(function(b) { b.checked = master.checked; });
+  });
+  boxes.forEach(function(b) {
+    b.addEventListener('change', function() { master.checked = allChecked(); });
+  });
+})();
+</script>
+{% endblock %}

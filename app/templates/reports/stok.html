@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}Laporan Stok{% endblock %}
+{% block page_title %}Laporan stok{% endblock %}
+{% block page_sub %}Persediaan saat ini: nilai beli, potensi jual, status per SKU, ringkasan per kategori{% endblock %}
+
+{% block content %}
+<div class="tx2-page ls-page">
+  <section class="tx2-shell" aria-label="Ringkasan stok">
+    <div class="tx2-top">
+      <div class="tx2-stats tx2-stats--rich">
+        <article class="tx2-stat tx2-stat--accent-violet">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">💎</span>
+            <span class="tx2-stat-label">Nilai persediaan (beli)</span>
+          </div>
+          <div class="tx2-stat-value">Rp {{ "{:,.0f}".format(total_nilai_persediaan).replace(",",".") }}</div>
+          <p class="tx2-stat-hint">Sesuai filter: stok × harga beli (bukan FIFO).</p>
+        </article>
+        <article class="tx2-stat tx2-stat--accent-mint">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">🏷️</span>
+            <span class="tx2-stat-label">Potensi omzet (ecer)</span>
+          </div>
+          <div class="tx2-stat-value">Rp {{ "{:,.0f}".format(total_potensi_jual).replace(",",".") }}</div>
+          <p class="tx2-stat-hint">Stok × harga jual ecer — perkiraan jika laku semua.</p>
+        </article>
+        <article class="tx2-stat tx2-stat--accent-slate">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">📦</span>
+            <span class="tx2-stat-label">SKU terfilter</span>
+          </div>
+          <div class="tx2-stat-value">{{ products|length }}</div>
+        </article>
+        <article class="tx2-stat tx2-stat--accent-amber">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">⚠️</span>
+            <span class="tx2-stat-label">Perlu perhatian</span>
+          </div>
+          <div class="tx2-stat-value">{{ jumlah_habis + jumlah_menipis }}</div>
+          <p class="tx2-stat-hint">Habis: {{ jumlah_habis }} · Menipis: {{ jumlah_menipis }}</p>
+        </article>
+        <article class="tx2-stat tx2-stat--accent-sky">
+          <div class="tx2-stat-head">
+            <span class="tx2-stat-icon" aria-hidden="true">✓</span>
+            <span class="tx2-stat-label">Di atas minimum</span>
+          </div>
+          <div class="tx2-stat-value">{{ jumlah_aman }}</div>
+        </article>
+      </div>
+    </div>
+
+    <p class="ls-overview" role="status">
+      <strong>Semua produk aktif (tenant):</strong>
+      {{ overview.total_sku }} SKU —
+      persediaan Rp {{ "{:,.0f}".format(overview.nilai_beli).replace(",",".") }} —
+      potensi ecer Rp {{ "{:,.0f}".format(overview.nilai_jual).replace(",",".") }} —
+      <span class="ls-overview-badges">
+        <span class="ls-ob">habis {{ overview.n_habis }}</span>
+        <span class="ls-ob">menipis {{ overview.n_menipis }}</span>
+        <span class="ls-ob ls-ob--ok">aman {{ overview.n_aman }}</span>
+      </span>
+    </p>
+
+    <nav class="tx2-chips" aria-label="Filter status stok cepat">
+      <div class="tx2-chips-track">
+        <a href="{{ chip_semua }}" class="tx2-chip{% if not stok_status %} is-active{% endif %}">Semua status</a>
+        <a href="{{ chip_habis }}" class="tx2-chip{% if stok_status == 'habis' %} is-active{% endif %}">Stok habis</a>
+        <a href="{{ chip_menipis }}" class="tx2-chip{% if stok_status == 'menipis' %} is-active{% endif %}">Menipis</a>
+        <a href="{{ chip_aman }}" class="tx2-chip{% if stok_status == 'aman' %} is-active{% endif %}">Aman</a>
+      </div>
+    </nav>
+
+    <div class="card report-filter-card ls-filter-card">
+      <form method="GET" action="{{ url_for('reports.stok') }}" class="ls-filter-form">
+        <div class="card-title ls-filter-heading">Filter &amp; urutan</div>
+        <div class="ls-filter-grid">
+          <div class="form-group">
+            <label class="form-label" for="ls-cat">Kategori</label>
+            <select name="category_id" id="ls-cat" class="form-control">
+              <option value="">Semua</option>
+              {% for c in categories %}
+              <option value="{{ c.id }}" {% if category_id and category_id|int == c.id %}selected{% endif %}>{{ c.nama }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ls-q">Cari nama atau barcode</label>
+            <input type="text" name="q" id="ls-q" class="form-control" value="{{ stok_q }}" placeholder="Contoh: Beras / 8991…" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ls-status">Status stok</label>
+            <select name="stok_status" id="ls-status" class="form-control">
+              <option value="" {% if not stok_status %}selected{% endif %}>Semua</option>
+              <option value="habis" {% if stok_status == 'habis' %}selected{% endif %}>Habis (stok ≤ 0)</option>
+              <option value="menipis" {% if stok_status == 'menipis' %}selected{% endif %}>Menipis (1…min)</option>
+              <option value="aman" {% if stok_status == 'aman' %}selected{% endif %}>Aman (di atas min)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ls-sort">Urutkan</label>
+            <select name="sort" id="ls-sort" class="form-control">
+              <option value="nama" {% if stok_sort == 'nama' %}selected{% endif %}>Nama A–Z</option>
+              <option value="kategori" {% if stok_sort == 'kategori' %}selected{% endif %}>Kategori, lalu nama</option>
+              <option value="stok_asc" {% if stok_sort == 'stok_asc' %}selected{% endif %}>Stok terendah dulu</option>
+              <option value="stok_desc" {% if stok_sort == 'stok_desc' %}selected{% endif %}>Stok tertinggi dulu</option>
+              <option value="nilai_beli_desc" {% if stok_sort == 'nilai_beli_desc' %}selected{% endif %}>Nilai persediaan (beli) tertinggi</option>
+              <option value="nilai_jual_desc" {% if stok_sort == 'nilai_jual_desc' %}selected{% endif %}>Potensi omzet ecer tertinggi</option>
+            </select>
+          </div>
+        </div>
+        <div class="ls-filter-actions">
+          <button type="submit" class="btn btn-primary">Terapkan</button>
+          <a href="{{ url_for('reports.stok') }}" class="btn btn-outline">Reset</a>
+          <a href="{{ url_for('reports.stok_export_produk') }}{% if qs_base %}?{{ qs_base }}{% endif %}" class="btn btn-outline" download>⬇ Export CSV</a>
+        </div>
+      </form>
+    </div>
+
+    {% if category_rows %}
+    <div class="card ls-cat-card">
+      <div class="card-header"><div class="card-title">Ringkasan per kategori (sesuai filter)</div></div>
+      <div class="table-wrapper ls-cat-wrap">
+        <table class="table ls-cat-table">
+          <thead>
+            <tr>
+              <th>Kategori</th>
+              <th class="text-end">SKU</th>
+              <th class="text-end">Qty stok</th>
+              <th class="text-end">Nilai beli</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in category_rows %}
+            <tr>
+              <td class="fw-semibold">{{ row.label }}</td>
+              <td class="text-end">{{ row.sku }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(row.qty).replace(",",".") }}</td>
+              <td class="text-end">Rp {{ "{:,.0f}".format(row.nilai_beli).replace(",",".") }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card ls-table-card">
+      <div class="card-header"><div class="card-title">Detail per produk</div></div>
+      <div class="table-wrapper report-table-wrap ls-table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Produk</th>
+              <th>Barcode</th>
+              <th>Kategori</th>
+              <th>Supplier</th>
+              <th>Satuan</th>
+              <th class="text-end">Stok</th>
+              <th class="text-end">Min</th>
+              <th>Status</th>
+              <th class="text-end">H. beli</th>
+              <th class="text-end">H. jual</th>
+              <th class="text-end">Nilai beli</th>
+              <th class="text-end">Potensi jual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in products %}
+            <tr>
+              <td class="ls-col-product">{{ p.nama }}</td>
+              <td class="text-muted">{{ p.barcode or '—' }}</td>
+              <td>{{ p.category.nama if p.category else '—' }}</td>
+              <td>{{ p.supplier.nama if p.supplier else '—' }}</td>
+              <td>{{ p.satuan or '—' }}</td>
+              <td class="text-end">{{ p.stok }}</td>
+              <td class="text-end">{{ p.stok_minimum }}</td>
+              <td>
+                {% if (p.stok or 0) <= 0 %}
+                <span class="badge badge-danger">Habis</span>
+                {% elif p.stok_menipis %}
+                <span class="badge badge-warning">Menipis</span>
+                {% else %}
+                <span class="badge badge-success">Aman</span>
+                {% endif %}
+              </td>
+              <td class="text-end">Rp {{ "{:,.0f}".format(p.harga_beli or 0).replace(",",".") }}</td>
+              <td class="text-end">Rp {{ "{:,.0f}".format(p.harga_jual or 0).replace(",",".") }}</td>
+              <td class="text-end fw-semibold">Rp {{ "{:,.0f}".format((p.stok or 0) * (p.harga_beli or 0)).replace(",",".") }}</td>
+              <td class="text-end">Rp {{ "{:,.0f}".format((p.stok or 0) * (p.harga_jual or 0)).replace(",",".") }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="12" class="ls-empty">Tidak ada produk pada filter ini.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

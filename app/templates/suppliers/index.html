@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Supplier{% endblock %}
+{% block page_title %}🏭 Manajemen Supplier{% endblock %}
+{% block page_sub %}{{ suppliers|length }} supplier terdaftar{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="page-list-toolbar">
+    <form method="GET" class="page-list-search">
+      <input type="text" name="q" class="form-control" placeholder="Cari supplier..." value="{{ search }}">
+      <button type="submit" class="btn btn-primary">🔍</button>
+    </form>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('suppliers.add') }}" class="btn btn-primary">➕ Tambah Supplier</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr><th>Nama Supplier</th><th>Kontak</th><th>Telepon</th><th>Alamat</th><th>Status</th>{% if current_user.is_admin %}<th>Aksi</th>{% endif %}</tr>
+      </thead>
+      <tbody>
+        {% for s in suppliers %}
+        <tr>
+          <td><div style="font-weight:600;">{{ s.nama }}</div></td>
+          <td>{{ s.kontak or '—' }}</td>
+          <td>{{ s.telepon or '—' }}</td>
+          <td class="text-muted">{{ s.alamat or '—' }}</td>
+          <td>
+            <span class="badge {{ 'badge-success' if s.aktif else 'badge-danger' }}">{{ 'Aktif' if s.aktif else 'Nonaktif' }}</span>
+          </td>
+          {% if current_user.is_admin %}
+          <td>
+            <div style="display:flex;gap:6px;">
+              <a href="{{ url_for('suppliers.edit', id=s.id) }}" class="btn btn-outline btn-sm">✏️</a>
+              {% if s.aktif %}
+              <form method="POST" action="{{ url_for('suppliers.delete', id=s.id) }}" onsubmit="return confirm('Nonaktifkan supplier ini?');" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button class="btn btn-outline btn-sm" style="color:var(--danger);">🗑️</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">📭 Tidak ada data supplier</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

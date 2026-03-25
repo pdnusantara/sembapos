@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Kategori Produk{% endblock %}
+{% block page_title %}🏷️ Kategori Produk{% endblock %}
+{% block page_sub %}{{ categories|length }} kategori tersedia{% endblock %}
+
+{% block content %}
+<div class="layout-two-col">
+  <div class="card">
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr><th>Nama Kategori</th><th>Jumlah Produk</th>{% if current_user.is_admin %}<th>Aksi</th>{% endif %}</tr>
+        </thead>
+        <tbody>
+          {% for cat in categories %}
+          <tr>
+            <td style="font-weight:600;">📦 {{ cat.nama }}</td>
+            <td><span class="badge badge-primary">{{ cat.products|length }} produk</span></td>
+            {% if current_user.is_admin %}
+            <td>
+              <form method="POST" action="{{ url_for('products.delete_category', id=cat.id) }}" onsubmit="return confirm('Hapus kategori ini?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button class="btn btn-outline btn-sm" style="color:var(--danger);" {{ 'disabled' if cat.products }}>🗑️</button>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr><td colspan="3" style="text-align:center;padding:32px;color:var(--text-muted);">📭 Belum ada kategori</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if current_user.is_admin %}
+  <div class="card">
+    <div class="card-header"><div class="card-title">➕ Tambah Kategori</div></div>
+    <form method="POST" action="{{ url_for('products.add_category') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="form-group">
+        <label class="form-label">Nama Kategori *</label>
+        <input type="text" name="nama" class="form-control" required placeholder="Contoh: Beras & Gula">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Simpan Kategori</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
