@@ -18,8 +18,11 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
+$ErrorActionPreference = "Continue"
 gh auth status 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
+$authOk = $LASTEXITCODE -eq 0
+$ErrorActionPreference = "Stop"
+if (-not $authOk) {
     Write-Host "`nBelum login. Jalankan:`n  gh auth login`n(Pilih GitHub.com, HTTPS, login lewat browser)`nLalu ulang:`n  .\scripts\push-to-github.ps1`n" -ForegroundColor Yellow
     exit 1
 }
