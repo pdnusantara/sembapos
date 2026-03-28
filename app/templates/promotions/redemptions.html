@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Log Voucher Redemption{% endblock %}
+{% block page_title %}Log Penggunaan Voucher{% endblock %}
+{% block page_sub %}Audit promo yang dipakai pada transaksi{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr><th>Waktu</th><th>Voucher</th><th>Member</th><th>Transaksi</th><th>Diskon</th></tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ r.voucher.kode if r.voucher else '-' }}</td>
+          <td>{{ r.member.nama if r.member else '-' }}</td>
+          <td><a href="{{ url_for('receipt.view_receipt', id=r.transaction_id) }}" target="_blank">{{ r.transaction.nomor if r.transaction else r.transaction_id }}</a></td>
+          <td>Rp {{ "{:,.0f}".format(r.discount_amount).replace(",",".") }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:32px;">Belum ada redemption.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

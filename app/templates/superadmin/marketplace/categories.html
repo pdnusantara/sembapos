@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Kategori Marketplace — Super Admin{% endblock %}
+{% block page_title %}Marketplace — Kategori{% endblock %}
+{% block page_sub %}Kelola kategori produk marketplace{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+  <div>
+    <h2 style="margin:0;font-size:18px;font-weight:700;">🏷️ Kategori Marketplace</h2>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <a href="{{ url_for('superadmin.marketplace_sellers') }}" class="btn btn-sm btn-outline">🏪 Seller</a>
+    <a href="{{ url_for('superadmin.marketplace_products') }}" class="btn btn-sm btn-outline">📦 Produk</a>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;">
+  <!-- LIST -->
+  <div class="card" style="overflow:hidden;">
+    {% if categories %}
+    <div style="overflow-x:auto;">
+      <table class="table" style="margin:0;">
+        <thead>
+          <tr>
+            <th>Kategori</th>
+            <th style="text-align:center">Produk</th>
+            <th style="text-align:center">Status</th>
+            <th style="text-align:right">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cat in categories %}
+          <tr>
+            <td>
+              <span style="font-size:20px;margin-right:8px;">{{ cat.icon }}</span>
+              <strong>{{ cat.nama }}</strong>
+              <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">{{ cat.slug }}</span>
+            </td>
+            <td style="text-align:center;">{{ cat.products | length }}</td>
+            <td style="text-align:center;">
+              <span class="badge {% if cat.aktif %}badge-success{% else %}badge-danger{% endif %}">
+                {{ 'Aktif' if cat.aktif else 'Off' }}
+              </span>
+            </td>
+            <td style="text-align:right;">
+              <div style="display:flex;justify-content:flex-end;gap:6px;">
+                <form method="POST" style="margin:0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="action" value="toggle">
+                  <input type="hidden" name="cat_id" value="{{ cat.id }}">
+                  <button type="submit" class="btn btn-sm {% if cat.aktif %}btn-warning{% else %}btn-success{% endif %}">
+                    {{ '🔒' if cat.aktif else '✅' }}
+                  </button>
+                </form>
+                {% if not cat.products %}
+                <form method="POST" style="margin:0;"
+                      onsubmit="return confirm('Hapus kategori {{ cat.nama }}?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="cat_id" value="{{ cat.id }}">
+                  <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:var(--text-muted);">Belum ada kategori.</div>
+    {% endif %}
+  </div>
+
+  <!-- FORM TAMBAH -->
+  <div class="card" style="padding:20px;">
+    <h3 style="margin:0 0 16px;font-size:15px;font-weight:700;">➕ Tambah Kategori</h3>
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="add">
+      <div class="form-group">
+        <label class="form-label">Nama Kategori <span style="color:var(--danger)">*</span></label>
+        <input type="text" name="nama" class="form-control" required placeholder="Contoh: Sembako, Snack, Minuman">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Icon (emoji)</label>
+        <input type="text" name="icon" class="form-control" value="📦" placeholder="📦" maxlength="5">
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Paste emoji dari keyboard atau <a href="https://emojipedia.org" target="_blank">emojipedia.org</a></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Urutan tampil</label>
+        <input type="number" name="sort_order" class="form-control" value="0" min="0">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Tambah Kategori</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

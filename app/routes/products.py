@@ -7,7 +7,8 @@ from flask_login import login_required, current_user
 from sqlalchemy import or_, func
 
 from .. import db
-from ..models import Product, ProductCategory, StockMovement, Supplier
+from ..models import Product, ProductCategory, StockMovement, Supplier, ProductAuditLog, InventoryCostLayer
+from ..fifo_costing import create_cost_layer, consume_fifo_stock_out
 
 products_bp = Blueprint('products', __name__, url_prefix='/products')
 
@@ -123,16 +124,56 @@ def _tenant_stats(tenant_id):
     count_aktif = aktif.count()
     count_menipis = aktif.filter(Product.stok > 0, Product.stok <= Product.stok_minimum).count()
     count_habis = aktif.filter(Product.stok <= 0).count()
-    nilai = db.session.query(func.coalesce(func.sum(Product.stok * Product.harga_beli), 0.0)).filter(
-        Product.tenant_id == tenant_id,
-        Product.aktif == True,
-    ).scalar() or 0.0
+    products = aktif.all()
+    layer_map = dict(
+        db.session.query(
+            InventoryCostLayer.product_id,
+            func.coalesce(func.sum(InventoryCostLayer.qty_remaining * InventoryCostLayer.unit_cost), 0.0),
+        )
+        .filter(
+            InventoryCostLayer.tenant_id == tenant_id,
+            InventoryCostLayer.qty_remaining > 0,
+        )
+        .group_by(InventoryCostLayer.product_id)
+        .all()
+    )
+    nilai = 0.0
+    for p in products:
+        layer_val = float(layer_map.get(p.id, 0.0) or 0.0)
+        if layer_val > 0:
+            nilai += layer_val
+        else:
+            nilai += float(p.stok or 0) * float(p.harga_beli or 0)
     return {
         'count_aktif': count_aktif,
         'count_menipis': count_menipis,
         'count_habis': count_habis,
         'nilai_persediaan': float(nilai),
     }
+
+
+def _log_product_audit(
+    tenant_id,
+    actor_user_id,
+    product_id,
+    action,
+    old_harga_jual=None,
+    new_harga_jual=None,
+    old_stok_minimum=None,
+    new_stok_minimum=None,
+    detail=None,
+):
+    db.session.add(ProductAuditLog(
+        tenant_id=tenant_id,
+        actor_user_id=actor_user_id,
+        product_id=product_id,
+        action=action,
+        old_harga_jual=old_harga_jual,
+        new_harga_jual=new_harga_jual,
+        old_stok_minimum=old_stok_minimum,
+        new_stok_minimum=new_stok_minimum,
+        detail=(detail[:2000] if detail else None),
+    ))
 
 
 def _filtered_query(tenant_id):
@@ -180,6 +221,7 @@ def index():
     status = request.args.get('status', 'all')
     stock_filter = request.args.get('stock', 'all')
     sort = request.args.get('sort', 'nama')
+    focus = (request.args.get('focus') or '').strip().lower()
 
     q = _filtered_query(tenant_id)
     products = q.paginate(page=page, per_page=20, error_out=False)
@@ -195,6 +237,7 @@ def index():
         status=status,
         stock_filter=stock_filter,
         sort=sort,
+        focus=focus,
         stats=stats,
     )
 
@@ -375,6 +418,14 @@ def import_products():
                         stok_sesudah=stok,
                         keterangan='Import CSV',
                     ))
+                    create_cost_layer(
+                        tenant_id=tenant_id,
+                        product_id=product.id,
+                        qty_in=stok,
+                        unit_cost=float(product.harga_beli or 0),
+                        source_type='import_csv',
+                        source_id=product.id,
+                    )
                 ok += 1
 
             db.session.commit()
@@ -444,6 +495,11 @@ def add():
             stok_minimum=float(request.form.get('stok_minimum', 5)),
             gambar=gambar,
         )
+        if product.harga_jual < product.harga_beli:
+            flash(
+                f'Peringatan: harga jual "{product.nama}" lebih rendah dari harga beli.',
+                'warning',
+            )
         db.session.add(product)
 
         if product.stok > 0:
@@ -458,10 +514,31 @@ def add():
                 keterangan='Stok awal',
             )
             db.session.add(movement)
+            create_cost_layer(
+                tenant_id=tenant_id,
+                product_id=product.id,
+                qty_in=float(product.stok or 0),
+                unit_cost=float(product.harga_beli or 0),
+                source_type='opening_stock',
+                source_id=product.id,
+            )
+
+        db.session.flush()
+        _log_product_audit(
+            tenant_id=tenant_id,
+            actor_user_id=current_user.id,
+            product_id=product.id,
+            action='product_created',
+            old_harga_jual=None,
+            new_harga_jual=float(product.harga_jual or 0),
+            old_stok_minimum=None,
+            new_stok_minimum=float(product.stok_minimum or 0),
+            detail='Produk dibuat.',
+        )
 
         db.session.commit()
         flash(f'Produk "{product.nama}" berhasil ditambahkan!', 'success')
-        return redirect(url_for('products.index'))
+        return redirect(url_for('products.index', focus='search', q=(product.barcode or product.nama or '').strip()))
 
     return render_template('products/form.html', product=None, categories=categories, suppliers=suppliers, action='Tambah')
 
@@ -480,6 +557,9 @@ def edit(id):
     ).order_by(Supplier.nama).all()
 
     if request.method == 'POST':
+        old_harga_jual = float(product.harga_jual or 0)
+        old_stok_minimum = float(product.stok_minimum or 0)
+
         bc = _norm_barcode(request.form.get('barcode'))
         if barcode_taken(tenant_id, bc, exclude_id=product.id):
             flash('Barcode sudah dipakai produk lain.', 'danger')
@@ -525,9 +605,31 @@ def edit(id):
         product.harga_jual_grosir_2 = tiers['harga_jual_grosir_2']
         product.stok_minimum = float(request.form.get('stok_minimum', 5))
         product.aktif = 'aktif' in request.form
+
+        if product.harga_jual < product.harga_beli:
+            flash(
+                f'Peringatan: harga jual "{product.nama}" lebih rendah dari harga beli.',
+                'warning',
+            )
+
+        changed_harga = float(product.harga_jual or 0) != old_harga_jual
+        changed_stok_minimum = float(product.stok_minimum or 0) != old_stok_minimum
+        if changed_harga or changed_stok_minimum:
+            _log_product_audit(
+                tenant_id=tenant_id,
+                actor_user_id=current_user.id,
+                product_id=product.id,
+                action='product_pricing_or_minstock_updated',
+                old_harga_jual=old_harga_jual,
+                new_harga_jual=float(product.harga_jual or 0),
+                old_stok_minimum=old_stok_minimum,
+                new_stok_minimum=float(product.stok_minimum or 0),
+                detail='Update harga jual / stok minimum dari form produk.',
+            )
+
         db.session.commit()
         flash(f'Produk "{product.nama}" berhasil diupdate!', 'success')
-        return redirect(url_for('products.index'))
+        return redirect(url_for('products.index', focus='search', q=(product.barcode or product.nama or '').strip()))
 
     return render_template('products/form.html', product=product, categories=categories, suppliers=suppliers, action='Edit')
 
@@ -599,6 +701,14 @@ def stock_in(id):
             keterangan=keterangan,
         )
         db.session.add(movement)
+        create_cost_layer(
+            tenant_id=tenant_id,
+            product_id=product.id,
+            qty_in=qty,
+            unit_cost=float(product.harga_beli or 0),
+            source_type='manual_stock_in',
+            source_id=product.id,
+        )
         db.session.commit()
         flash(f'Stok {product.nama} berhasil ditambah {qty} {product.satuan}!', 'success')
         return redirect(url_for('products.index'))
@@ -645,9 +755,24 @@ def stock_adjust(id):
         if delta > 0:
             tipe = 'masuk'
             qty_mov = delta
+            create_cost_layer(
+                tenant_id=tenant_id,
+                product_id=product.id,
+                qty_in=delta,
+                unit_cost=float(product.harga_beli or 0),
+                source_type='manual_adjustment_in',
+                source_id=product.id,
+            )
         else:
             tipe = 'keluar'
             qty_mov = abs(delta)
+            consume_fifo_stock_out(
+                tenant_id=tenant_id,
+                product=product,
+                qty_needed=qty_mov,
+                actor_user_id=current_user.id,
+                reason='manual_adjustment_out',
+            )
         db.session.add(StockMovement(
             product_id=product.id,
             user_id=current_user.id,
@@ -673,6 +798,17 @@ def stock_history(id):
     q = StockMovement.query.filter_by(product_id=product.id).order_by(StockMovement.created_at.desc())
     movements = q.paginate(page=page, per_page=30, error_out=False)
     return render_template('products/stock_history.html', product=product, movements=movements)
+
+
+@products_bp.route('/history-price/<int:id>')
+@login_required
+def price_history(id):
+    tenant_id = current_user.tenant_id
+    product = Product.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    page = request.args.get('page', 1, type=int)
+    q = ProductAuditLog.query.filter_by(tenant_id=tenant_id, product_id=product.id).order_by(ProductAuditLog.created_at.desc())
+    logs = q.paginate(page=page, per_page=30, error_out=False)
+    return render_template('products/price_history.html', product=product, logs=logs)
 
 
 @products_bp.route('/categories')

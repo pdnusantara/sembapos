@@ -6,7 +6,14 @@
 {% block content %}
 <div class="page-shell report-page">
   <div class="card report-filter-card mb-3">
-    <form method="GET" class="filter-bar-inline report-filter-form report-breakdown-filter">
+    <div class="report-filter-head">
+      <div class="report-filter-mode">
+        <button type="button" id="filterModeBasic" class="btn btn-outline btn-sm">Basic</button>
+        <button type="button" id="filterModeAdvanced" class="btn btn-outline btn-sm">Advanced</button>
+      </div>
+      <a href="{{ url_for('reports.sales_breakdown_export_summary', date_from=date_from, date_to=date_to, branch_id=selected_branch_id, hpp_mode=hpp_mode) }}" class="btn btn-sm btn-outline">Export ringkasan</a>
+    </div>
+    <form method="GET" class="filter-bar-inline report-filter-form report-breakdown-filter" id="reportFilterForm">
       <input type="hidden" name="tab" value="{{ tab }}">
       <input type="hidden" name="q_produk" value="{{ q_produk }}">
       <input type="hidden" name="q_kategori" value="{{ q_kategori }}">
@@ -37,7 +44,7 @@
       </div>
       {% endif %}
 
-      <div class="form-group" style="margin:0;">
+      <div class="form-group report-adv" style="margin:0;">
         <label class="form-label">Maks. baris</label>
         <select name="limit" class="form-control">
           {% for n in [20, 50, 100, 200, 500] %}
@@ -46,16 +53,41 @@
         </select>
       </div>
 
-      <div class="form-group" style="margin:0;">
+      <div class="form-group report-adv" style="margin:0;">
         <label class="form-label">Mode HPP</label>
         <select name="hpp_mode" class="form-control">
           <option value="master" {{ 'selected' if hpp_mode == 'master' else '' }}>Harga beli master</option>
           <option value="snapshot" {{ 'selected' if hpp_mode == 'snapshot' else '' }}>Snapshot transaksi</option>
         </select>
       </div>
+      <div class="form-group report-adv" style="margin:0;">
+        <label class="form-label">Granularitas tren</label>
+        <select name="granularity" class="form-control">
+          <option value="daily" {{ 'selected' if granularity == 'daily' else '' }}>Harian</option>
+          <option value="weekly" {{ 'selected' if granularity == 'weekly' else '' }}>Mingguan</option>
+          <option value="monthly" {{ 'selected' if granularity == 'monthly' else '' }}>Bulanan</option>
+        </select>
+      </div>
+      <div class="form-group report-adv" style="margin:0;">
+        <label class="form-label">Bandingkan periode sebelumnya</label>
+        <select name="compare_prev" class="form-control">
+          <option value="1" {{ 'selected' if compare_prev else '' }}>Ya</option>
+          <option value="0" {{ 'selected' if not compare_prev else '' }}>Tidak</option>
+        </select>
+      </div>
 
       <button type="submit" class="btn btn-primary">🔍 Tampilkan</button>
     </form>
+    <div class="report-focus-chips">
+      <a class="report-focus-chip {{ 'active' if not focus else '' }}" href="{{ url_for('reports.sales_breakdown', tab=tab, date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, granularity=granularity, compare_prev=('1' if compare_prev else '0'), q_produk=q_produk, q_kategori=q_kategori, sort_produk=sort_produk, sort_kategori=sort_kategori, dir_produk=dir_produk, dir_kategori=dir_kategori) }}">Semua</a>
+      <a class="report-focus-chip {{ 'active' if focus == 'margin_negatif' else '' }}" href="{{ url_for('reports.sales_breakdown', tab=tab, date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, granularity=granularity, compare_prev=('1' if compare_prev else '0'), focus='margin_negatif', q_produk=q_produk, q_kategori=q_kategori, sort_produk=sort_produk, sort_kategori=sort_kategori, dir_produk=dir_produk, dir_kategori=dir_kategori) }}">Margin negatif</a>
+      <a class="report-focus-chip {{ 'active' if focus == 'retur_tinggi' else '' }}" href="{{ url_for('reports.sales_breakdown', tab=tab, date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, granularity=granularity, compare_prev=('1' if compare_prev else '0'), focus='retur_tinggi', q_produk=q_produk, q_kategori=q_kategori, sort_produk=sort_produk, sort_kategori=sort_kategori, dir_produk=dir_produk, dir_kategori=dir_kategori) }}">Retur > 5%</a>
+      <a class="report-focus-chip {{ 'active' if focus == 'margin_tipis' else '' }}" href="{{ url_for('reports.sales_breakdown', tab=tab, date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, granularity=granularity, compare_prev=('1' if compare_prev else '0'), focus='margin_tipis', q_produk=q_produk, q_kategori=q_kategori, sort_produk=sort_produk, sort_kategori=sort_kategori, dir_produk=dir_produk, dir_kategori=dir_kategori) }}">Margin tipis</a>
+      <a class="report-focus-chip {{ 'active' if focus == 'abc_c' else '' }}" href="{{ url_for('reports.sales_breakdown', tab=tab, date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, granularity=granularity, compare_prev=('1' if compare_prev else '0'), focus='abc_c', q_produk=q_produk, q_kategori=q_kategori, sort_produk=sort_produk, sort_kategori=sort_kategori, dir_produk=dir_produk, dir_kategori=dir_kategori) }}">ABC C</a>
+    </div>
+    <p class="report-data-confidence">
+      Data quality HPP: <strong>{{ hpp_confidence.source }}</strong> — snapshot {{ "{:,.2f}".format(hpp_confidence.coverage_pct).replace(".", ",") }}% dari {{ hpp_confidence.total_items }} item.
+    </p>
   </div>
 
   <div class="report-tabs" role="tablist" aria-label="Tab laporan penjualan breakdown">
@@ -75,6 +107,7 @@
   {% endif %}
 
   <div class="report-alert-grid">
+    {% if can_view_profit %}
     <div class="card report-alert-card {{ 'warn' if alerts.negative_margin_count > 0 else 'ok' }}">
       <div class="card-title">⚠️ Produk margin negatif</div>
       <p class="report-alert-value">{{ alerts.negative_margin_count }}</p>
@@ -82,10 +115,12 @@
       <p class="report-alert-meta">
         Contoh: {{ alerts.negative_margin_top[0].nama_produk }}
       </p>
+      <a class="btn btn-sm btn-outline" href="{{ url_for('reports.sales_breakdown', tab='produk', date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, granularity=granularity, compare_prev=('1' if compare_prev else '0'), focus='margin_negatif') }}">Lihat produk masalah</a>
       {% else %}
       <p class="report-alert-meta">Tidak ada produk dengan margin negatif di data saat ini.</p>
       {% endif %}
     </div>
+    {% endif %}
     <div class="card report-alert-card {{ 'warn' if alerts.sharp_drop_count > 0 else 'ok' }}">
       <div class="card-title">📉 Kategori turun tajam</div>
       <p class="report-alert-value">{{ alerts.sharp_drop_count }}</p>
@@ -93,8 +128,19 @@
       <p class="report-alert-meta">
         Terbesar: {{ alerts.sharp_drop_top[0].nama_kategori }} ({{ "{:,.2f}".format(alerts.sharp_drop_top[0].change_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%)
       </p>
+      <a class="btn btn-sm btn-outline" href="{{ url_for('reports.sales_breakdown', tab='kategori', date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, granularity=granularity, compare_prev=('1' if compare_prev else '0')) }}">Buka analisis kategori</a>
       {% else %}
       <p class="report-alert-meta">Belum ada kategori yang turun ≥ 30% dibanding periode sebelumnya.</p>
+      {% endif %}
+    </div>
+    <div class="card report-alert-card {{ 'warn' if alerts.high_returns_count > 0 else 'ok' }}">
+      <div class="card-title">↩️ Produk dengan retur</div>
+      <p class="report-alert-value">{{ alerts.high_returns_count }}</p>
+      {% if alerts.high_returns_top %}
+      <p class="report-alert-meta">Terbesar: {{ alerts.high_returns_top[0].nama_produk }} (Rp {{ "{:,.0f}".format(alerts.high_returns_top[0].retur).replace(",", ".") }})</p>
+      <a class="btn btn-sm btn-outline" href="{{ url_for('reports.sales_breakdown', tab='produk', date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, granularity=granularity, compare_prev=('1' if compare_prev else '0'), focus='retur_tinggi') }}">Lihat retur tinggi</a>
+      {% else %}
+      <p class="report-alert-meta">Tidak ada retur produk pada periode ini.</p>
       {% endif %}
     </div>
   </div>
@@ -112,6 +158,8 @@
         <input type="hidden" name="q_kategori" value="{{ q_kategori }}">
         <input type="hidden" name="sort_kategori" value="{{ sort_kategori }}">
         <input type="hidden" name="dir_kategori" value="{{ dir_kategori }}">
+        <input type="hidden" name="granularity" value="{{ granularity }}">
+        <input type="hidden" name="compare_prev" value="{{ '1' if compare_prev else '0' }}">
         <div class="form-group" style="margin:0;">
           <label class="form-label">Cari produk</label>
           <input type="text" name="q_produk" class="form-control" value="{{ q_produk }}" placeholder="Nama produk...">
@@ -154,6 +202,7 @@
           <div class="stat-sublabel">Total kuantitas item terjual</div>
         </div>
       </div>
+      {% if can_view_profit %}
       <div class="stat-card {{ 'success' if produk_totals.margin >= 0 else 'danger' }}">
         <div class="stat-icon {{ 'success' if produk_totals.margin >= 0 else 'danger' }}">📈</div>
         <div class="stat-info">
@@ -162,6 +211,49 @@
           <div class="stat-sublabel">{{ "{:,.2f}".format(produk_totals.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</div>
         </div>
       </div>
+      {% endif %}
+    </div>
+    <div class="stats-grid report-breakdown-stats report-breakdown-stats--net">
+      <div class="stat-card warning">
+        <div class="stat-icon warning">↩️</div>
+        <div class="stat-info">
+          <div class="stat-value">Rp {{ "{:,.0f}".format(produk_totals.retur).replace(",", ".") }}</div>
+          <div class="stat-label">Total retur produk</div>
+        </div>
+      </div>
+      <div class="stat-card primary">
+        <div class="stat-icon primary">🧾</div>
+        <div class="stat-info">
+          <div class="stat-value">Rp {{ "{:,.0f}".format(produk_totals.net_sales).replace(",", ".") }}</div>
+          <div class="stat-label">Net sales produk</div>
+        </div>
+      </div>
+      {% if can_view_profit %}
+      <div class="stat-card {{ 'success' if produk_totals.net_margin >= 0 else 'danger' }}">
+        <div class="stat-icon {{ 'success' if produk_totals.net_margin >= 0 else 'danger' }}">🎯</div>
+        <div class="stat-info">
+          <div class="stat-value">Rp {{ "{:,.0f}".format(produk_totals.net_margin).replace(",", ".") }}</div>
+          <div class="stat-label">Net margin</div>
+          <div class="stat-sublabel">{{ "{:,.2f}".format(produk_totals.net_margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}% · {{ produk_totals.trx_count }} transaksi</div>
+        </div>
+      </div>
+      {% endif %}
+      {% if compare_prev %}
+      <div class="stat-card">
+        <div class="stat-icon">🆚</div>
+        <div class="stat-info">
+          <div class="stat-value">{{ "{:,.2f}".format(prev_change.net_sales_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</div>
+          <div class="stat-label">Perubahan net sales vs periode lalu</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="report-kpi-sticky" id="reportKpiSticky">
+      <span>Net Sales: <strong>Rp {{ "{:,.0f}".format(produk_totals.net_sales).replace(",", ".") }}</strong></span>
+      {% if can_view_profit %}
+      <span>Net Margin: <strong class="{{ 'text-success' if produk_totals.net_margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(produk_totals.net_margin).replace(",", ".") }}</strong></span>
+      {% endif %}
+      <span>Retur: <strong>Rp {{ "{:,.0f}".format(produk_totals.retur).replace(",", ".") }}</strong></span>
     </div>
 
     <div class="card report-chart-card">
@@ -170,6 +262,14 @@
       </div>
       <div class="report-chart-wrap">
         <canvas id="salesTopChart"></canvas>
+      </div>
+    </div>
+    <div class="card report-chart-card">
+      <div class="card-header">
+        <div class="card-title">📉 Tren {{ 'harian' if granularity == 'daily' else ('mingguan' if granularity == 'weekly' else 'bulanan') }}</div>
+      </div>
+      <div class="report-chart-wrap">
+        <canvas id="salesTrendChart"></canvas>
       </div>
     </div>
 
@@ -192,6 +292,7 @@
         <p class="text-muted">Belum ada pembanding yang valid.</p>
         {% endif %}
       </div>
+      {% if can_view_profit %}
       <div class="card report-insight-card">
         <div class="card-title">🏆 Margin terbaik</div>
         {% if produk_insights.best_margin %}
@@ -210,6 +311,7 @@
         <p class="text-muted">Belum ada pembanding yang valid.</p>
         {% endif %}
       </div>
+      {% endif %}
     </div>
 
     <div class="card">
@@ -224,24 +326,64 @@
               <th>Produk</th>
               <th>Qty</th>
               <th>Omzet</th>
-              <th>HPP Est.</th>
+              {% if can_view_profit %}<th>HPP Est.</th>{% endif %}
+              <th>Retur</th>
+              <th>Net sales</th>
+              {% if can_view_profit %}
               <th>Margin</th>
               <th>Margin %</th>
+              {% endif %}
+              <th>ABC</th>
             </tr>
           </thead>
           <tbody>
-            {% for row in produk_rows %}
+            {% for row in filtered_produk_rows %}
             <tr class="report-row-clickable" onclick="window.location='{{ url_for('reports.sales_breakdown', tab='produk', date_from=date_from, date_to=date_to, limit=row_limit, branch_id=selected_branch_id, hpp_mode=hpp_mode, q_produk=q_produk, q_kategori=q_kategori, sort_produk=sort_produk, sort_kategori=sort_kategori, dir_produk=dir_produk, dir_kategori=dir_kategori, detail_type='produk', detail_key=row.produk_key) }}'">
               <td>{{ row.rank }}</td>
               <td>{{ row.nama_produk }}</td>
               <td>{{ "{:,.2f}".format(row.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</td>
               <td>Rp {{ "{:,.0f}".format(row.omzet).replace(",", ".") }}</td>
-              <td>Rp {{ "{:,.0f}".format(row.hpp).replace(",", ".") }}</td>
+              {% if can_view_profit %}<td>Rp {{ "{:,.0f}".format(row.hpp).replace(",", ".") }}</td>{% endif %}
+              <td>Rp {{ "{:,.0f}".format(row.retur).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(row.net_sales).replace(",", ".") }}</td>
+              {% if can_view_profit %}
               <td class="{{ 'text-success' if row.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(row.margin).replace(",", ".") }}</td>
               <td class="{{ 'text-success' if row.margin_pct >= 0 else 'text-danger' }}">{{ "{:,.2f}".format(row.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</td>
+              {% endif %}
+              <td><span class="badge badge-{{ 'success' if row.abc == 'A' else ('warning' if row.abc == 'B' else 'info') }}">ABC {{ row.abc }}</span></td>
             </tr>
             {% else %}
-            <tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted);">📭 Tidak ada data produk pada periode ini</td></tr>
+            <tr><td colspan="{{ 10 if can_view_profit else 7 }}" style="text-align:center;padding:30px;color:var(--text-muted);">📭 Tidak ada data produk pada periode ini</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🏬 Perbandingan cabang</div>
+      </div>
+      <div class="table-wrapper report-table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Cabang</th><th>Transaksi</th><th>Omzet</th><th>Retur</th><th>Net sales</th>{% if can_view_profit %}<th>HPP</th><th>Margin</th>{% endif %}</tr>
+          </thead>
+          <tbody>
+            {% for b in branch_compare %}
+            <tr>
+              <td>{{ b.branch_name }}</td>
+              <td>{{ b.trx_count }}</td>
+              <td>Rp {{ "{:,.0f}".format(b.omzet).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(b.retur).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(b.net_sales).replace(",", ".") }}</td>
+              {% if can_view_profit %}
+              <td>Rp {{ "{:,.0f}".format(b.hpp).replace(",", ".") }}</td>
+              <td class="{{ 'text-success' if b.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(b.margin).replace(",", ".") }}</td>
+              {% endif %}
+            </tr>
+            {% else %}
+            <tr><td colspan="{{ 7 if can_view_profit else 5 }}" class="admin-table-empty">Belum ada data cabang.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -261,8 +403,10 @@
               <th>Kasir</th>
               <th>Qty</th>
               <th>Omzet</th>
+              {% if can_view_profit %}
               <th>HPP</th>
               <th>Margin</th>
+              {% endif %}
               <th>Waktu</th>
             </tr>
           </thead>
@@ -273,8 +417,10 @@
               <td>{{ d.kasir_nama }}</td>
               <td>{{ "{:,.2f}".format(d.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</td>
               <td>Rp {{ "{:,.0f}".format(d.omzet).replace(",", ".") }}</td>
+              {% if can_view_profit %}
               <td>Rp {{ "{:,.0f}".format(d.hpp).replace(",", ".") }}</td>
               <td class="{{ 'text-success' if d.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(d.margin).replace(",", ".") }}</td>
+              {% endif %}
               <td>{{ d.created_at.strftime('%d/%m/%Y %H:%M') if d.created_at else '-' }}</td>
             </tr>
             {% endfor %}
@@ -297,6 +443,8 @@
         <input type="hidden" name="q_produk" value="{{ q_produk }}">
         <input type="hidden" name="sort_produk" value="{{ sort_produk }}">
         <input type="hidden" name="dir_produk" value="{{ dir_produk }}">
+        <input type="hidden" name="granularity" value="{{ granularity }}">
+        <input type="hidden" name="compare_prev" value="{{ '1' if compare_prev else '0' }}">
         <div class="form-group" style="margin:0;">
           <label class="form-label">Cari kategori</label>
           <input type="text" name="q_kategori" class="form-control" value="{{ q_kategori }}" placeholder="Nama kategori...">
@@ -339,6 +487,7 @@
           <div class="stat-sublabel">Total kuantitas item terjual</div>
         </div>
       </div>
+      {% if can_view_profit %}
       <div class="stat-card {{ 'success' if kategori_totals.margin >= 0 else 'danger' }}">
         <div class="stat-icon {{ 'success' if kategori_totals.margin >= 0 else 'danger' }}">📈</div>
         <div class="stat-info">
@@ -347,6 +496,7 @@
           <div class="stat-sublabel">{{ "{:,.2f}".format(kategori_totals.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</div>
         </div>
       </div>
+      {% endif %}
     </div>
 
     <div class="card report-chart-card">
@@ -359,6 +509,7 @@
     </div>
 
     <div class="report-insights-grid">
+      {% if can_view_profit %}
       <div class="card report-insight-card">
         <div class="card-title">🚀 Top kategori omzet</div>
         {% if kategori_insights.top %}
@@ -377,6 +528,7 @@
         <p class="text-muted">Belum ada pembanding yang valid.</p>
         {% endif %}
       </div>
+      {% endif %}
       <div class="card report-insight-card">
         <div class="card-title">🏆 Margin kategori terbaik</div>
         {% if kategori_insights.best_margin %}
@@ -409,9 +561,11 @@
               <th>Kategori</th>
               <th>Qty</th>
               <th>Omzet</th>
+              {% if can_view_profit %}
               <th>HPP Est.</th>
               <th>Margin</th>
               <th>Margin %</th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
@@ -421,12 +575,14 @@
               <td>{{ row.nama_kategori }}</td>
               <td>{{ "{:,.2f}".format(row.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</td>
               <td>Rp {{ "{:,.0f}".format(row.omzet).replace(",", ".") }}</td>
+              {% if can_view_profit %}
               <td>Rp {{ "{:,.0f}".format(row.hpp).replace(",", ".") }}</td>
               <td class="{{ 'text-success' if row.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(row.margin).replace(",", ".") }}</td>
               <td class="{{ 'text-success' if row.margin_pct >= 0 else 'text-danger' }}">{{ "{:,.2f}".format(row.margin_pct).replace(",", "_").replace(".", ",").replace("_", ".") }}%</td>
+              {% endif %}
             </tr>
             {% else %}
-            <tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted);">📭 Tidak ada data kategori pada periode ini</td></tr>
+            <tr><td colspan="{{ 7 if can_view_profit else 4 }}" style="text-align:center;padding:30px;color:var(--text-muted);">📭 Tidak ada data kategori pada periode ini</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -447,8 +603,10 @@
               <th>Produk</th>
               <th>Qty</th>
               <th>Omzet</th>
+              {% if can_view_profit %}
               <th>HPP</th>
               <th>Margin</th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
@@ -459,8 +617,10 @@
               <td>{{ d.nama_produk }}</td>
               <td>{{ "{:,.2f}".format(d.qty).replace(",", "_").replace(".", ",").replace("_", ".") }}</td>
               <td>Rp {{ "{:,.0f}".format(d.omzet).replace(",", ".") }}</td>
+              {% if can_view_profit %}
               <td>Rp {{ "{:,.0f}".format(d.hpp).replace(",", ".") }}</td>
               <td class="{{ 'text-success' if d.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(d.margin).replace(",", ".") }}</td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
@@ -478,44 +638,117 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (() => {
+  const compactRupiah = (v) => {
+    const n = Number(v || 0);
+    const abs = Math.abs(n);
+    if (abs >= 1_000_000_000) return 'Rp ' + (n / 1_000_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + ' M';
+    if (abs >= 1_000_000) return 'Rp ' + (n / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + ' jt';
+    if (abs >= 1_000) return 'Rp ' + (n / 1_000).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + ' rb';
+    return 'Rp ' + n.toLocaleString('id-ID');
+  };
+  const canViewProfit = {{ 'true' if can_view_profit else 'false' }};
   const labels = {{ chart_labels | tojson }};
   const omzetData = {{ chart_omzet | tojson }};
   const marginData = {{ chart_margin | tojson }};
+  const trendLabels = {{ trend_labels | tojson }};
+  const trendOmzet = {{ trend_omzet | tojson }};
+  const trendHpp = {{ trend_hpp | tojson }};
+  const trendRetur = {{ trend_retur | tojson }};
+  const trendMargin = {{ trend_margin | tojson }};
   const el = document.getElementById('salesTopChart');
   if (!el || !labels.length) return;
+  const topDatasets = [
+    {
+      label: 'Omzet',
+      data: omzetData,
+      backgroundColor: 'rgba(108, 99, 255, 0.55)',
+      borderColor: 'rgba(108, 99, 255, 0.95)',
+      borderWidth: 1
+    },
+  ];
+  if (canViewProfit) {
+    topDatasets.push({
+      label: 'Margin',
+      data: marginData,
+      backgroundColor: 'rgba(0, 212, 170, 0.45)',
+      borderColor: 'rgba(0, 212, 170, 0.95)',
+      borderWidth: 1
+    });
+  }
   new Chart(el, {
     type: 'bar',
     data: {
       labels,
-      datasets: [
-        {
-          label: 'Omzet',
-          data: omzetData,
-          backgroundColor: 'rgba(108, 99, 255, 0.55)',
-          borderColor: 'rgba(108, 99, 255, 0.95)',
-          borderWidth: 1
-        },
-        {
-          label: 'Margin',
-          data: marginData,
-          backgroundColor: 'rgba(0, 212, 170, 0.45)',
-          borderColor: 'rgba(0, 212, 170, 0.95)',
-          borderWidth: 1
-        }
-      ]
+      datasets: topDatasets
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
         x: { ticks: { maxRotation: 0, autoSkip: true } },
-        y: { beginAtZero: true }
+        y: {
+          beginAtZero: true,
+          ticks: { callback: (value) => compactRupiah(value) }
+        }
       },
       plugins: {
         legend: { display: true }
       }
     }
   });
+
+  const trendEl = document.getElementById('salesTrendChart');
+  if (trendEl && trendLabels.length) {
+    const trendSets = [
+      { label: 'Omzet', data: trendOmzet, borderColor: 'rgba(108, 99, 255, 0.95)', backgroundColor: 'rgba(108, 99, 255, 0.2)', tension: 0.25 },
+      { label: 'Retur', data: trendRetur, borderColor: 'rgba(245, 158, 11, 0.95)', backgroundColor: 'rgba(245, 158, 11, 0.2)', tension: 0.25 },
+    ];
+    if (canViewProfit) {
+      trendSets.push(
+        { label: 'HPP', data: trendHpp, borderColor: 'rgba(239, 68, 68, 0.95)', backgroundColor: 'rgba(239, 68, 68, 0.2)', tension: 0.25 },
+        { label: 'Margin', data: trendMargin, borderColor: 'rgba(0, 212, 170, 0.95)', backgroundColor: 'rgba(0, 212, 170, 0.2)', tension: 0.25 },
+      );
+    }
+    new Chart(trendEl, {
+      type: 'line',
+      data: {
+        labels: trendLabels,
+        datasets: trendSets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, ticks: { callback: (value) => compactRupiah(value) } } },
+      }
+    });
+  }
+
+  // Persist filter mode and latest values for better return UX.
+  const form = document.getElementById('reportFilterForm');
+  const basicBtn = document.getElementById('filterModeBasic');
+  const advBtn = document.getElementById('filterModeAdvanced');
+  const advFields = document.querySelectorAll('.report-adv');
+  const applyMode = (mode) => {
+    const showAdv = mode === 'advanced';
+    advFields.forEach((el) => el.classList.toggle('is-hidden', !showAdv));
+    basicBtn.classList.toggle('active', !showAdv);
+    advBtn.classList.toggle('active', showAdv);
+    localStorage.setItem('salesBreakdownFilterMode', mode);
+  };
+  const savedMode = localStorage.getItem('salesBreakdownFilterMode') || 'basic';
+  applyMode(savedMode);
+  basicBtn?.addEventListener('click', () => applyMode('basic'));
+  advBtn?.addEventListener('click', () => applyMode('advanced'));
+  if (form) {
+    form.addEventListener('submit', () => {
+      const payload = {};
+      Array.from(form.elements).forEach((el) => {
+        if (!el.name) return;
+        payload[el.name] = el.value;
+      });
+      localStorage.setItem('salesBreakdownLastFilters', JSON.stringify(payload));
+    });
+  }
 })();
 </script>
 {% endblock %}

@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+{% block title %}Marketplace — {{ current_user.tenant.nama }}{% endblock %}
+{% block page_title %}Marketplace{% endblock %}
+{% block page_sub %}Belanja produk untuk toko Anda{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketplace.css', v=marketplace_css_v) }}">
+{% endblock %}
+
+{% block content %}
+<div class="mk-page">
+  <!-- TOP BAR -->
+  <div class="mk-topbar">
+    <a href="{{ url_for('marketplace.index') }}" class="mk-topbar__brand">
+      🛍️ <span>Marketplace</span>
+    </a>
+    <form class="mk-topbar__search" method="GET" action="{{ url_for('marketplace.index') }}">
+      {% if category_id %}<input type="hidden" name="category" value="{{ category_id }}">{% endif %}
+      {% if seller_id %}<input type="hidden" name="seller" value="{{ seller_id }}">{% endif %}
+      {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+      <input type="text" name="q" value="{{ q }}" placeholder="Cari produk, misalnya: beras, gula, minyak…">
+      <button type="submit">🔍</button>
+    </form>
+    <div class="mk-topbar__actions">
+      <a href="{{ url_for('marketplace.cart') }}" class="mk-cart-btn">
+        🛒 Keranjang
+        {% if cart_count > 0 %}
+        <span class="mk-cart-badge">{{ cart_count }}</span>
+        {% endif %}
+      </a>
+      <a href="{{ url_for('marketplace.orders') }}" class="mk-order-btn">📋 Pesanan Saya</a>
+    </div>
+  </div>
+
+  <!-- MAIN BODY -->
+  <div class="mk-body">
+    <!-- SIDEBAR FILTER -->
+    <aside class="mk-sidebar">
+      <div class="mk-filter-card">
+        <div class="mk-filter-card__title">Kategori</div>
+        <ul class="mk-filter-list">
+          <li>
+            <a href="{{ url_for('marketplace.index', q=q, sort=sort) }}"
+               class="{% if not category_id %}active{% endif %}">
+              🏷️ Semua Kategori
+            </a>
+          </li>
+          {% for cat in categories %}
+          <li>
+            <a href="{{ url_for('marketplace.index', q=q, sort=sort, category=cat.id) }}"
+               class="{% if category_id == cat.id %}active{% endif %}">
+              {{ cat.icon }} {{ cat.nama }}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="mk-filter-card">
+        <div class="mk-filter-card__title">Seller</div>
+        <ul class="mk-filter-list">
+          <li>
+            <a href="{{ url_for('marketplace.index', q=q, sort=sort, category=category_id) }}"
+               class="{% if not seller_id %}active{% endif %}">
+              🏭 Semua Seller
+            </a>
+          </li>
+          {% for sel in sellers %}
+          <li>
+            <a href="{{ url_for('marketplace.index', q=q, sort=sort, category=category_id, seller=sel.id) }}"
+               class="{% if seller_id == sel.id %}active{% endif %}">
+              🏪 {{ sel.nama }}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="mk-filter-card">
+        <div class="mk-filter-card__title">Rentang Harga</div>
+        <form method="GET" action="{{ url_for('marketplace.index') }}">
+          {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+          {% if category_id %}<input type="hidden" name="category" value="{{ category_id }}">{% endif %}
+          {% if seller_id %}<input type="hidden" name="seller" value="{{ seller_id }}">{% endif %}
+          <input type="hidden" name="sort" value="{{ sort }}">
+          <div class="mk-price-range">
+            <input type="number" name="min_harga" placeholder="Harga minimum"
+                   value="{{ min_harga if min_harga else '' }}" min="0" step="1000">
+            <input type="number" name="max_harga" placeholder="Harga maksimum"
+                   value="{{ max_harga if max_harga else '' }}" min="0" step="1000">
+            <button type="submit" class="mk-filter-btn">Terapkan</button>
+          </div>
+        </form>
+        {% if min_harga or max_harga %}
+        <div style="margin-top: 8px;">
+          <a href="{{ url_for('marketplace.index', q=q, category=category_id, seller=seller_id, sort=sort) }}"
+             style="font-size:12px;color:var(--mk-red);">✕ Reset filter harga</a>
+        </div>
+        {% endif %}
+      </div>
+    </aside>
+
+    <!-- PRODUCT CONTENT -->
+    <div class="mk-content">
+      <!-- TOOLBAR -->
+      <div class="mk-toolbar">
+        <span class="mk-toolbar__label">Urutkan:</span>
+        <div class="mk-sort-tabs">
+          <a href="{{ url_for('marketplace.index', q=q, category=category_id, seller=seller_id, min_harga=min_harga, max_harga=max_harga, sort='terbaru') }}"
+             class="mk-sort-tab {% if sort == 'terbaru' %}active{% endif %}">Terbaru</a>
+          <a href="{{ url_for('marketplace.index', q=q, category=category_id, seller=seller_id, min_harga=min_harga, max_harga=max_harga, sort='termurah') }}"
+             class="mk-sort-tab {% if sort == 'termurah' %}active{% endif %}">Termurah</a>
+          <a href="{{ url_for('marketplace.index', q=q, category=category_id, seller=seller_id, min_harga=min_harga, max_harga=max_harga, sort='termahal') }}"
+             class="mk-sort-tab {% if sort == 'termahal' %}active{% endif %}">Termahal</a>
+        </div>
+        <span class="mk-result-count">{{ pagination.total }} produk ditemukan</span>
+      </div>
+
+      <!-- LAST SEARCH BANNER -->
+      <div id="mk-last-search-banner" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--mk-green-light,#e8f5e9);border:1px solid var(--mk-green,#4caf50);border-radius:8px;font-size:13px;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>🕐 Pencarian terakhir:</span>
+        <strong id="mk-last-search-text"></strong>
+        <a id="mk-last-search-link" href="#" style="color:var(--mk-green-dark,#2e7d32);font-weight:600;">Tampilkan Lagi</a>
+        <button onclick="mkClearLastSearch()" style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:16px;color:var(--mk-gray-600,#757575);" title="Hapus riwayat">✕</button>
+      </div>
+
+      <!-- PRODUCT GRID -->
+      <div class="mk-product-grid">
+        {% for product in products %}
+        <div class="mk-card" data-product-id="{{ product.id }}" data-stok="{{ product.stok }}">
+          <a href="{{ url_for('marketplace.product_detail', product_id=product.id) }}" class="mk-card__link">
+            <div class="mk-card__img-wrap">
+              {% if product.gambar_utama %}
+              <img class="mk-card__img" src="{{ url_for('static', filename=product.gambar_utama) }}" alt="{{ product.nama }}">
+              {% else %}
+              <div class="mk-card__img-placeholder">📦</div>
+              {% endif %}
+              {% if product.stok == 0 %}
+              <span class="mk-card__badge mk-badge-out">Stok Habis</span>
+              {% elif product.harga_grosir and product.min_qty_grosir %}
+              <span class="mk-card__badge mk-badge-grosir">Harga Grosir</span>
+              {% endif %}
+            </div>
+            <div class="mk-card__body">
+              <div class="mk-card__name">{{ product.nama }}</div>
+              <div class="mk-card__price">Rp {{ "{:,.0f}".format(product.harga) }}</div>
+              <div class="mk-card__satuan">per {{ product.satuan or 'pcs' }}</div>
+              <div class="mk-card__seller">🏪 {{ product.seller.nama }}</div>
+              <div class="mk-card__stock">
+                {% if product.stok > 0 %}
+                Stok: {{ product.stok }}
+                {% else %}
+                <span style="color:var(--mk-red)">Stok Habis</span>
+                {% endif %}
+              </div>
+            </div>
+          </a>
+          <div class="mk-card__footer">
+            {% if product.stok > 0 %}
+            <button class="mk-btn-add-cart"
+                    onclick="mkQuickAdd({{ product.id }}, this)"
+                    data-url="{{ url_for('marketplace.cart_add') }}">
+              🛒 + Keranjang
+            </button>
+            {% else %}
+            <button class="mk-btn-add-cart mk-btn-add-cart--disabled" disabled>Stok Habis</button>
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div class="mk-empty">
+          <div class="mk-empty__icon">🔍</div>
+          <div class="mk-empty__title">Produk tidak ditemukan</div>
+          <div class="mk-empty__sub">Coba ubah kata kunci atau filter pencarian Anda.</div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- PAGINATION -->
+      {% if pagination.pages > 1 %}
+      <div class="mk-pagination">
+        {% if pagination.has_prev %}
+        <a class="mk-page-btn" href="{{ url_for('marketplace.index', q=q, category=category_id, seller=seller_id, sort=sort, min_harga=min_harga, max_harga=max_harga, page=pagination.prev_num) }}">‹</a>
+        {% endif %}
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+          {% if p %}
+          <a class="mk-page-btn {% if p == pagination.page %}active{% endif %}"
+             href="{{ url_for('marketplace.index', q=q, category=category_id, seller=seller_id, sort=sort, min_harga=min_harga, max_harga=max_harga, page=p) }}">{{ p }}</a>
+          {% else %}
+          <span class="mk-page-btn disabled">…</span>
+          {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+        <a class="mk-page-btn" href="{{ url_for('marketplace.index', q=q, category=category_id, seller=seller_id, sort=sort, min_harga=min_harga, max_harga=max_harga, page=pagination.next_num) }}">›</a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.mk-card { display:flex; flex-direction:column; }
+.mk-card__link { display:flex; flex-direction:column; flex:1; text-decoration:none; color:inherit; }
+.mk-card__footer { padding:8px 12px 12px; }
+.mk-btn-add-cart {
+  width:100%; padding:7px 10px; border:none; border-radius:8px;
+  background:var(--mk-green,#4caf50); color:#fff; font-size:12px;
+  font-weight:600; cursor:pointer; transition:background .2s, opacity .2s;
+}
+.mk-btn-add-cart:hover { background:var(--mk-green-dark,#388e3c); }
+.mk-btn-add-cart--disabled { background:var(--mk-gray-300,#e0e0e0); color:var(--mk-gray-600,#757575); cursor:not-allowed; }
+.mk-btn-add-cart--loading { opacity:.6; pointer-events:none; }
+#mk-toast {
+  position:fixed; bottom:24px; right:24px; z-index:9999;
+  background:#323232; color:#fff; padding:12px 20px; border-radius:10px;
+  font-size:13px; font-weight:500; max-width:320px;
+  box-shadow:0 4px 20px rgba(0,0,0,.35);
+  transform:translateY(80px); opacity:0;
+  transition:transform .3s ease, opacity .3s ease;
+  pointer-events:none;
+}
+#mk-toast.mk-toast--show { transform:translateY(0); opacity:1; }
+#mk-toast.mk-toast--success { border-left:4px solid #4caf50; }
+#mk-toast.mk-toast--error   { border-left:4px solid #f44336; }
+</style>
+
+<div id="mk-toast"></div>
+
+<script>
+const MK_CART_ADD_URL = "{{ url_for('marketplace.cart_add') }}";
+const MK_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+function mkShowToast(msg, type) {
+  const t = document.getElementById('mk-toast');
+  t.textContent = msg;
+  t.className = 'mk-toast--show mk-toast--' + (type || 'success');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function() { t.className = ''; }, 3000);
+}
+
+function mkQuickAdd(productId, btn) {
+  btn.classList.add('mk-btn-add-cart--loading');
+  var origText = btn.textContent;
+  btn.textContent = '…';
+
+  var fd = new FormData();
+  fd.append('product_id', productId);
+  fd.append('qty', 1);
+  fd.append('csrf_token', MK_CSRF);
+
+  fetch(MK_CART_ADD_URL, {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: fd,
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    btn.classList.remove('mk-btn-add-cart--loading');
+    btn.textContent = origText;
+    if (data.success) {
+      mkShowToast('🛒 ' + data.message, 'success');
+      document.querySelectorAll('.mk-cart-badge').forEach(function(el) {
+        el.textContent = data.cart_count;
+        el.style.display = data.cart_count > 0 ? '' : 'none';
+      });
+      var cartBtn = document.querySelector('.mk-cart-btn');
+      if (cartBtn && data.cart_count > 0) {
+        var badge = cartBtn.querySelector('.mk-cart-badge');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'mk-cart-badge';
+          cartBtn.appendChild(badge);
+        }
+        badge.textContent = data.cart_count;
+      }
+    } else {
+      mkShowToast(data.message || 'Gagal menambahkan.', 'error');
+    }
+  })
+  .catch(function() {
+    btn.classList.remove('mk-btn-add-cart--loading');
+    btn.textContent = origText;
+    mkShowToast('Terjadi kesalahan jaringan.', 'error');
+  });
+}
+
+// ── Feature 10: Last Search / Filter History ──────────────────
+(function() {
+  var STORAGE_KEY = 'mk_last_filter';
+  var q = {{ q | tojson }};
+  var categoryId = {{ category_id | tojson }};
+  var sellerId = {{ seller_id | tojson }};
+  var sortVal = {{ sort | tojson }};
+
+  if (q || categoryId || sellerId) {
+    try {
+      var labels = [];
+      if (q) labels.push(q);
+      {% for cat in categories %}
+      if (categoryId === {{ cat.id }}) labels.push({{ cat.nama | tojson }});
+      {% endfor %}
+      {% for sel in sellers %}
+      if (sellerId === {{ sel.id }}) labels.push({{ sel.nama | tojson }});
+      {% endfor %}
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        q: q, categoryId: categoryId, sellerId: sellerId, sort: sortVal,
+        label: labels.join(', ') || q,
+      }));
+    } catch(e) {}
+  } else {
+    try {
+      var saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        var data = JSON.parse(saved);
+        if (data && data.label) {
+          var banner = document.getElementById('mk-last-search-banner');
+          var textEl = document.getElementById('mk-last-search-text');
+          var linkEl = document.getElementById('mk-last-search-link');
+          if (banner && textEl && linkEl) {
+            textEl.textContent = data.label;
+            var params = new URLSearchParams();
+            if (data.q) params.set('q', data.q);
+            if (data.categoryId) params.set('category', data.categoryId);
+            if (data.sellerId) params.set('seller', data.sellerId);
+            if (data.sort && data.sort !== 'terbaru') params.set('sort', data.sort);
+            linkEl.href = '?' + params.toString();
+            banner.style.display = 'flex';
+          }
+        }
+      }
+    } catch(e) {}
+  }
+})();
+
+function mkClearLastSearch() {
+  try { localStorage.removeItem('mk_last_filter'); } catch(e) {}
+  var banner = document.getElementById('mk-last-search-banner');
+  if (banner) banner.style.display = 'none';
+}
+</script>
+{% endblock %}

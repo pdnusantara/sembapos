@@ -10,7 +10,13 @@
       <input type="text" name="q" class="form-control" placeholder="Cari nama atau HP..." value="{{ search }}">
       <button type="submit" class="btn btn-primary">🔍</button>
     </form>
-    <a href="{{ url_for('members.add') }}" class="btn btn-primary">➕ Tambah Pelanggan</a>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a href="{{ url_for('members.add') }}" class="btn btn-primary">➕ Tambah Pelanggan</a>
+      {% if current_user.role in ('superadmin','admin') %}
+      <a href="{{ url_for('members.tiers') }}" class="btn btn-outline">Tier Loyalty</a>
+      <a href="{{ url_for('members.vouchers') }}" class="btn btn-outline">Voucher Promo</a>
+      {% endif %}
+    </div>
   </div>
 </div>
 
@@ -18,7 +24,7 @@
   <div class="table-wrapper">
     <table class="table">
       <thead>
-        <tr><th>Nama</th><th>No. HP</th><th>Poin</th><th>Total Belanja</th><th>Hutang</th><th>Aksi</th></tr>
+        <tr><th>Nama</th><th>No. HP</th><th>Tier</th><th>Poin</th><th>Rolling Spend</th><th>Total Belanja</th><th>Hutang</th><th>Aksi</th></tr>
       </thead>
       <tbody>
         {% for m in members %}
@@ -26,8 +32,16 @@
           <td><div style="font-weight:600;">{{ m.nama }}</div></td>
           <td style="font-family:monospace;">{{ m.telepon }}</td>
           <td>
+            {% if m.tier %}
+            <span class="badge badge-info">{{ m.tier.nama }}</span>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
             <span class="badge badge-warning" style="font-weight:700;font-size:14px;">⭐ {{ m.poin }}</span>
           </td>
+          <td class="text-muted">Rp {{ "{:,.0f}".format(m.rolling_spend or 0).replace(",",".") }}</td>
           <td class="text-muted">Rp {{ "{:,.0f}".format(m.total_belanja).replace(",",".") }}</td>
           <td>
             {% if m.total_hutang > 0 %}
@@ -44,7 +58,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">📭 Tidak ada data pelanggan</td></tr>
+        <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">📭 Tidak ada data pelanggan</td></tr>
         {% endfor %}
       </tbody>
     </table>

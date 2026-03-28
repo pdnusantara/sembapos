@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Seller' if seller else 'Tambah Seller' }} — Marketplace{% endblock %}
+{% block page_title %}{{ 'Edit Seller' if seller else 'Tambah Seller' }}{% endblock %}
+{% block page_sub %}Marketplace Seller Center{% endblock %}
+
+{% block content %}
+<div style="max-width:640px;">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+    <a href="{{ url_for('superadmin.marketplace_sellers') }}" class="btn btn-sm btn-outline">← Kembali</a>
+    <h2 style="margin:0;font-size:16px;font-weight:700;">
+      {{ '✏️ Edit Seller: ' + seller.nama if seller else '+ Tambah Seller Baru' }}
+    </h2>
+  </div>
+
+  <div class="card" style="padding:24px;">
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-group">
+        <label class="form-label">Nama Seller <span style="color:var(--danger)">*</span></label>
+        <input type="text" name="nama" class="form-control" required
+               value="{{ seller.nama if seller else '' }}" placeholder="Nama seller / toko">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Deskripsi</label>
+        <textarea name="deskripsi" class="form-control" rows="3"
+                  placeholder="Deskripsi singkat seller">{{ seller.deskripsi if seller else '' }}</textarea>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="form-group">
+          <label class="form-label">Telepon</label>
+          <input type="text" name="telepon" class="form-control"
+                 value="{{ seller.telepon if seller else '' }}" placeholder="08xxxxxxxxxx">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control"
+                 value="{{ seller.email if seller else '' }}" placeholder="seller@email.com">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Alamat</label>
+        <textarea name="alamat" class="form-control" rows="2"
+                  placeholder="Alamat lengkap seller">{{ seller.alamat if seller else '' }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Logo / Foto Seller</label>
+        {% if seller and seller.logo %}
+        <div style="margin-bottom:10px;">
+          <img src="{{ url_for('static', filename=seller.logo) }}" alt="Logo"
+               style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Logo saat ini. Upload baru untuk mengganti.</div>
+        </div>
+        {% endif %}
+        <input type="file" name="logo" class="form-control" accept="image/*">
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Format: JPG, PNG, WEBP. Maks 5 MB.</div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button type="submit" class="btn btn-primary">
+          {{ '💾 Simpan Perubahan' if seller else '➕ Tambah Seller' }}
+        </button>
+        <a href="{{ url_for('superadmin.marketplace_sellers') }}" class="btn btn-outline">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

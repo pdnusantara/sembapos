@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f8fafc">
+  <meta name="description" content="SembaPOS — platform kasir cloud multi-tenant untuk toko sembako dan retail Indonesia. POS, stok, laporan, marketplace B2B, dan multi-cabang dalam satu sistem.">
+  <title>SembaPOS — Kasir Cloud untuk Toko Sembako &amp; Retail</title>
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://sembapos.com/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://sembapos.com/">
+  <meta property="og:title" content="SembaPOS — Kasir Cloud untuk Toko Sembako &amp; Retail">
+  <meta property="og:description" content="POS, stok, laporan, marketplace B2B, dan multi-cabang dalam satu platform cloud. Siap pakai harian untuk toko sembako dan retail Indonesia.">
+  <meta property="og:image" content="https://sembapos.com/static/img/og-sembapos.png">
+  <meta property="og:locale" content="id_ID">
+  <meta property="og:site_name" content="SembaPOS">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SembaPOS — Kasir Cloud untuk Toko Sembako &amp; Retail">
+  <meta name="twitter:description" content="POS, stok, laporan, marketplace B2B, dan multi-cabang dalam satu platform cloud.">
+  <meta name="twitter:image" content="https://sembapos.com/static/img/og-sembapos.png">
+
+  <!-- Font — preconnect + link (bukan @import, agar tidak render-blocking) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css', v=landing_css_v) }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+
+  <!-- Schema.org JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "SembaPOS",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "Platform kasir cloud multi-tenant untuk toko sembako dan retail Indonesia.",
+    "url": "https://sembapos.com/",
+    "offers": {
+      "@type": "AggregateOffer",
+      "priceCurrency": "IDR",
+      "availability": "https://schema.org/InStock"
+    },
+    "author": {
+      "@type": "Organization",
+      "name": "PT Turangga Jaya Teknologi"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Skip navigation untuk aksesibilitas -->
+  <a href="#main-content" class="skip-nav">Langsung ke konten utama</a>
+
+  <!-- Header wrap: full-width sticky agar background blur menutupi seluruh viewport -->
+  <div id="header-wrap">
+    <header id="header">
+      <a href="/" class="logo-mark"><span aria-hidden="true">🏪</span> SembaPOS</a>
+      <nav aria-label="Navigasi utama">
+        <button id="nav-toggle" aria-controls="nav-menu" aria-expanded="false" aria-label="Buka menu navigasi">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+        </button>
+        <ul class="nav-links" id="nav-menu" role="list">
+          <li><a href="#fitur">Fitur</a></li>
+          <li><a href="#cara-kerja">Cara Kerja</a></li>
+          <li><a href="#paket">Paket</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="/login" class="btn-nav">Masuk</a></li>
+        </ul>
+      </nav>
+    </header>
+  </div>
+
+  <main id="main-content">
+
+    <!-- ── HERO ─────────────────────────────────────── -->
+    <section class="hero">
+      <span class="hero-badge">☁️ Cloud POS</span>
+      <h1>Kasir toko, stok, dan laporan dalam satu platform</h1>
+      <p class="hero-lead">SembaPOS membantu toko sembako dan retail berjalan lebih rapi — multi-cabang, aman per tenant, siap dipakai harian.</p>
+      <div class="hero-cta">
+        <a href="/login" class="btn-primary-lg">Coba Gratis Sekarang</a>
+        <a href="#paket" class="btn-ghost-lg">Lihat paket →</a>
+      </div>
+      <p class="hero-existing-user">Sudah punya akun? <a href="/login">Masuk →</a></p>
+      <div class="hero-trust">
+        <span>✓ Multi-cabang</span>
+        <span>✓ Laporan real-time</span>
+        <span>✓ Marketplace B2B</span>
+        <span>✓ Tanpa instal aplikasi</span>
+      </div>
+    </section>
+
+    <!-- ── STATS STRIP ────────────────────────────────── -->
+    <section class="stats-strip" aria-label="Statistik platform">
+      <div class="stat-item">
+        <strong>500+</strong>
+        <span>Toko aktif</span>
+      </div>
+      <div class="stat-item">
+        <strong>1 Juta+</strong>
+        <span>Transaksi diproses</span>
+      </div>
+      <div class="stat-item">
+        <strong>99.9%</strong>
+        <span>Uptime cloud</span>
+      </div>
+      <div class="stat-item">
+        <strong>Gratis</strong>
+        <span>Setup &amp; migrasi data</span>
+      </div>
+    </section>
+
+    <!-- ── FITUR ──────────────────────────────────────── -->
+    <section id="fitur" class="section">
+      <div class="section-head">
+        <h2>Fitur utama</h2>
+        <p>Semua yang dibutuhkan kasir dan pemilik toko, dalam satu tempat.</p>
+      </div>
+      <div class="features-grid">
+        <article class="feature-card">
+          <div class="feature-icon">🛒</div>
+          <h3>POS &amp; pembayaran</h3>
+          <p>Checkout cepat, multi metode bayar, struk termal, dan riwayat transaksi.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">📦</div>
+          <h3>Stok &amp; pembelian</h3>
+          <p>Kelola barang, stok minimum, pemasok, dan penerimaan barang (FIFO).</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Laporan lengkap</h3>
+          <p>Omzet, laba kotor, HPP, arus kas, dan tren harian — ekspor CSV satu klik.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">👥</div>
+          <h3>Member &amp; promo</h3>
+          <p>Program loyalitas, poin, voucher, dan analitik perilaku pelanggan.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">🏢</div>
+          <h3>Multi cabang</h3>
+          <p>Pisahkan data per cabang dengan pengguna dan shift kasir terkelola.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">🔐</div>
+          <h3>Hak akses fleksibel</h3>
+          <p>Peran admin, kasir, dan super admin dengan modul yang dapat dikonfigurasi.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">🛍️</div>
+          <h3>Marketplace B2B</h3>
+          <p>Beli produk dari supplier langsung dalam sistem — lengkap dengan keranjang, checkout, dan riwayat pesanan.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">💰</div>
+          <h3>Hutang &amp; piutang</h3>
+          <p>Pantau saldo hutang ke supplier dan piutang pelanggan dengan laporan aging.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ── CARA KERJA ──────────────────────────────────── -->
+    <section id="cara-kerja" class="section">
+      <div class="section-head">
+        <h2>Cara kerja</h2>
+        <p>Mulai dalam hitungan menit, bukan jam.</p>
+      </div>
+      <div class="steps-row">
+        <div class="step">
+          <div class="step-num" aria-hidden="true">1</div>
+          <h3>Daftar &amp; aktivasi</h3>
+          <p>Hubungi tim kami atau daftar langsung. Akun toko Anda aktif dalam 1 hari kerja.</p>
+        </div>
+        <div class="step-connector" aria-hidden="true">→</div>
+        <div class="step">
+          <div class="step-num" aria-hidden="true">2</div>
+          <h3>Atur toko</h3>
+          <p>Tambah produk (import CSV), buat cabang, atur pengguna dan hak akses sesuai kebutuhan.</p>
+        </div>
+        <div class="step-connector" aria-hidden="true">→</div>
+        <div class="step">
+          <div class="step-num" aria-hidden="true">3</div>
+          <h3>Mulai transaksi</h3>
+          <p>Kasir buka shift, scan barcode atau pilih produk, terima pembayaran, cetak struk. Selesai.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PAKET HARGA ─────────────────────────────────── -->
+    <section id="paket" class="section">
+      <div class="section-head">
+        <h2>Paket harga</h2>
+        <p>Pilih paket yang sesuai skala bisnis Anda. Semua paket bisa ditingkatkan kapan saja.</p>
+      </div>
+      <div class="pricing-grid">
+        {% if landing_packages %}
+        {% for pkg in landing_packages %}
+        <article class="pricing-card{% if pkg.is_popular %} popular{% endif %}">
+          {% if pkg.is_popular %}<div class="popular-badge">Paling Laris</div>{% endif %}
+          <h3 class="plan-name">{{ pkg.nama }}</h3>
+          <p class="plan-desc">{{ pkg.deskripsi }}</p>
+          <div class="plan-prices">
+            {% for line in pkg.price_lines %}
+            <div class="plan-price-line">{{ line }}</div>
+            {% endfor %}
+          </div>
+          <ul class="features-list">
+            {% for line in pkg.features %}
+            <li><span class="check-icon" aria-hidden="true">✓</span> {{ line }}</li>
+            {% endfor %}
+          </ul>
+          <a href="/login" class="btn-price{% if pkg.is_popular %} filled{% else %} outline{% endif %}">Coba Sekarang</a>
+        </article>
+        {% endfor %}
+        {% else %}
+        <p class="pricing-empty">Belum ada paket aktif untuk ditampilkan. Silakan <a href="/login">masuk</a> atau hubungi administrator.</p>
+        {% endif %}
+      </div>
+      <p class="pricing-custom">Butuh paket khusus atau kuota lebih besar? <a href="#kontak">Hubungi kami via WhatsApp →</a></p>
+    </section>
+
+    <!-- ── FAQ ───────────────────────────────────────────── -->
+    <section id="faq" class="section">
+      <div class="section-head">
+        <h2>Pertanyaan umum</h2>
+        <p>Hal yang sering ditanyakan sebelum mulai menggunakan SembaPOS.</p>
+      </div>
+      <div class="faq-list">
+
+        <div class="faq-item">
+          <button type="button" class="faq-question" aria-expanded="false">
+            <span>Apakah bisa dipakai di tablet atau smartphone?</span>
+            <span class="faq-icon" aria-hidden="true">+</span>
+          </button>
+          <div class="faq-answer" role="region">
+            <div class="faq-answer-inner">Ya, tampilan web responsif untuk tablet, laptop, dan komputer. Kasir dapat beroperasi dari perangkat apa pun selama ada browser modern dan koneksi internet.</div>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button type="button" class="faq-question" aria-expanded="false">
+            <span>Apakah data antar toko bisa tercampur?</span>
+            <span class="faq-icon" aria-hidden="true">+</span>
+          </button>
+          <div class="faq-answer" role="region">
+            <div class="faq-answer-inner">Tidak. Data setiap toko diisolasi per tenant — pengguna satu toko sama sekali tidak dapat mengakses data toko lain, meski berjalan di infrastruktur yang sama.</div>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button type="button" class="faq-question" aria-expanded="false">
+            <span>Perlu instal aplikasi atau software khusus?</span>
+            <span class="faq-icon" aria-hidden="true">+</span>
+          </button>
+          <div class="faq-answer" role="region">
+            <div class="faq-answer-inner">Tidak wajib. SembaPOS berjalan sepenuhnya di browser (Chrome, Firefox, Edge, Safari). Tidak ada unduhan atau instalasi yang diperlukan.</div>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button type="button" class="faq-question" aria-expanded="false">
+            <span>Bagaimana cara mendaftar dan mulai menggunakan?</span>
+            <span class="faq-icon" aria-hidden="true">+</span>
+          </button>
+          <div class="faq-answer" role="region">
+            <div class="faq-answer-inner">Hubungi tim kami via WhatsApp atau email, atau klik "Coba Gratis" di atas. Kami akan menyiapkan akun toko Anda dalam 1 hari kerja, termasuk panduan onboarding dan import produk pertama.</div>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button type="button" class="faq-question" aria-expanded="false">
+            <span>Apakah ada masa uji coba gratis?</span>
+            <span class="faq-icon" aria-hidden="true">+</span>
+          </button>
+          <div class="faq-answer" role="region">
+            <div class="faq-answer-inner">Ya. Kami menyediakan periode uji coba agar Anda bisa mencoba semua fitur sebelum berlangganan. Hubungi tim kami untuk detail program trial terbaru.</div>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button type="button" class="faq-question" aria-expanded="false">
+            <span>Apakah bisa beroperasi tanpa internet (offline)?</span>
+            <span class="faq-icon" aria-hidden="true">+</span>
+          </button>
+          <div class="faq-answer" role="region">
+            <div class="faq-answer-inner">SembaPOS adalah aplikasi berbasis cloud dan membutuhkan koneksi internet untuk beroperasi penuh. Namun karena ringan, koneksi 4G atau WiFi biasa sudah cukup. Kami merekomendasikan koneksi stabil untuk lingkungan kasir.</div>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button type="button" class="faq-question" aria-expanded="false">
+            <span>Apa itu fitur Marketplace B2B?</span>
+            <span class="faq-icon" aria-hidden="true">+</span>
+          </button>
+          <div class="faq-answer" role="region">
+            <div class="faq-answer-inner">Marketplace B2B adalah fitur di mana tenant (toko Anda) dapat membeli produk dari supplier atau distributor yang terdaftar langsung di dalam sistem — lengkap dengan keranjang belanja, checkout, riwayat pesanan, dan manajemen stok terintegrasi.</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── CTA / KONTAK ────────────────────────────────── -->
+    <section id="kontak" class="section cta-section">
+      <h2>Siap memulai?</h2>
+      <p>Coba gratis atau hubungi tim kami — kami senang membantu toko Anda beralih ke sistem yang lebih rapi.</p>
+      <div class="cta-row">
+        <a href="https://wa.me/6281234567890?text=Halo%2C%20saya%20ingin%20coba%20SembaPOS" class="btn-whatsapp" target="_blank" rel="noopener noreferrer">
+          💬 Chat WhatsApp
+        </a>
+        <a href="/login" class="btn-primary-lg">Coba Gratis Sekarang</a>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Mobile sticky CTA -->
+  <div class="mobile-sticky-cta" aria-hidden="true">
+    <div class="cta-inner">
+      <div>
+        <strong>Siap Memulai?</strong>
+        <div class="cta-sub">Manajemen toko jadi mudah</div>
+      </div>
+      <a href="/login" class="btn-primary">Coba Gratis</a>
+    </div>
+  </div>
+
+  <footer>
+    <nav class="footer-nav" aria-label="Navigasi footer">
+      <a href="#fitur">Fitur</a>
+      <a href="#cara-kerja">Cara Kerja</a>
+      <a href="#paket">Paket</a>
+      <a href="#faq">FAQ</a>
+      <a href="#kontak">Kontak</a>
+      <a href="/login">Masuk</a>
+    </nav>
+    <p>&copy; 2026 SembaPOS. Platform kasir cloud untuk bisnis retail Indonesia.</p>
+    <p class="footer-madeby">Made with <span class="footer-love" aria-hidden="true">♥</span> by PT Turangga Jaya Teknologi</p>
+  </footer>
+
+  <script>
+    // ── Header scroll behaviour (target inner #header, bukan wrap) ──
+    const headerEl = document.getElementById('header');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 50) {
+        headerEl.style.padding = '0.5rem 5%';
+        headerEl.style.boxShadow = '0 2px 8px rgba(0,0,0,.08)';
+      } else {
+        headerEl.style.padding = '1rem 5%';
+        headerEl.style.boxShadow = 'none';
+      }
+    }, { passive: true });
+
+    // ── Hamburger mobile nav ──
+    const navToggle = document.getElementById('nav-toggle');
+    const navMenu   = document.getElementById('nav-menu');
+    navToggle.addEventListener('click', () => {
+      const isOpen = navMenu.classList.toggle('nav-open');
+      navToggle.setAttribute('aria-expanded', isOpen);
+    });
+    // Tutup menu saat item nav diklik
+    navMenu.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        navMenu.classList.remove('nav-open');
+        navToggle.setAttribute('aria-expanded', 'false');
+      });
+    });
+
+    // ── Smooth scroll untuk anchor link ──
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        const targetId = this.getAttribute('href');
+        if (targetId === '#') return;
+        const targetEl = document.querySelector(targetId);
+        if (targetEl) {
+          e.preventDefault();
+          window.scrollTo({ top: targetEl.offsetTop - 72, behavior: 'smooth' });
+        }
+      });
+    });
+
+    // ── Intersection Observer: fade-in animasi ──
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0) scale(1)';
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.feature-card, .pricing-card, .faq-item, .stat-item, .step').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = el.classList.contains('pricing-card') ? 'translateY(16px) scale(0.98)' : 'translateY(20px)';
+      el.style.transition = 'opacity 0.55s ease-out, transform 0.55s ease-out';
+      observer.observe(el);
+    });
+
+    // ── FAQ accordion + aria-expanded ──
+    document.querySelectorAll('.faq-question').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = btn.parentElement;
+        const isActive = item.classList.contains('active');
+
+        // Tutup semua yang lain
+        document.querySelectorAll('.faq-item').forEach(other => {
+          if (other !== item) {
+            other.classList.remove('active');
+            other.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+          }
+        });
+
+        item.classList.toggle('active', !isActive);
+        btn.setAttribute('aria-expanded', String(!isActive));
+      });
+    });
+  </script>
+</body>
+</html>

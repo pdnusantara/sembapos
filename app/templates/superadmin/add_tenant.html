@@ -57,6 +57,30 @@
           <label class="form-label">Alamat</label>
           <input type="text" name="alamat" class="form-control" placeholder="Alamat toko">
         </div>
+        <div class="form-group">
+          <label class="form-label">Provinsi</label>
+          <select name="provinsi" id="provinsiSelect" class="form-control">
+            <option value="">Pilih provinsi...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kab/Kota</label>
+          <select name="kab_kota" id="kabSelect" class="form-control" disabled>
+            <option value="">Pilih kab/kota...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kecamatan</label>
+          <select name="kecamatan" id="kecSelect" class="form-control" disabled>
+            <option value="">Pilih kecamatan...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Desa/Kelurahan</label>
+          <select name="desa" id="desaSelect" class="form-control" disabled>
+            <option value="">Pilih desa/kelurahan...</option>
+          </select>
+        </div>
       </div>
       <div style="background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.2);border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--text-muted);">
         ℹ️ Sistem membuat <strong>Cabang Utama</strong> dan akun <strong>Admin</strong> dengan password default. Username &amp; password admin hanya ditampilkan <strong>sekali</strong> di halaman detail tenant setelah dibuat — harap disimpan.
@@ -83,5 +107,83 @@ if (paketEl) {
   paketEl.addEventListener('change', syncKuota);
   syncKuota();
 }
+
+// Wilayah Indonesia (dropdown berjenjang)
+const provinsiSelect = document.getElementById('provinsiSelect');
+const kabSelect = document.getElementById('kabSelect');
+const kecSelect = document.getElementById('kecSelect');
+const desaSelect = document.getElementById('desaSelect');
+
+function resetSelect(el, placeholder, disabled=true) {
+  el.innerHTML = `<option value="">${placeholder}</option>`;
+  el.disabled = disabled;
+}
+
+function fillSelect(el, items, placeholder) {
+  resetSelect(el, placeholder, false);
+  for (const item of items) {
+    const opt = document.createElement('option');
+    opt.value = item.nama;
+    opt.textContent = item.nama;
+    opt.dataset.code = item.id;
+    el.appendChild(opt);
+  }
+}
+
+async function fetchJSON(url) {
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error('Gagal load wilayah');
+  return await res.json();
+}
+
+async function loadProvinsi() {
+  try {
+    const data = await fetchJSON('{{ url_for("superadmin.wilayah_provinsi") }}');
+    fillSelect(provinsiSelect, data, 'Pilih provinsi...');
+  } catch (e) {
+    resetSelect(provinsiSelect, 'Gagal load provinsi', true);
+  }
+}
+
+provinsiSelect.addEventListener('change', async function() {
+  const id = this.selectedOptions[0]?.dataset.code;
+  resetSelect(kabSelect, 'Pilih kab/kota...', true);
+  resetSelect(kecSelect, 'Pilih kecamatan...', true);
+  resetSelect(desaSelect, 'Pilih desa/kelurahan...', true);
+  if (!id) return;
+  try {
+    const data = await fetchJSON(`{{ url_for("superadmin.wilayah_kabupaten", prov_id="PID") }}`.replace('PID', id));
+    fillSelect(kabSelect, data, 'Pilih kab/kota...');
+  } catch (e) {
+    resetSelect(kabSelect, 'Gagal load kab/kota', true);
+  }
+});
+
+kabSelect.addEventListener('change', async function() {
+  const id = this.selectedOptions[0]?.dataset.code;
+  resetSelect(kecSelect, 'Pilih kecamatan...', true);
+  resetSelect(desaSelect, 'Pilih desa/kelurahan...', true);
+  if (!id) return;
+  try {
+    const data = await fetchJSON(`{{ url_for("superadmin.wilayah_kecamatan", kab_id="KID") }}`.replace('KID', id));
+    fillSelect(kecSelect, data, 'Pilih kecamatan...');
+  } catch (e) {
+    resetSelect(kecSelect, 'Gagal load kecamatan', true);
+  }
+});
+
+kecSelect.addEventListener('change', async function() {
+  const id = this.selectedOptions[0]?.dataset.code;
+  resetSelect(desaSelect, 'Pilih desa/kelurahan...', true);
+  if (!id) return;
+  try {
+    const data = await fetchJSON(`{{ url_for("superadmin.wilayah_desa", kec_id="CID") }}`.replace('CID', id));
+    fillSelect(desaSelect, data, 'Pilih desa/kelurahan...');
+  } catch (e) {
+    resetSelect(desaSelect, 'Gagal load desa/kelurahan', true);
+  }
+});
+
+loadProvinsi();
 </script>
 {% endblock %}

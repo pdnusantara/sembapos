@@ -14,7 +14,7 @@
             <span class="tx2-stat-label">Nilai persediaan (beli)</span>
           </div>
           <div class="tx2-stat-value">Rp {{ "{:,.0f}".format(total_nilai_persediaan).replace(",",".") }}</div>
-          <p class="tx2-stat-hint">Sesuai filter: stok × harga beli (bukan FIFO).</p>
+          <p class="tx2-stat-hint">Sesuai filter: prioritas layer FIFO, fallback harga beli master.</p>
         </article>
         <article class="tx2-stat tx2-stat--accent-mint">
           <div class="tx2-stat-head">
@@ -59,6 +59,14 @@
         <span class="ls-ob">menipis {{ overview.n_menipis }}</span>
         <span class="ls-ob ls-ob--ok">aman {{ overview.n_aman }}</span>
       </span>
+    </p>
+    <p class="ls-overview" role="status">
+      <strong>Kesehatan FIFO:</strong>
+      mismatch stok-vs-layer <span class="ls-ob">{{ fifo_health.mismatch_count }}</span> ·
+      stok tanpa layer <span class="ls-ob">{{ fifo_health.layer_missing_count }}</span> ·
+      qty layer melebihi stok <span class="ls-ob">{{ fifo_health.overlayer_count }}</span> ·
+      event fallback <span class="ls-ob">{{ fifo_health.fallback_events }}</span>
+      · <a href="{{ url_for('reports.fifo_health') }}" class="btn btn-outline btn-sm">Lihat FIFO Health</a>
     </p>
 
     <nav class="tx2-chips" aria-label="Filter status stok cepat">
@@ -185,7 +193,7 @@
               </td>
               <td class="text-end">Rp {{ "{:,.0f}".format(p.harga_beli or 0).replace(",",".") }}</td>
               <td class="text-end">Rp {{ "{:,.0f}".format(p.harga_jual or 0).replace(",",".") }}</td>
-              <td class="text-end fw-semibold">Rp {{ "{:,.0f}".format((p.stok or 0) * (p.harga_beli or 0)).replace(",",".") }}</td>
+              <td class="text-end fw-semibold">Rp {{ "{:,.0f}".format((fifo_value_map.get(p.id, 0) if fifo_value_map.get(p.id, 0) > 0 else ((p.stok or 0) * (p.harga_beli or 0)))).replace(",",".") }}</td>
               <td class="text-end">Rp {{ "{:,.0f}".format((p.stok or 0) * (p.harga_jual or 0)).replace(",",".") }}</td>
             </tr>
             {% else %}

@@ -18,6 +18,10 @@ instance/
 app/static/uploads/products/*
 !app/static/uploads/products/.gitkeep
 
+# Upload marketplace (dibuat runtime)
+app/static/uploads/marketplace/*
+!app/static/uploads/marketplace/.gitkeep
+
 # IDE / OS
 .idea/
 .vscode/

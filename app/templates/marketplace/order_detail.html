@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Pesanan {{ order.nomor }} — Marketplace{% endblock %}
+{% block page_title %}Detail Pesanan{% endblock %}
+{% block page_sub %}{{ order.nomor }}{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketplace.css', v=marketplace_css_v) }}">
+{% endblock %}
+
+{% block content %}
+<div class="mk-page">
+  <div class="mk-topbar">
+    <a href="{{ url_for('marketplace.index') }}" class="mk-topbar__brand">🛍️ <span>Marketplace</span></a>
+    <div style="flex:1;"></div>
+    <div class="mk-topbar__actions">
+      <a href="{{ url_for('marketplace.cart') }}" class="mk-cart-btn">🛒 Keranjang</a>
+    </div>
+  </div>
+
+  <div class="mk-page-title">
+    <a href="{{ url_for('marketplace.index') }}">Marketplace</a>
+    <span class="mk-page-title__sep">›</span>
+    <a href="{{ url_for('marketplace.orders') }}">Pesanan Saya</a>
+    <span class="mk-page-title__sep">›</span>
+    <span class="mk-page-title__current">{{ order.nomor }}</span>
+  </div>
+
+  <div class="mk-order-detail-wrap">
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;">
+      <!-- LEFT -->
+      <div>
+        <!-- STATUS HEADER -->
+        <div class="mk-section-card">
+          <div class="mk-section-card__head">
+            📦 Status Pesanan
+          </div>
+          <div class="mk-section-card__body">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <div>
+                <div style="font-size:13px;color:var(--mk-gray-600);">No. Pesanan</div>
+                <div style="font-size:16px;font-weight:700;color:var(--mk-green-dark);">{{ order.nomor }}</div>
+              </div>
+              <span class="mk-status mk-status--{{ order.status }}" style="font-size:13px;padding:6px 14px;">
+                {{ order.status_label }}
+              </span>
+            </div>
+
+            <!-- TIMELINE -->
+            <div class="mk-timeline">
+              {% for h in order.status_history %}
+              <div class="mk-timeline-item">
+                <div class="mk-timeline-dot {% if loop.last %}mk-timeline-dot--active{% endif %}">
+                  {% if h.to_status == 'delivered' %}✅
+                  {% elif h.to_status == 'cancelled' %}❌
+                  {% elif h.to_status == 'shipped' %}🚚
+                  {% elif h.to_status == 'processing' %}⚙️
+                  {% elif h.to_status == 'confirmed' %}✔️
+                  {% else %}⏳{% endif %}
+                </div>
+                <div class="mk-timeline-body">
+                  <div class="mk-timeline-status">{{ status_labels.get(h.to_status, h.to_status) }}</div>
+                  {% if h.catatan %}
+                  <div class="mk-timeline-note">{{ h.catatan }}</div>
+                  {% endif %}
+                  <div class="mk-timeline-time">{{ h.created_at.strftime('%d %b %Y, %H:%M') }}</div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- ITEMS -->
+        <div class="mk-section-card">
+          <div class="mk-section-card__head">🏪 {{ order.seller.nama }}</div>
+          <div class="mk-section-card__body" style="padding:0;">
+            <table class="mk-items-table">
+              <thead>
+                <tr>
+                  <th>Produk</th>
+                  <th style="text-align:center">Qty</th>
+                  <th style="text-align:right">Harga</th>
+                  <th style="text-align:right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in order.items %}
+                <tr>
+                  <td>
+                    <div style="font-weight:500">{{ item.nama_produk }}</div>
+                    <div style="font-size:11px;color:var(--mk-gray-600)">{{ item.satuan or 'pcs' }}</div>
+                  </td>
+                  <td style="text-align:center">{{ item.qty }}</td>
+                  <td style="text-align:right">Rp {{ "{:,.0f}".format(item.harga) }}</td>
+                  <td style="text-align:right" class="price">Rp {{ "{:,.0f}".format(item.subtotal) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" style="text-align:right;font-weight:700;">Total Pesanan</td>
+                  <td style="text-align:right;font-weight:700;color:var(--mk-red);">Rp {{ "{:,.0f}".format(order.total) }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- PEMBATALAN (hanya jika pending) -->
+        {% if order.status == 'pending' %}
+        <div class="mk-section-card">
+          <div class="mk-section-card__head" style="color:var(--mk-red);">⚠️ Batalkan Pesanan</div>
+          <div class="mk-section-card__body">
+            <form method="POST" action="{{ url_for('marketplace.order_cancel', order_id=order.id) }}"
+                  onsubmit="return confirm('Yakin ingin membatalkan pesanan ini?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="mk-form-group">
+                <label class="mk-form-label">Alasan pembatalan</label>
+                <textarea name="alasan" class="mk-form-textarea" placeholder="Tuliskan alasan pembatalan (opsional)"></textarea>
+              </div>
+              <button type="submit" class="mk-btn-danger">❌ Batalkan Pesanan</button>
+            </form>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- RIGHT: INFO -->
+      <div>
+        <div class="mk-section-card">
+          <div class="mk-section-card__head">📍 Informasi Pengiriman</div>
+          <div class="mk-section-card__body">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div>
+                <div style="font-size:12px;color:var(--mk-gray-600);">Penerima</div>
+                <div style="font-size:14px;font-weight:600;">{{ order.nama_penerima or '—' }}</div>
+              </div>
+              <div>
+                <div style="font-size:12px;color:var(--mk-gray-600);">Telepon</div>
+                <div style="font-size:14px;">{{ order.telepon_penerima or '—' }}</div>
+              </div>
+              <div>
+                <div style="font-size:12px;color:var(--mk-gray-600);">Alamat</div>
+                <div style="font-size:13px;line-height:1.5;">{{ order.alamat_kirim or '—' }}</div>
+              </div>
+              {% if order.catatan %}
+              <div>
+                <div style="font-size:12px;color:var(--mk-gray-600);">Catatan</div>
+                <div style="font-size:13px;color:var(--mk-gray-800);">{{ order.catatan }}</div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="mk-section-card" style="margin-top:12px;">
+          <div class="mk-section-card__head">💰 Ringkasan Pembayaran</div>
+          <div class="mk-section-card__body">
+            <div class="mk-summary-row">
+              <span>Subtotal</span>
+              <span>Rp {{ "{:,.0f}".format(order.total) }}</span>
+            </div>
+            <div class="mk-summary-total">
+              <span>Total</span>
+              <span>Rp {{ "{:,.0f}".format(order.total) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <a href="{{ url_for('marketplace.order_invoice', order_id=order.id) }}"
+             target="_blank"
+             class="mk-btn-primary" style="width:100%;box-sizing:border-box;display:flex;">
+            🖨️ Cetak Invoice
+          </a>
+        </div>
+        {% if order.status != 'pending' %}
+        <div style="margin-top:8px;">
+          <form method="POST" action="{{ url_for('marketplace.order_repeat', order_id=order.id) }}"
+                onsubmit="return confirm('Tambahkan semua item pesanan ini ke keranjang?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="mk-btn-primary"
+                    style="width:100%;box-sizing:border-box;display:flex;justify-content:center;background:var(--mk-orange,#ff9800);">
+              🔄 Pesan Lagi
+            </button>
+          </form>
+        </div>
+        {% endif %}
+        <div style="margin-top:8px;">
+          <a href="{{ url_for('marketplace.orders') }}" class="mk-btn-outline" style="width:100%;box-sizing:border-box;display:flex;">
+            ← Kembali ke Daftar Pesanan
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@media (max-width: 700px) {
+  .mk-order-detail-wrap > div { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}

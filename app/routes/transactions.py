@@ -48,6 +48,7 @@ def _filtered_query():
             selectinload(Transaction.user),
             selectinload(Transaction.branch),
             selectinload(Transaction.member),
+            selectinload(Transaction.payments),
             selectinload(Transaction.sales_returns),
         )
         .filter(Transaction.tenant_id == tenant_id)
@@ -81,7 +82,7 @@ def _filtered_query():
         q = q.filter(Transaction.status == st)
 
     met = request.args.get('metode', '').strip().lower()
-    if met in ('tunai', 'transfer', 'qris'):
+    if met in ('tunai', 'transfer', 'qris', 'kredit', 'mixed'):
         q = q.filter(Transaction.metode_bayar == met)
 
     uid = request.args.get('user_id', '').strip()
@@ -296,6 +297,7 @@ def detail(id):
             selectinload(Transaction.branch),
             selectinload(Transaction.member),
             selectinload(Transaction.items),
+            selectinload(Transaction.payments),
             selectinload(Transaction.sales_returns),
         )
         .filter_by(id=id, tenant_id=tenant_id)

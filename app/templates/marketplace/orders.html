@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Pesanan Saya — Marketplace{% endblock %}
+{% block page_title %}Pesanan Saya{% endblock %}
+{% block page_sub %}Riwayat pembelian di Marketplace{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketplace.css', v=marketplace_css_v) }}">
+{% endblock %}
+
+{% block content %}
+<div class="mk-page">
+  <div class="mk-topbar">
+    <a href="{{ url_for('marketplace.index') }}" class="mk-topbar__brand">🛍️ <span>Marketplace</span></a>
+    <div style="flex:1;"></div>
+    <div class="mk-topbar__actions">
+      <a href="{{ url_for('marketplace.cart') }}" class="mk-cart-btn">
+        🛒 Keranjang
+        {% if cart_count > 0 %}<span class="mk-cart-badge">{{ cart_count }}</span>{% endif %}
+      </a>
+    </div>
+  </div>
+
+  <div class="mk-page-title">
+    <a href="{{ url_for('marketplace.index') }}">Marketplace</a>
+    <span class="mk-page-title__sep">›</span>
+    <span class="mk-page-title__current">Pesanan Saya</span>
+  </div>
+
+  <div class="mk-orders-wrap">
+    <!-- STATUS TABS -->
+    <div class="mk-status-tabs">
+      <a href="{{ url_for('marketplace.orders') }}"
+         class="mk-status-tab {% if not status_filter %}active{% endif %}">Semua</a>
+      {% for code, label in all_statuses %}
+      <a href="{{ url_for('marketplace.orders', status=code) }}"
+         class="mk-status-tab {% if status_filter == code %}active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+
+    <!-- ORDER LIST -->
+    {% if orders %}
+    {% for order in orders %}
+    <a href="{{ url_for('marketplace.order_detail', order_id=order.id) }}" class="mk-order-card">
+      <div class="mk-order-card__head">
+        <span class="mk-order-card__nomor">📦 {{ order.nomor }}</span>
+        <span class="mk-status mk-status--{{ order.status }}">{{ order.status_label }}</span>
+        <span class="mk-order-card__date">{{ order.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+      </div>
+      <div class="mk-order-card__body">
+        <div>
+          <div class="mk-order-card__seller">🏪 {{ order.seller.nama }}</div>
+          <div class="mk-order-card__items">{{ order.items | length }} item produk</div>
+        </div>
+        <div class="mk-order-card__total">Rp {{ "{:,.0f}".format(order.total) }}</div>
+        <span style="font-size:12px;color:var(--mk-green);font-weight:600;">Lihat Detail →</span>
+      </div>
+    </a>
+    {% endfor %}
+
+    <!-- PAGINATION -->
+    {% if pagination.pages > 1 %}
+    <div class="mk-pagination" style="margin-top:24px;">
+      {% if pagination.has_prev %}
+      <a class="mk-page-btn" href="{{ url_for('marketplace.orders', status=status_filter, page=pagination.prev_num) }}">‹</a>
+      {% endif %}
+      {% for p in pagination.iter_pages() %}
+        {% if p %}
+        <a class="mk-page-btn {% if p == pagination.page %}active{% endif %}"
+           href="{{ url_for('marketplace.orders', status=status_filter, page=p) }}">{{ p }}</a>
+        {% else %}
+        <span class="mk-page-btn disabled">…</span>
+        {% endif %}
+      {% endfor %}
+      {% if pagination.has_next %}
+      <a class="mk-page-btn" href="{{ url_for('marketplace.orders', status=status_filter, page=pagination.next_num) }}">›</a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div style="text-align:center;padding:60px 20px;">
+      <div style="font-size:64px;margin-bottom:16px;">📋</div>
+      <div style="font-size:16px;font-weight:600;color:var(--mk-gray-800);margin-bottom:8px;">
+        {% if status_filter %}Tidak ada pesanan dengan status ini.
+        {% else %}Belum ada pesanan.{% endif %}
+      </div>
+      <div style="font-size:13px;color:var(--mk-gray-600);margin-bottom:20px;">
+        Mulai belanja produk untuk toko Anda!
+      </div>
+      <a href="{{ url_for('marketplace.index') }}" class="mk-btn-primary" style="display:inline-flex;text-decoration:none;">
+        🛍️ Belanja Sekarang
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

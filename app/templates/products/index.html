@@ -27,7 +27,7 @@
   <form method="GET" class="product-filter-form">
     <div class="search-bar">
       <span class="search-icon">🔍</span>
-      <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Nama atau barcode...">
+      <input type="text" id="productSearchInput" name="q" value="{{ search }}" class="form-control" placeholder="Nama atau scan barcode..." autocomplete="off">
     </div>
     <select name="category" class="form-control filter-select" onchange="this.form.submit()">
       <option value="">Semua Kategori</option>
@@ -64,7 +64,7 @@
 </div>
 
 <div class="card">
-  <div class="table-wrapper table-sticky">
+  <div class="table-wrapper admin-table-responsive products-table-responsive">
     <table class="table table-responsive-min">
       <thead>
         <tr>
@@ -85,21 +85,21 @@
         {% set margin = p.harga_jual - p.harga_beli %}
         {% set margin_pct = (margin / p.harga_beli * 100) if p.harga_beli and p.harga_beli > 0 else none %}
         <tr>
-          <td>
+          <td data-label="Foto">
             {% if p.gambar %}
             <img src="{{ url_for('static', filename=p.gambar) }}" alt="" class="product-thumb">
             {% else %}
             <span class="product-thumb-placeholder">📦</span>
             {% endif %}
           </td>
-          <td>
+          <td data-label="Produk">
             <div style="font-weight:600;color:var(--text-light);">{{ p.nama }}</div>
             {% if p.barcode %}<div style="font-size:11px;color:var(--text-muted);font-family:monospace;">{{ p.barcode }}</div>{% endif %}
           </td>
-          <td>{{ p.category.nama if p.category else '—' }}</td>
-          <td><span class="badge badge-info">{{ p.satuan }}</span></td>
-          <td class="text-muted">Rp {{ "{:,.0f}".format(p.harga_beli).replace(",",".") }}</td>
-          <td>
+          <td data-label="Kategori">{{ p.category.nama if p.category else '—' }}</td>
+          <td data-label="Satuan"><span class="badge badge-info">{{ p.satuan }}</span></td>
+          <td data-label="Harga Beli" class="text-muted">Rp {{ "{:,.0f}".format(p.harga_beli).replace(",",".") }}</td>
+          <td data-label="Harga Jual">
             <div class="fw-bold text-light">Ecer: Rp {{ "{:,.0f}".format(p.harga_jual).replace(",",".") }}</div>
             {% if p.min_qty_grosir_1 and p.harga_jual_grosir_1 %}
             <div style="font-size:11px;color:var(--text-muted);">G1 ≥ {{ p.min_qty_grosir_1 }}: Rp {{ "{:,.0f}".format(p.harga_jual_grosir_1).replace(",",".") }}</div>
@@ -108,7 +108,7 @@
             <div style="font-size:11px;color:var(--text-muted);">G2 ≥ {{ p.min_qty_grosir_2 }}: Rp {{ "{:,.0f}".format(p.harga_jual_grosir_2).replace(",",".") }}</div>
             {% endif %}
           </td>
-          <td>
+          <td data-label="Margin">
             <span class="text-light">Rp {{ "{:,.0f}".format(margin).replace(",",".") }}</span>
             {% if margin_pct is not none %}
             <div style="font-size:11px;color:var(--text-muted);">{{ "{:.1f}".format(margin_pct) }}%</div>
@@ -116,23 +116,22 @@
             <div style="font-size:11px;color:var(--text-muted);">—</div>
             {% endif %}
           </td>
-          <td>
+          <td data-label="Stok">
             <span class="badge {{ 'badge-danger' if p.stok <= 0 else ('badge-warning' if p.stok <= p.stok_minimum else 'badge-success') }}">
               {{ p.stok|int if p.stok == p.stok|int else p.stok }} {{ p.satuan }}
             </span>
           </td>
-          <td>
+          <td data-label="Status">
             <span class="badge {{ 'badge-success' if p.aktif else 'badge-danger' }}">
               {{ '✅ Aktif' if p.aktif else '❌ Nonaktif' }}
             </span>
           </td>
           {% if current_user.is_admin %}
-          <td>
-            <div class="product-actions">
+          <td data-label="Aksi">
+            <div class="product-actions products-row-actions">
               <a href="{{ url_for('products.edit', id=p.id) }}" class="btn btn-outline btn-sm" title="Edit">✏️</a>
-              <a href="{{ url_for('products.stock_in', id=p.id) }}" class="btn btn-outline btn-sm" title="Stok masuk">📥</a>
-              <a href="{{ url_for('products.stock_adjust', id=p.id) }}" class="btn btn-outline btn-sm" title="Koreksi stok">⚖️</a>
               <a href="{{ url_for('products.stock_history', id=p.id) }}" class="btn btn-outline btn-sm" title="Riwayat">📜</a>
+              <a href="{{ url_for('products.price_history', id=p.id) }}" class="btn btn-outline btn-sm" title="Audit harga/min stok">🧾</a>
               <form method="POST" action="{{ url_for('products.duplicate', id=p.id) }}" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button type="submit" class="btn btn-outline btn-sm" title="Duplikat">📋</button>
@@ -147,7 +146,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="{% if current_user.is_admin %}10{% else %}9{% endif %}" style="text-align:center;padding:40px;color:var(--text-muted);">
+          <td colspan="{% if current_user.is_admin %}10{% else %}9{% endif %}" class="admin-table-empty" style="text-align:center;padding:40px;color:var(--text-muted);">
             📭 Tidak ada produk untuk filter ini.
             {% if current_user.is_admin %}<a href="{{ url_for('products.add') }}">Tambah produk</a>{% endif %}
           </td>
@@ -159,7 +158,13 @@
 </div>
 
 {% if products.pages > 1 %}
-<div class="pagination">
+<div class="pagination" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+  <div class="text-muted" style="font-size:12px;">
+    Menampilkan {{ ((products.page - 1) * products.per_page) + 1 }} -
+    {{ ((products.page - 1) * products.per_page) + (products.items|length) }}
+    dari {{ products.total }} produk
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;">
   {% if products.has_prev %}
   <a href="{{ url_for('products.index', page=products.prev_num, q=search, category=cat_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">‹</a>
   {% endif %}
@@ -173,6 +178,23 @@
   {% if products.has_next %}
   <a href="{{ url_for('products.index', page=products.next_num, q=search, category=cat_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">›</a>
   {% endif %}
+  </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const search = document.getElementById('productSearchInput');
+  if (!search) return;
+  const shouldFocus = {{ (focus == 'search')|tojson }};
+  if (shouldFocus) {
+    setTimeout(() => {
+      search.focus();
+      search.select();
+    }, 80);
+  }
+});
+</script>
 {% endblock %}

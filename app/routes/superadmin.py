@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 import re
 import secrets
 import string
@@ -16,10 +17,14 @@ from flask import (
     flash,
     session,
     Response,
+    jsonify,
 )
+from urllib.request import urlopen, Request
+from urllib.error import URLError
 from flask_login import login_required, current_user, login_user
 from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload, joinedload
+from werkzeug.utils import secure_filename
 
 from .. import db
 from ..models import (
@@ -30,6 +35,15 @@ from ..models import (
     SuperadminAuditLog,
     TenantPackage,
     TenantPlanHistory,
+    MarketplaceSeller,
+    MarketplaceCategory,
+    MarketplaceProduct,
+    MarketplaceProductImage,
+    MarketplaceOrder,
+    MarketplaceOrderItem,
+    MarketplaceOrderStatusHistory,
+    MARKETPLACE_ORDER_STATUSES,
+    MARKETPLACE_ORDER_STATUS_LABELS,
 )
 from ..permissions import (
     PERMISSION_MODULES,
@@ -43,6 +57,37 @@ superadmin_bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
 UNLIMITED_THRESHOLD = 9000
 PER_PAGE = 20
 PAKET_KODE_RE = re.compile(r'^[a-z0-9_]{2,30}$')
+WILAYAH_API_BASE = 'https://www.emsifa.com/api-wilayah-indonesia/api'
+
+
+def _normalize_wilayah_items(items):
+    """API emsifa pakai field `name`; template superadmin pakai `nama`."""
+    if not isinstance(items, list):
+        return []
+    out = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        oid = it.get('id')
+        if oid is None:
+            continue
+        nama = (it.get('nama') or it.get('name') or '').strip() or str(oid)
+        out.append({'id': str(oid), 'nama': nama})
+    return out
+
+
+def _fetch_wilayah_json(path):
+    url = f'{WILAYAH_API_BASE}/{path.lstrip("/")}'
+    req = Request(url, headers={'User-Agent': 'sembako-superadmin/1.0'})
+    try:
+        with urlopen(req, timeout=12) as resp:
+            data = resp.read().decode('utf-8')
+            parsed = json.loads(data)
+            if isinstance(parsed, list):
+                return _normalize_wilayah_items(parsed)
+            return []
+    except (URLError, TimeoutError, json.JSONDecodeError, ValueError):
+        return []
 
 
 def _paket_kuota_map():
@@ -577,6 +622,10 @@ def add_tenant():
             nama=request.form['nama'],
             kode=kode,
             alamat=request.form.get('alamat', ''),
+            provinsi=(request.form.get('provinsi') or '').strip() or None,
+            kab_kota=(request.form.get('kab_kota') or '').strip() or None,
+            kecamatan=(request.form.get('kecamatan') or '').strip() or None,
+            desa=(request.form.get('desa') or '').strip() or None,
             telepon=request.form.get('telepon', ''),
             email=request.form.get('email', ''),
             paket_id=pkg.id,
@@ -643,6 +692,43 @@ def add_tenant():
     )
 
 
+@superadmin_bp.route('/wilayah/provinsi')
+@login_required
+@superadmin_required
+def wilayah_provinsi():
+    return jsonify(_fetch_wilayah_json('provinces.json'))
+
+
+@superadmin_bp.route('/wilayah/kabupaten/<prov_id>')
+@login_required
+@superadmin_required
+def wilayah_kabupaten(prov_id):
+    prov_id = re.sub(r'[^0-9]', '', str(prov_id))
+    if not prov_id:
+        return jsonify([])
+    return jsonify(_fetch_wilayah_json(f'regencies/{prov_id}.json'))
+
+
+@superadmin_bp.route('/wilayah/kecamatan/<kab_id>')
+@login_required
+@superadmin_required
+def wilayah_kecamatan(kab_id):
+    kab_id = re.sub(r'[^0-9]', '', str(kab_id))
+    if not kab_id:
+        return jsonify([])
+    return jsonify(_fetch_wilayah_json(f'districts/{kab_id}.json'))
+
+
+@superadmin_bp.route('/wilayah/desa/<kec_id>')
+@login_required
+@superadmin_required
+def wilayah_desa(kec_id):
+    kec_id = re.sub(r'[^0-9]', '', str(kec_id))
+    if not kec_id:
+        return jsonify([])
+    return jsonify(_fetch_wilayah_json(f'villages/{kec_id}.json'))
+
+
 @superadmin_bp.route('/tenants/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 @superadmin_required
@@ -675,6 +761,10 @@ def edit_tenant(id):
 
         tenant.nama = request.form.get('nama', tenant.nama).strip() or tenant.nama
         tenant.alamat = request.form.get('alamat', '')
+        tenant.provinsi = (request.form.get('provinsi') or '').strip() or None
+        tenant.kab_kota = (request.form.get('kab_kota') or '').strip() or None
+        tenant.kecamatan = (request.form.get('kecamatan') or '').strip() or None
+        tenant.desa = (request.form.get('desa') or '').strip() or None
         tenant.telepon = request.form.get('telepon', '')
         tenant.email = request.form.get('email', '')
         tenant.paket_id = pkg.id
@@ -912,4 +1002,806 @@ def view_tenant(id):
         unlimited_threshold=UNLIMITED_THRESHOLD,
         paket_modul_ringkas=paket_modul_ringkas,
         plan_history_recent=plan_history_recent,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# MARKETPLACE — SELLER CENTER (Super Admin)
+# ─────────────────────────────────────────────────────────────
+
+ALLOWED_IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+
+def _allowed_image(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTS
+
+
+def _save_marketplace_image(file_obj, subfolder='sellers'):
+    """Simpan gambar ke static/uploads/marketplace/<subfolder>/, return URL relatif."""
+    from flask import current_app
+    upload_dir = os.path.join(
+        current_app.static_folder, 'uploads', 'marketplace', subfolder
+    )
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = secure_filename(file_obj.filename)
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'jpg'
+    unique_name = f"{secrets.token_hex(10)}.{ext}"
+    file_obj.save(os.path.join(upload_dir, unique_name))
+    return f"uploads/marketplace/{subfolder}/{unique_name}"
+
+
+# ── CATEGORIES ────────────────────────────────────────────────
+
+@superadmin_bp.route('/marketplace/categories', methods=['GET', 'POST'])
+@superadmin_required
+def marketplace_categories():
+    if request.method == 'POST':
+        action = request.form.get('action', 'add')
+
+        if action == 'add':
+            nama = request.form.get('nama', '').strip()
+            icon = request.form.get('icon', '📦').strip() or '📦'
+            sort_order = request.form.get('sort_order', 0, type=int)
+            if not nama:
+                flash('Nama kategori wajib diisi.', 'danger')
+            else:
+                slug = re.sub(r'[^a-z0-9]+', '-', nama.lower()).strip('-')
+                existing = MarketplaceCategory.query.filter_by(slug=slug).first()
+                if existing:
+                    slug = f"{slug}-{secrets.token_hex(3)}"
+                cat = MarketplaceCategory(
+                    nama=nama, icon=icon, slug=slug, sort_order=sort_order
+                )
+                db.session.add(cat)
+                db.session.commit()
+                flash(f'Kategori "{nama}" berhasil ditambahkan.', 'success')
+
+        elif action == 'delete':
+            cat_id = request.form.get('cat_id', type=int)
+            cat = MarketplaceCategory.query.get_or_404(cat_id)
+            if cat.products:
+                flash('Tidak bisa menghapus kategori yang masih memiliki produk.', 'danger')
+            else:
+                db.session.delete(cat)
+                db.session.commit()
+                flash('Kategori dihapus.', 'success')
+
+        elif action == 'toggle':
+            cat_id = request.form.get('cat_id', type=int)
+            cat = MarketplaceCategory.query.get_or_404(cat_id)
+            cat.aktif = not cat.aktif
+            db.session.commit()
+            flash(f'Kategori {"diaktifkan" if cat.aktif else "dinonaktifkan"}.', 'success')
+
+        return redirect(url_for('superadmin.marketplace_categories'))
+
+    categories = MarketplaceCategory.query.order_by(MarketplaceCategory.sort_order).all()
+    return render_template(
+        'superadmin/marketplace/categories.html',
+        categories=categories,
+    )
+
+
+# ── SELLERS ──────────────────────────────────────────────────
+
+@superadmin_bp.route('/marketplace/sellers')
+@superadmin_required
+def marketplace_sellers():
+    sellers = MarketplaceSeller.query.order_by(MarketplaceSeller.nama).all()
+    # Hitung stats per seller
+    for s in sellers:
+        s._total_produk = MarketplaceProduct.query.filter_by(seller_id=s.id).count()
+        s._total_order = MarketplaceOrder.query.filter_by(seller_id=s.id).count()
+    return render_template(
+        'superadmin/marketplace/sellers.html',
+        sellers=sellers,
+    )
+
+
+@superadmin_bp.route('/marketplace/sellers/add', methods=['GET', 'POST'])
+@superadmin_required
+def marketplace_seller_add():
+    if request.method == 'POST':
+        nama = request.form.get('nama', '').strip()
+        if not nama:
+            flash('Nama seller wajib diisi.', 'danger')
+            return render_template('superadmin/marketplace/seller_form.html', seller=None)
+
+        logo_url = None
+        logo_file = request.files.get('logo')
+        if logo_file and logo_file.filename and _allowed_image(logo_file.filename):
+            logo_url = _save_marketplace_image(logo_file, 'sellers')
+
+        seller = MarketplaceSeller(
+            nama=nama,
+            deskripsi=request.form.get('deskripsi', '').strip(),
+            logo=logo_url,
+            alamat=request.form.get('alamat', '').strip(),
+            telepon=request.form.get('telepon', '').strip(),
+            email=request.form.get('email', '').strip(),
+        )
+        db.session.add(seller)
+        db.session.commit()
+        flash(f'Seller "{nama}" berhasil ditambahkan.', 'success')
+        return redirect(url_for('superadmin.marketplace_sellers'))
+
+    return render_template('superadmin/marketplace/seller_form.html', seller=None)
+
+
+@superadmin_bp.route('/marketplace/sellers/<int:seller_id>/edit', methods=['GET', 'POST'])
+@superadmin_required
+def marketplace_seller_edit(seller_id):
+    seller = MarketplaceSeller.query.get_or_404(seller_id)
+
+    if request.method == 'POST':
+        nama = request.form.get('nama', '').strip()
+        if not nama:
+            flash('Nama seller wajib diisi.', 'danger')
+            return render_template('superadmin/marketplace/seller_form.html', seller=seller)
+
+        seller.nama = nama
+        seller.deskripsi = request.form.get('deskripsi', '').strip()
+        seller.alamat = request.form.get('alamat', '').strip()
+        seller.telepon = request.form.get('telepon', '').strip()
+        seller.email = request.form.get('email', '').strip()
+
+        logo_file = request.files.get('logo')
+        if logo_file and logo_file.filename and _allowed_image(logo_file.filename):
+            seller.logo = _save_marketplace_image(logo_file, 'sellers')
+
+        db.session.commit()
+        flash('Seller berhasil diperbarui.', 'success')
+        return redirect(url_for('superadmin.marketplace_sellers'))
+
+    return render_template('superadmin/marketplace/seller_form.html', seller=seller)
+
+
+@superadmin_bp.route('/marketplace/sellers/<int:seller_id>/toggle', methods=['POST'])
+@superadmin_required
+def marketplace_seller_toggle(seller_id):
+    seller = MarketplaceSeller.query.get_or_404(seller_id)
+    seller.aktif = not seller.aktif
+    db.session.commit()
+    flash(f'Seller {"diaktifkan" if seller.aktif else "dinonaktifkan"}.', 'success')
+    return redirect(url_for('superadmin.marketplace_sellers'))
+
+
+# ── PRODUCTS ──────────────────────────────────────────────────
+
+@superadmin_bp.route('/marketplace/products')
+@superadmin_required
+def marketplace_products():
+    page = request.args.get('page', 1, type=int)
+    seller_id = request.args.get('seller', type=int)
+    category_id = request.args.get('category', type=int)
+    q = request.args.get('q', '').strip()
+
+    query = MarketplaceProduct.query
+
+    if seller_id:
+        query = query.filter_by(seller_id=seller_id)
+    if category_id:
+        query = query.filter_by(category_id=category_id)
+    if q:
+        query = query.filter(MarketplaceProduct.nama.ilike(f'%{q}%'))
+
+    query = query.order_by(MarketplaceProduct.created_at.desc())
+    pagination = query.paginate(page=page, per_page=30, error_out=False)
+
+    sellers = MarketplaceSeller.query.order_by(MarketplaceSeller.nama).all()
+    categories = MarketplaceCategory.query.order_by(MarketplaceCategory.sort_order).all()
+
+    return render_template(
+        'superadmin/marketplace/products.html',
+        products=pagination.items,
+        pagination=pagination,
+        sellers=sellers,
+        categories=categories,
+        seller_id=seller_id,
+        category_id=category_id,
+        q=q,
+    )
+
+
+@superadmin_bp.route('/marketplace/products/add', methods=['GET', 'POST'])
+@superadmin_required
+def marketplace_product_add():
+    sellers = MarketplaceSeller.query.filter_by(aktif=True).order_by(MarketplaceSeller.nama).all()
+    categories = MarketplaceCategory.query.filter_by(aktif=True).order_by(
+        MarketplaceCategory.sort_order
+    ).all()
+
+    if request.method == 'POST':
+        nama = request.form.get('nama', '').strip()
+        seller_id = request.form.get('seller_id', type=int)
+        harga = request.form.get('harga', 0, type=float)
+
+        errors = []
+        if not nama:
+            errors.append('Nama produk wajib diisi.')
+        if not seller_id:
+            errors.append('Seller wajib dipilih.')
+        if harga <= 0:
+            errors.append('Harga harus lebih dari 0.')
+
+        if errors:
+            for e in errors:
+                flash(e, 'danger')
+            return render_template(
+                'superadmin/marketplace/product_form.html',
+                product=None,
+                sellers=sellers,
+                categories=categories,
+            )
+
+        gambar_utama = None
+        main_img = request.files.get('gambar_utama')
+        if main_img and main_img.filename and _allowed_image(main_img.filename):
+            gambar_utama = _save_marketplace_image(main_img, 'products')
+
+        harga_grosir = request.form.get('harga_grosir', type=float) or None
+        min_qty_grosir = request.form.get('min_qty_grosir', type=int) or None
+
+        product = MarketplaceProduct(
+            seller_id=seller_id,
+            category_id=request.form.get('category_id', type=int) or None,
+            nama=nama,
+            deskripsi=request.form.get('deskripsi', '').strip(),
+            harga=harga,
+            harga_grosir=harga_grosir,
+            min_qty_grosir=min_qty_grosir,
+            stok=request.form.get('stok', 0, type=int),
+            satuan=request.form.get('satuan', 'pcs').strip() or 'pcs',
+            berat_gram=request.form.get('berat_gram', 0, type=int),
+            gambar_utama=gambar_utama,
+            sku=request.form.get('sku', '').strip() or None,
+        )
+        db.session.add(product)
+        db.session.flush()
+
+        # Galeri foto tambahan
+        for extra_file in request.files.getlist('gallery_images'):
+            if extra_file and extra_file.filename and _allowed_image(extra_file.filename):
+                img_url = _save_marketplace_image(extra_file, 'products')
+                img = MarketplaceProductImage(product_id=product.id, url=img_url)
+                db.session.add(img)
+
+        db.session.commit()
+        flash(f'Produk "{nama}" berhasil ditambahkan.', 'success')
+        return redirect(url_for('superadmin.marketplace_products'))
+
+    return render_template(
+        'superadmin/marketplace/product_form.html',
+        product=None,
+        sellers=sellers,
+        categories=categories,
+    )
+
+
+@superadmin_bp.route('/marketplace/products/<int:product_id>/edit', methods=['GET', 'POST'])
+@superadmin_required
+def marketplace_product_edit(product_id):
+    product = MarketplaceProduct.query.get_or_404(product_id)
+    sellers = MarketplaceSeller.query.filter_by(aktif=True).order_by(MarketplaceSeller.nama).all()
+    categories = MarketplaceCategory.query.filter_by(aktif=True).order_by(
+        MarketplaceCategory.sort_order
+    ).all()
+
+    if request.method == 'POST':
+        nama = request.form.get('nama', '').strip()
+        harga = request.form.get('harga', 0, type=float)
+
+        if not nama or harga <= 0:
+            flash('Nama dan harga wajib diisi dengan benar.', 'danger')
+            return render_template(
+                'superadmin/marketplace/product_form.html',
+                product=product,
+                sellers=sellers,
+                categories=categories,
+            )
+
+        product.nama = nama
+        product.seller_id = request.form.get('seller_id', type=int) or product.seller_id
+        product.category_id = request.form.get('category_id', type=int) or None
+        product.deskripsi = request.form.get('deskripsi', '').strip()
+        product.harga = harga
+        product.harga_grosir = request.form.get('harga_grosir', type=float) or None
+        product.min_qty_grosir = request.form.get('min_qty_grosir', type=int) or None
+        product.stok = request.form.get('stok', 0, type=int)
+        product.satuan = request.form.get('satuan', 'pcs').strip() or 'pcs'
+        product.berat_gram = request.form.get('berat_gram', 0, type=int)
+        product.sku = request.form.get('sku', '').strip() or None
+        product.aktif = request.form.get('aktif') == '1'
+
+        main_img = request.files.get('gambar_utama')
+        if main_img and main_img.filename and _allowed_image(main_img.filename):
+            product.gambar_utama = _save_marketplace_image(main_img, 'products')
+
+        # Hapus gambar gallery yang dipilih
+        delete_img_ids = request.form.getlist('delete_image')
+        if delete_img_ids:
+            MarketplaceProductImage.query.filter(
+                MarketplaceProductImage.id.in_([int(x) for x in delete_img_ids if x.isdigit()])
+            ).delete(synchronize_session=False)
+
+        # Tambah galeri baru
+        for extra_file in request.files.getlist('gallery_images'):
+            if extra_file and extra_file.filename and _allowed_image(extra_file.filename):
+                img_url = _save_marketplace_image(extra_file, 'products')
+                img = MarketplaceProductImage(product_id=product.id, url=img_url)
+                db.session.add(img)
+
+        db.session.commit()
+        flash('Produk berhasil diperbarui.', 'success')
+        return redirect(url_for('superadmin.marketplace_products'))
+
+    return render_template(
+        'superadmin/marketplace/product_form.html',
+        product=product,
+        sellers=sellers,
+        categories=categories,
+    )
+
+
+@superadmin_bp.route('/marketplace/products/<int:product_id>/delete', methods=['POST'])
+@superadmin_required
+def marketplace_product_delete(product_id):
+    product = MarketplaceProduct.query.get_or_404(product_id)
+    if product.order_items:
+        flash('Produk tidak dapat dihapus karena sudah terdapat dalam pesanan.', 'danger')
+        return redirect(url_for('superadmin.marketplace_products'))
+    db.session.delete(product)
+    db.session.commit()
+    flash('Produk berhasil dihapus.', 'success')
+    return redirect(url_for('superadmin.marketplace_products'))
+
+
+# ── ORDERS (SELLER CENTER) ────────────────────────────────────
+
+@superadmin_bp.route('/marketplace/orders')
+@superadmin_required
+def marketplace_orders():
+    page = request.args.get('page', 1, type=int)
+    status_filter = request.args.get('status', '')
+    seller_id = request.args.get('seller', type=int)
+    q = request.args.get('q', '').strip()
+
+    query = MarketplaceOrder.query
+
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if seller_id:
+        query = query.filter_by(seller_id=seller_id)
+    if q:
+        query = query.filter(
+            or_(
+                MarketplaceOrder.nomor.ilike(f'%{q}%'),
+                MarketplaceOrder.nama_penerima.ilike(f'%{q}%'),
+            )
+        )
+
+    query = query.order_by(MarketplaceOrder.created_at.desc())
+    pagination = query.paginate(page=page, per_page=30, error_out=False)
+
+    sellers = MarketplaceSeller.query.order_by(MarketplaceSeller.nama).all()
+
+    # Stats
+    stats = {
+        'total': MarketplaceOrder.query.count(),
+        'pending': MarketplaceOrder.query.filter_by(status='pending').count(),
+        'processing': MarketplaceOrder.query.filter(
+            MarketplaceOrder.status.in_(['confirmed', 'processing'])
+        ).count(),
+        'shipped': MarketplaceOrder.query.filter_by(status='shipped').count(),
+        'delivered': MarketplaceOrder.query.filter_by(status='delivered').count(),
+        'cancelled': MarketplaceOrder.query.filter_by(status='cancelled').count(),
+    }
+
+    return render_template(
+        'superadmin/marketplace/orders.html',
+        orders=pagination.items,
+        pagination=pagination,
+        sellers=sellers,
+        status_filter=status_filter,
+        seller_id=seller_id,
+        q=q,
+        all_statuses=MARKETPLACE_ORDER_STATUSES,
+        stats=stats,
+    )
+
+
+@superadmin_bp.route('/marketplace/orders/<int:order_id>')
+@superadmin_required
+def marketplace_order_detail(order_id):
+    order = MarketplaceOrder.query.get_or_404(order_id)
+    return render_template(
+        'superadmin/marketplace/order_detail.html',
+        order=order,
+        all_statuses=MARKETPLACE_ORDER_STATUSES,
+        status_labels=MARKETPLACE_ORDER_STATUS_LABELS,
+    )
+
+
+@superadmin_bp.route('/marketplace/orders/<int:order_id>/status', methods=['POST'])
+@superadmin_required
+def marketplace_order_status(order_id):
+    order = MarketplaceOrder.query.get_or_404(order_id)
+    new_status = request.form.get('status', '').strip()
+    catatan = request.form.get('catatan', '').strip()
+
+    valid_statuses = [s for s, _ in MARKETPLACE_ORDER_STATUSES]
+    if new_status not in valid_statuses:
+        flash('Status tidak valid.', 'danger')
+        return redirect(url_for('superadmin.marketplace_order_detail', order_id=order_id))
+
+    if new_status == order.status:
+        flash('Status tidak berubah.', 'info')
+        return redirect(url_for('superadmin.marketplace_order_detail', order_id=order_id))
+
+    old_status = order.status
+    order.status = new_status
+    history = MarketplaceOrderStatusHistory(
+        order_id=order.id,
+        from_status=old_status,
+        to_status=new_status,
+        catatan=catatan or None,
+        changed_by_user_id=current_user.id,
+    )
+    db.session.add(history)
+
+    # Kembalikan stok jika dibatalkan oleh superadmin
+    if new_status == 'cancelled' and old_status not in ('cancelled',):
+        for item in order.items:
+            if item.product_id:
+                product = MarketplaceProduct.query.get(item.product_id)
+                if product:
+                    product.stok += item.qty
+
+    db.session.commit()
+    flash(
+        f'Status pesanan diubah dari "{MARKETPLACE_ORDER_STATUS_LABELS.get(old_status, old_status)}" '
+        f'ke "{MARKETPLACE_ORDER_STATUS_LABELS.get(new_status, new_status)}".', 'success'
+    )
+    return redirect(url_for('superadmin.marketplace_order_detail', order_id=order_id))
+
+
+@superadmin_bp.route('/marketplace/orders/<int:order_id>/invoice')
+@superadmin_required
+def marketplace_order_invoice(order_id):
+    order = MarketplaceOrder.query.get_or_404(order_id)
+    return render_template('marketplace/invoice.html', order=order, is_admin=True,
+                           now=datetime.utcnow())
+
+
+# ─────────────────────────────────────────────────────────────
+# MARKETPLACE — CSV IMPORT
+# ─────────────────────────────────────────────────────────────
+
+_MP_CSV_COLUMNS = [
+    'nama', 'sku', 'seller_id', 'category_id', 'satuan',
+    'harga', 'harga_grosir', 'min_qty_grosir', 'stok',
+    'berat_gram', 'deskripsi', 'aktif',
+]
+
+
+@superadmin_bp.route('/marketplace/products/import/sample.csv')
+@superadmin_required
+def marketplace_product_import_sample():
+    rows = [
+        _MP_CSV_COLUMNS,
+        ['Beras Premium 5kg', 'BRS-5KG', '1', '1', 'karung', '75000', '70000', '10', '100', '5000', 'Beras premium kualitas terbaik', '1'],
+        ['Gula Pasir 1kg', 'GUL-1KG', '1', '2', 'kg', '14000', '', '', '200', '1000', '', '1'],
+    ]
+    si = StringIO()
+    w = csv.writer(si)
+    for row in rows:
+        w.writerow(row)
+    output = '\ufeff' + si.getvalue()
+    return Response(
+        output,
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=sample_marketplace_products.csv'},
+    )
+
+
+@superadmin_bp.route('/marketplace/products/import', methods=['GET', 'POST'])
+@superadmin_required
+def marketplace_product_import():
+    sellers = MarketplaceSeller.query.filter_by(aktif=True).order_by(MarketplaceSeller.nama).all()
+    categories = MarketplaceCategory.query.filter_by(aktif=True).order_by(MarketplaceCategory.nama).all()
+
+    if request.method == 'GET':
+        return render_template(
+            'superadmin/marketplace/product_import.html',
+            sellers=sellers,
+            categories=categories,
+        )
+
+    uploaded = request.files.get('csv_file')
+    if not uploaded or not uploaded.filename:
+        flash('Pilih file CSV terlebih dahulu.', 'danger')
+        return render_template('superadmin/marketplace/product_import.html',
+                               sellers=sellers, categories=categories)
+
+    filename = secure_filename(uploaded.filename).lower()
+    if not filename.endswith('.csv'):
+        flash('Hanya file .csv yang didukung.', 'danger')
+        return render_template('superadmin/marketplace/product_import.html',
+                               sellers=sellers, categories=categories)
+
+    try:
+        content = uploaded.read().decode('utf-8-sig')
+    except UnicodeDecodeError:
+        try:
+            uploaded.seek(0)
+            content = uploaded.read().decode('latin-1')
+        except Exception:
+            flash('File tidak dapat dibaca. Pastikan encoding UTF-8.', 'danger')
+            return render_template('superadmin/marketplace/product_import.html',
+                                   sellers=sellers, categories=categories)
+
+    reader = csv.DictReader(StringIO(content))
+    if not reader.fieldnames or 'nama' not in reader.fieldnames or 'harga' not in reader.fieldnames:
+        flash('Kolom wajib "nama" dan "harga" tidak ditemukan. Unduh contoh CSV untuk referensi.', 'danger')
+        return render_template('superadmin/marketplace/product_import.html',
+                               sellers=sellers, categories=categories)
+
+    created_count = 0
+    updated_count = 0
+    errors = []
+
+    for row_num, row in enumerate(reader, start=2):
+        nama = (row.get('nama') or '').strip()
+        if not nama:
+            errors.append(f'Baris {row_num}: kolom "nama" kosong, dilewati.')
+            continue
+
+        try:
+            harga = float((row.get('harga') or '0').replace(',', ''))
+        except ValueError:
+            errors.append(f'Baris {row_num} ({nama}): harga tidak valid.')
+            continue
+
+        sku = (row.get('sku') or '').strip() or None
+
+        # Resolve seller_id
+        raw_seller = (row.get('seller_id') or '').strip()
+        try:
+            seller_id = int(raw_seller) if raw_seller else None
+        except ValueError:
+            seller_id = None
+
+        if not seller_id:
+            errors.append(f'Baris {row_num} ({nama}): seller_id tidak valid atau kosong.')
+            continue
+
+        seller = MarketplaceSeller.query.get(seller_id)
+        if not seller:
+            errors.append(f'Baris {row_num} ({nama}): seller_id {seller_id} tidak ditemukan.')
+            continue
+
+        # Optional fields
+        raw_cat = (row.get('category_id') or '').strip()
+        category_id = None
+        if raw_cat:
+            try:
+                category_id = int(raw_cat)
+            except ValueError:
+                pass
+
+        satuan = (row.get('satuan') or 'pcs').strip() or 'pcs'
+
+        try:
+            harga_grosir_raw = (row.get('harga_grosir') or '').strip()
+            harga_grosir = float(harga_grosir_raw.replace(',', '')) if harga_grosir_raw else None
+        except ValueError:
+            harga_grosir = None
+
+        try:
+            mqg_raw = (row.get('min_qty_grosir') or '').strip()
+            min_qty_grosir = int(mqg_raw) if mqg_raw else None
+        except ValueError:
+            min_qty_grosir = None
+
+        try:
+            stok = int((row.get('stok') or '0').strip())
+        except ValueError:
+            stok = 0
+
+        try:
+            berat_gram = int((row.get('berat_gram') or '0').strip())
+        except ValueError:
+            berat_gram = 0
+
+        deskripsi = (row.get('deskripsi') or '').strip() or None
+
+        aktif_raw = (row.get('aktif') or '1').strip().lower()
+        aktif = aktif_raw not in ('0', 'false', 'tidak', 'no', 'off')
+
+        # Upsert: match by SKU if provided
+        product = None
+        if sku:
+            product = MarketplaceProduct.query.filter_by(sku=sku, seller_id=seller_id).first()
+
+        if product:
+            product.nama = nama
+            product.harga = harga
+            product.harga_grosir = harga_grosir
+            product.min_qty_grosir = min_qty_grosir
+            product.stok = stok
+            product.satuan = satuan
+            product.berat_gram = berat_gram
+            product.deskripsi = deskripsi
+            product.category_id = category_id
+            product.aktif = aktif
+            updated_count += 1
+        else:
+            product = MarketplaceProduct(
+                seller_id=seller_id,
+                category_id=category_id,
+                nama=nama,
+                sku=sku,
+                harga=harga,
+                harga_grosir=harga_grosir,
+                min_qty_grosir=min_qty_grosir,
+                stok=stok,
+                satuan=satuan,
+                berat_gram=berat_gram,
+                deskripsi=deskripsi,
+                aktif=aktif,
+            )
+            db.session.add(product)
+            created_count += 1
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Gagal menyimpan data: {str(e)}', 'danger')
+        return render_template('superadmin/marketplace/product_import.html',
+                               sellers=sellers, categories=categories)
+
+    if created_count or updated_count:
+        flash(f'Import selesai: {created_count} produk baru ditambahkan, {updated_count} diperbarui.', 'success')
+    if errors:
+        for e in errors[:10]:
+            flash(e, 'warning')
+        if len(errors) > 10:
+            flash(f'… dan {len(errors) - 10} kesalahan lainnya.', 'warning')
+
+    return redirect(url_for('superadmin.marketplace_products'))
+
+
+# ─────────────────────────────────────────────────────────────
+# MARKETPLACE — REPORTS
+# ─────────────────────────────────────────────────────────────
+
+@superadmin_bp.route('/marketplace/reports')
+@superadmin_required
+def marketplace_reports():
+    today = datetime.utcnow()
+    year = request.args.get('year', today.year, type=int)
+    month = request.args.get('month', today.month, type=int)
+
+    # Date range for selected month
+    from calendar import monthrange
+    _, days_in_month = monthrange(year, month)
+    start_dt = datetime(year, month, 1)
+    end_dt = datetime(year, month, days_in_month, 23, 59, 59)
+
+    non_cancelled = MarketplaceOrder.status != 'cancelled'
+
+    # KPIs for selected month
+    month_orders = MarketplaceOrder.query.filter(
+        MarketplaceOrder.created_at >= start_dt,
+        MarketplaceOrder.created_at <= end_dt,
+        non_cancelled,
+    ).all()
+    total_orders_month = len(month_orders)
+    total_omzet_month = sum(o.total for o in month_orders)
+
+    active_sellers = db.session.query(func.count(func.distinct(MarketplaceOrder.seller_id))).filter(
+        MarketplaceOrder.created_at >= start_dt,
+        MarketplaceOrder.created_at <= end_dt,
+        non_cancelled,
+    ).scalar() or 0
+
+    active_tenants = db.session.query(func.count(func.distinct(MarketplaceOrder.tenant_id))).filter(
+        MarketplaceOrder.created_at >= start_dt,
+        MarketplaceOrder.created_at <= end_dt,
+        non_cancelled,
+    ).scalar() or 0
+
+    # Omzet per seller for selected month
+    seller_revenue = db.session.query(
+        MarketplaceSeller.nama,
+        func.count(MarketplaceOrder.id).label('order_count'),
+        func.sum(MarketplaceOrder.total).label('omzet'),
+    ).join(MarketplaceOrder, MarketplaceOrder.seller_id == MarketplaceSeller.id).filter(
+        MarketplaceOrder.created_at >= start_dt,
+        MarketplaceOrder.created_at <= end_dt,
+        non_cancelled,
+    ).group_by(MarketplaceSeller.id, MarketplaceSeller.nama).order_by(
+        func.sum(MarketplaceOrder.total).desc()
+    ).all()
+
+    # Top 10 best-selling products (all-time or month — using all-time for richer data)
+    top_products = db.session.query(
+        MarketplaceOrderItem.nama_produk,
+        func.sum(MarketplaceOrderItem.qty).label('total_qty'),
+        func.sum(MarketplaceOrderItem.subtotal).label('total_omzet'),
+    ).join(MarketplaceOrder, MarketplaceOrder.id == MarketplaceOrderItem.order_id).filter(
+        MarketplaceOrder.created_at >= start_dt,
+        MarketplaceOrder.created_at <= end_dt,
+        non_cancelled,
+    ).group_by(MarketplaceOrderItem.nama_produk).order_by(
+        func.sum(MarketplaceOrderItem.qty).desc()
+    ).limit(10).all()
+
+    # Top tenants by order count
+    top_tenants = db.session.query(
+        Tenant.nama,
+        func.count(MarketplaceOrder.id).label('order_count'),
+        func.sum(MarketplaceOrder.total).label('total_belanja'),
+    ).join(MarketplaceOrder, MarketplaceOrder.tenant_id == Tenant.id).filter(
+        MarketplaceOrder.created_at >= start_dt,
+        MarketplaceOrder.created_at <= end_dt,
+        non_cancelled,
+    ).group_by(Tenant.id, Tenant.nama).order_by(
+        func.count(MarketplaceOrder.id).desc()
+    ).limit(10).all()
+
+    # Daily order trend for selected month
+    daily_trend_rows = db.session.query(
+        func.date(MarketplaceOrder.created_at).label('day'),
+        func.count(MarketplaceOrder.id).label('order_count'),
+        func.sum(MarketplaceOrder.total).label('omzet'),
+    ).filter(
+        MarketplaceOrder.created_at >= start_dt,
+        MarketplaceOrder.created_at <= end_dt,
+        non_cancelled,
+    ).group_by(func.date(MarketplaceOrder.created_at)).order_by(
+        func.date(MarketplaceOrder.created_at)
+    ).all()
+
+    # Build complete daily series (fill gaps with 0)
+    daily_map = {}
+    for row in daily_trend_rows:
+        key = str(row.day)[:10]
+        daily_map[key] = {'count': row.order_count, 'omzet': float(row.omzet or 0)}
+
+    from datetime import date as date_type, timedelta as td
+    daily_labels = []
+    daily_counts = []
+    daily_omzet = []
+    cur = start_dt.date()
+    end_date = end_dt.date()
+    while cur <= end_date:
+        key = cur.strftime('%Y-%m-%d')
+        daily_labels.append(cur.strftime('%d'))
+        daily_counts.append(daily_map.get(key, {}).get('count', 0))
+        daily_omzet.append(daily_map.get(key, {}).get('omzet', 0))
+        cur += td(days=1)
+
+    # Available years for filter
+    min_year_row = db.session.query(func.min(func.extract('year', MarketplaceOrder.created_at))).scalar()
+    min_year = int(min_year_row) if min_year_row else today.year
+    years = list(range(min_year, today.year + 1))
+
+    return render_template(
+        'superadmin/marketplace/reports.html',
+        year=year,
+        month=month,
+        years=years,
+        total_orders_month=total_orders_month,
+        total_omzet_month=total_omzet_month,
+        active_sellers=active_sellers,
+        active_tenants=active_tenants,
+        seller_revenue=seller_revenue,
+        top_products=top_products,
+        top_tenants=top_tenants,
+        daily_labels=daily_labels,
+        daily_counts=daily_counts,
+        daily_omzet=daily_omzet,
+        days_in_month=days_in_month,
     )

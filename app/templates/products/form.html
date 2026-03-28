@@ -50,6 +50,9 @@
         <div class="form-group">
           <label class="form-label">Harga Jual (Rp) *</label>
           <input type="number" name="harga_jual" class="form-control" value="{{ product.harga_jual|int if product else '' }}" min="0" required>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+            Sistem akan memberi peringatan jika harga jual di bawah harga beli (warning only, tetap bisa simpan).
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Min qty Grosir 1</label>
@@ -109,6 +112,7 @@
         <button type="submit" class="btn btn-primary">💾 Simpan Produk</button>
         <a href="{{ url_for('products.index') }}" class="btn btn-outline">✕ Batal</a>
         {% if product %}
+        <a href="{{ url_for('products.price_history', id=product.id) }}" class="btn btn-outline">🧾 Audit harga/min stok</a>
         <a href="{{ url_for('products.stock_history', id=product.id) }}" class="btn btn-outline">📜 Riwayat stok</a>
         {% endif %}
       </div>

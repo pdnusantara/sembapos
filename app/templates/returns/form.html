@@ -6,6 +6,9 @@
 {% block content %}
 <div class="page-shell">
   <div class="mb-3">
+    {% if back_to %}
+    <a href="{{ back_to }}" class="btn btn-outline btn-sm">← Kembali ke POS</a>
+    {% endif %}
     <a href="{{ url_for('transactions.detail', id=trx.id) }}" class="btn btn-outline btn-sm">← Kembali ke transaksi</a>
   </div>
 

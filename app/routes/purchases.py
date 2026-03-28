@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from datetime import datetime
 from .. import db
 from ..models import PurchaseOrder, PurchaseOrderItem, Supplier, Product, StockMovement
+from ..fifo_costing import create_cost_layer
 
 purchases_bp = Blueprint('purchases', __name__, url_prefix='/purchases')
 
@@ -148,6 +149,15 @@ def receive(id):
             if product:
                 stok_sebelum = product.stok
                 product.stok += qty_terima
+                create_cost_layer(
+                    tenant_id=tenant_id,
+                    product_id=product.id,
+                    qty_in=qty_terima,
+                    unit_cost=float(item.harga_beli or 0),
+                    source_type='po_receive',
+                    source_id=po.id,
+                    received_at=po.tanggal_terima or datetime.utcnow(),
+                )
                 
                 # Record movement
                 movement = StockMovement(

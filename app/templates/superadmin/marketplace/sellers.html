@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Seller Marketplace — Super Admin{% endblock %}
+{% block page_title %}Marketplace — Seller{% endblock %}
+{% block page_sub %}Kelola seller produk marketplace{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+  <div>
+    <h2 style="margin:0;font-size:18px;font-weight:700;">🏪 Daftar Seller Marketplace</h2>
+    <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">
+      Seller adalah entitas yang menyediakan produk untuk dibeli tenant.
+    </p>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <a href="{{ url_for('superadmin.marketplace_categories') }}" class="btn btn-sm btn-outline">🏷️ Kategori</a>
+    <a href="{{ url_for('superadmin.marketplace_products') }}" class="btn btn-sm btn-outline">📦 Produk</a>
+    <a href="{{ url_for('superadmin.marketplace_orders') }}" class="btn btn-sm btn-outline">📋 Order Masuk</a>
+    <a href="{{ url_for('superadmin.marketplace_seller_add') }}" class="btn btn-sm btn-primary">+ Tambah Seller</a>
+  </div>
+</div>
+
+{% if sellers %}
+<div class="card" style="overflow:hidden;">
+  <div style="overflow-x:auto;">
+    <table class="table" style="margin:0;">
+      <thead>
+        <tr>
+          <th>Seller</th>
+          <th>Telepon / Email</th>
+          <th style="text-align:center">Produk</th>
+          <th style="text-align:center">Order</th>
+          <th style="text-align:center">Status</th>
+          <th style="text-align:right">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for seller in sellers %}
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:12px;">
+              {% if seller.logo %}
+              <img src="{{ url_for('static', filename=seller.logo) }}" alt="{{ seller.nama }}"
+                   style="width:40px;height:40px;border-radius:8px;object-fit:cover;border:1px solid var(--border);">
+              {% else %}
+              <div style="width:40px;height:40px;border-radius:8px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:20px;">🏪</div>
+              {% endif %}
+              <div>
+                <div style="font-weight:600;font-size:14px;">{{ seller.nama }}</div>
+                {% if seller.alamat %}
+                <div style="font-size:12px;color:var(--text-muted);">📍 {{ seller.alamat | truncate(50) }}</div>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <td>
+            <div style="font-size:13px;">
+              {% if seller.telepon %}📞 {{ seller.telepon }}<br>{% endif %}
+              {% if seller.email %}✉️ {{ seller.email }}{% endif %}
+              {% if not seller.telepon and not seller.email %}<span style="color:var(--text-muted);">—</span>{% endif %}
+            </div>
+          </td>
+          <td style="text-align:center;font-size:15px;font-weight:700;">{{ seller._total_produk }}</td>
+          <td style="text-align:center;font-size:15px;font-weight:700;">{{ seller._total_order }}</td>
+          <td style="text-align:center;">
+            <span class="badge {% if seller.aktif %}badge-success{% else %}badge-danger{% endif %}">
+              {{ 'Aktif' if seller.aktif else 'Nonaktif' }}
+            </span>
+          </td>
+          <td style="text-align:right;">
+            <div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;">
+              <a href="{{ url_for('superadmin.marketplace_seller_edit', seller_id=seller.id) }}"
+                 class="btn btn-sm btn-outline">✏️ Edit</a>
+              <form method="POST" action="{{ url_for('superadmin.marketplace_seller_toggle', seller_id=seller.id) }}" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm {% if seller.aktif %}btn-warning{% else %}btn-success{% endif %}"
+                        onclick="return confirm('{{ 'Nonaktifkan' if seller.aktif else 'Aktifkan' }} seller ini?')">
+                  {{ '🔒 Nonaktifkan' if seller.aktif else '✅ Aktifkan' }}
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card" style="padding:60px;text-align:center;">
+  <div style="font-size:56px;margin-bottom:12px;">🏪</div>
+  <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Belum ada seller</div>
+  <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px;">
+    Tambahkan seller untuk mulai mengelola produk marketplace.
+  </div>
+  <a href="{{ url_for('superadmin.marketplace_seller_add') }}" class="btn btn-primary">+ Tambah Seller Pertama</a>
+</div>
+{% endif %}
+{% endblock %}

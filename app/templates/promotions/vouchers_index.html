@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Voucher Promo{% endblock %}
+{% block page_title %}Voucher & Promo{% endblock %}
+{% block page_sub %}Kelola kode voucher per periode dan rule{% endblock %}
+
+{% block content %}
+<div class="card mb-3" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+  <div>
+    <a href="{{ url_for('members.voucher_form') }}" class="btn btn-primary">+ Buat Voucher</a>
+    <a href="{{ url_for('members.voucher_redemptions') }}" class="btn btn-outline">Log Redemption</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr><th>Kode</th><th>Nama</th><th>Periode</th><th>Rule</th><th>Status</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+      {% for v in vouchers %}
+        <tr>
+          <td><code>{{ v.kode }}</code></td>
+          <td>{{ v.nama }}</td>
+          <td>{{ v.start_at.strftime('%d/%m/%Y %H:%M') }} - {{ v.end_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>
+            {% if v.discount_type == 'percent' %}{{ v.discount_value|int }}%{% else %}Rp {{ "{:,.0f}".format(v.discount_value).replace(",",".") }}{% endif %}
+            · min Rp {{ "{:,.0f}".format(v.min_spend).replace(",",".") }}
+          </td>
+          <td>{{ 'Aktif' if v.active else 'Nonaktif' }}</td>
+          <td style="display:flex;gap:6px;">
+            <a class="btn btn-outline btn-sm" href="{{ url_for('members.voucher_form', id=v.id) }}">Edit</a>
+            <form method="POST" action="{{ url_for('members.voucher_delete', id=v.id) }}" onsubmit="return confirm('Hapus voucher ini?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button class="btn btn-outline btn-sm" type="submit">Hapus</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">Belum ada voucher.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

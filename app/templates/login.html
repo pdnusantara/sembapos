@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f0f1a">
   <title>Login — Kasir Sembako</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
 </head>
 <body>
@@ -16,6 +16,7 @@
       <div class="logo-circle">🏪</div>
       <h1>Kasir Sembako</h1>
       <p>Sistem Point of Sale Multi-Tenant</p>
+      <p style="margin-top:10px;font-size:13px;"><a href="{{ url_for('landing.index') }}" style="color:var(--primary-light);">← Beranda</a></p>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -37,32 +38,32 @@
       </div>
       <div class="form-group">
         <label class="form-label">Password</label>
-        <div style="position:relative;">
+        <div class="password-input-wrap">
           <input type="password" name="password" id="passwordInput" class="form-control" placeholder="Masukkan password" autocomplete="current-password" required>
-          <button type="button" onclick="togglePass()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;" id="passToggle">👁️</button>
+          <button type="button" onclick="togglePass()" class="password-toggle" id="passToggle" aria-label="Tampilkan atau sembunyikan password">👁️</button>
         </div>
       </div>
-      <div class="form-group" style="display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" name="remember" id="remember" style="width:16px;height:16px;accent-color:var(--primary);">
-        <label for="remember" style="color:var(--text-muted);font-size:13px;cursor:pointer;">Ingat saya</label>
+      <div class="form-group remember-wrap">
+        <input type="checkbox" name="remember" id="remember" class="remember-check">
+        <label for="remember" class="remember-label">Ingat saya</label>
       </div>
       <button type="submit" class="btn btn-primary btn-block btn-lg" id="submitBtn">
         <span id="btnText">🔐 Masuk</span>
-        <span id="btnSpinner" style="display:none;" class="spinner"></span>
+        <span id="btnSpinner" class="spinner btn-spinner-hidden"></span>
       </button>
     </form>
 
-    <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border);">
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Akun Demo</p>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        <button onclick="fillLogin('superadmin','admin123')" class="demo-btn" style="background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.2);border-radius:8px;padding:8px 12px;color:var(--primary-light);font-size:12px;cursor:pointer;text-align:left;font-family:'Inter',sans-serif;transition:all 0.2s;">
-          🔑 Super Admin &mdash; <span style="color:var(--text-muted);">superadmin / admin123</span>
+    <div class="demo-accounts">
+      <p class="demo-title">Akun Demo</p>
+      <div class="demo-list">
+        <button onclick="fillLogin('superadmin','admin123')" class="demo-btn demo-btn-superadmin">
+          🔑 Super Admin &mdash; <span class="demo-cred">superadmin / admin123</span>
         </button>
-        <button onclick="fillLogin('admin_toko_makmur','admin123')" class="demo-btn" style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.15);border-radius:8px;padding:8px 12px;color:var(--secondary);font-size:12px;cursor:pointer;text-align:left;font-family:'Inter',sans-serif;transition:all 0.2s;">
-          🛡️ Admin Toko &mdash; <span style="color:var(--text-muted);">admin_toko_makmur / admin123</span>
+        <button onclick="fillLogin('admin_toko_makmur','admin123')" class="demo-btn demo-btn-admin">
+          🛡️ Admin Toko &mdash; <span class="demo-cred">admin_toko_makmur / admin123</span>
         </button>
-        <button onclick="fillLogin('kasir_makmur','kasir123')" class="demo-btn" style="background:rgba(255,165,2,0.08);border:1px solid rgba(255,165,2,0.15);border-radius:8px;padding:8px 12px;color:var(--warning);font-size:12px;cursor:pointer;text-align:left;font-family:'Inter',sans-serif;transition:all 0.2s;">
-          💼 Kasir &mdash; <span style="color:var(--text-muted);">kasir_makmur / kasir123</span>
+        <button onclick="fillLogin('kasir_makmur','kasir123')" class="demo-btn demo-btn-cashier">
+          💼 Kasir &mdash; <span class="demo-cred">kasir_makmur / kasir123</span>
         </button>
       </div>
     </div>
@@ -84,7 +85,7 @@ function togglePass() {
 
 document.getElementById('loginForm').addEventListener('submit', function() {
   document.getElementById('btnText').style.display = 'none';
-  document.getElementById('btnSpinner').style.display = 'inline-flex';
+  document.getElementById('btnSpinner').classList.remove('btn-spinner-hidden');
   document.getElementById('submitBtn').disabled = true;
 });
 </script>

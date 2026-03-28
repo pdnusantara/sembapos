@@ -12,7 +12,7 @@ def get_tenant_id():
     return current_user.tenant_id if not current_user.is_superadmin else None
 
 
-@dashboard_bp.route('/')
+@dashboard_bp.route('/dashboard')
 @login_required
 def index():
     tenant_id = get_tenant_id()

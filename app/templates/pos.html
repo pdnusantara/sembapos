@@ -8,6 +8,7 @@
 <div class="card pos-shift-strip" id="posShiftStrip" style="margin-bottom:12px;padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;border-radius:12px;">
   <div id="posShiftStripText" class="text-muted" style="font-size:14px;">Memuat status shift…</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button type="button" id="btnToggleFullView" class="btn btn-outline btn-sm" onclick="togglePosFullView()">⛶ Full View</button>
     <button type="button" id="btnOpenShift" class="btn btn-primary btn-sm" style="display:none;">Buka shift</button>
     <button type="button" id="btnCloseShift" class="btn btn-outline btn-sm" style="display:none;">Tutup shift</button>
   </div>
@@ -81,6 +82,9 @@
 
     <div class="pos-recent" id="posRecent" style="display:none;">
       <div class="pos-recent-title">Transaksi hari ini</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">
+        Gunakan tombol <strong>↩ Retur/Tukar</strong> untuk buka form retur langsung dari transaksi ini.
+      </div>
       <div id="posRecentList"></div>
     </div>
   </div>
@@ -90,9 +94,13 @@
       <div class="cart-title">🛒 Keranjang</div>
       <div class="cart-header-actions">
         <button type="button" class="btn btn-outline btn-sm" onclick="holdCart()" title="Simpan keranjang">⏸️ Tahan</button>
-        <button type="button" class="btn btn-outline btn-sm" onclick="recallCart()" title="Ambil keranjang tertahan">▶️ Ambil</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="recallLatestCart()" title="Ambil antrian terbaru">▶️ Ambil</button>
         <button type="button" class="btn btn-outline btn-sm" onclick="clearCart()">🗑️ Kosongkan</button>
       </div>
+    </div>
+    <div id="holdQueuePanel" style="margin-bottom:10px;display:none;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Antrian keranjang tertahan</div>
+      <div id="holdQueueList" style="display:grid;gap:6px;"></div>
     </div>
 
     <div id="cartEmpty" class="cart-empty">
@@ -118,6 +126,10 @@
           <span>
             <input type="number" id="diskonInput" class="form-control pos-diskon-field" value="0" min="0" oninput="recalculate()">
           </span>
+        </div>
+        <div class="cart-row" id="promoDiscountRow" style="display:none;">
+          <span>Diskon promo</span>
+          <span id="promoDiscountDisplay" class="text-success">Rp 0</span>
         </div>
         <div class="cart-total">
           <span class="total-label">💰 TOTAL</span>
@@ -145,21 +157,39 @@
 
     <div class="cart-payment pos-pay-modal-body">
       <div class="payment-methods">
-        <button type="button" class="method-btn active" data-method="tunai" onclick="setMethod('tunai',this)">💵 Tunai</button>
-        <button type="button" class="method-btn" data-method="transfer" onclick="setMethod('transfer',this)">🏦 Transfer</button>
-        <button type="button" class="method-btn" data-method="qris" onclick="setMethod('qris',this)">📱 QRIS</button>
-        <button type="button" class="method-btn method-btn--danger" data-method="kredit" onclick="setMethod('kredit',this)">💳 Kredit</button>
+        <button type="button" class="method-btn active" onclick="focusPaymentInput('tunai')">💵 Tunai</button>
+        <button type="button" class="method-btn" onclick="focusPaymentInput('transfer')">🏦 Transfer</button>
+        <button type="button" class="method-btn" onclick="focusPaymentInput('qris')">📱 QRIS</button>
+        <button type="button" class="method-btn method-btn--danger" onclick="focusPaymentInput('kredit')">💳 Kredit</button>
       </div>
 
-      <div id="cashSection">
-        <label class="form-label" style="margin-top:8px;">Uang dibayar</label>
-        <div class="payment-input">
-          <span class="currency-prefix">Rp</span>
-          <input type="number" id="bayarInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
+      <div id="splitPaymentSection" style="margin-top:8px;">
+        <label class="form-label">Nominal per metode</label>
+        <div style="display:grid;grid-template-columns:1fr;gap:8px;">
+          <div class="payment-input">
+            <span class="currency-prefix" style="min-width:74px;">Tunai</span>
+            <input type="number" id="payTunaiInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
+          </div>
+          <div class="payment-input">
+            <span class="currency-prefix" style="min-width:74px;">Transfer</span>
+            <input type="number" id="payTransferInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
+          </div>
+          <div class="payment-input">
+            <span class="currency-prefix" style="min-width:74px;">QRIS</span>
+            <input type="number" id="payQrisInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
+          </div>
+          <div class="payment-input">
+            <span class="currency-prefix" style="min-width:74px;">Kredit</span>
+            <input type="number" id="payKreditInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
+          </div>
         </div>
         <div class="pos-quick-cash" id="quickCash"></div>
-        <div class="change-display" id="changeDisplay" style="margin-top:10px;">
-          <span class="change-label">💵 Kembalian</span>
+        <div class="change-display" id="remainingDisplay" style="margin-top:10px;">
+          <span class="change-label">Sisa tagihan</span>
+          <span class="change-value">Rp 0</span>
+        </div>
+        <div class="change-display" id="changeDisplay" style="margin-top:8px;">
+          <span class="change-label">💵 Kembalian tunai</span>
           <span class="change-value">Rp 0</span>
         </div>
       </div>
@@ -178,6 +208,20 @@
       </div>
 
       <input type="text" id="catatanInput" class="form-control" placeholder="Catatan (opsional)..." style="margin-top:10px;">
+      <input type="text" id="voucherInput" class="form-control" placeholder="Kode voucher (opsional)" style="margin-top:10px;text-transform:uppercase;">
+      <div id="discountDecisionPanel" style="margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--bg-soft-2);">
+        <div style="font-weight:700;margin-bottom:6px;">Keputusan Diskon</div>
+        <div id="discountDecisionReason" class="text-muted" style="font-size:12px;">Belum ada promo aktif.</div>
+        <div style="display:grid;grid-template-columns:1fr;gap:4px;margin-top:8px;font-size:12px;">
+          <div class="cart-row"><span title="Diskon dari tier loyalty/member yang aktif">Diskon member/tier</span><span id="candMemberDiscount">Rp 0</span></div>
+          <div class="cart-row"><span title="Diskon hasil validasi kode voucher">Diskon voucher</span><span id="candVoucherDiscount">Rp 0</span></div>
+          <div class="cart-row"><span title="Diskon manual yang diinput kasir">Diskon manual</span><span id="candManualDiscount">Rp 0</span></div>
+          <div class="cart-row" style="font-weight:700;">
+            <span title="Promo terpilih berdasarkan rule non-stacking">Pemenang promo</span>
+            <span id="candWinner" class="badge badge-secondary">NONE</span>
+          </div>
+        </div>
+      </div>
 
       <button type="button" class="btn-checkout" id="checkoutBtn" onclick="checkout()" disabled style="margin-top:14px;">
         🧾 Proses pembayaran
@@ -196,6 +240,8 @@
     <div style="background:rgba(255,255,255,0.04);border-radius:12px;padding:16px;margin:16px 0;text-align:left;">
       <div class="cart-row"><span>Total</span><span id="successTotal" class="fw-bold text-light"></span></div>
       <div class="cart-row"><span>Dibayar</span><span id="successBayar" class="fw-bold"></span></div>
+      <div id="successPayments" style="margin-top:8px;"></div>
+      <div id="successDecisionSummary" class="text-muted" style="margin-top:8px;font-size:12px;"></div>
       <div class="cart-row" id="successChangeRow"><span>Kembalian</span><span id="successKembalian" class="fw-bold text-success"></span></div>
       <div class="cart-row" id="successPointRow" style="display:none;"><span>Poin didapat</span><span id="successPoint" class="fw-bold text-warning"></span></div>
     </div>
@@ -241,16 +287,20 @@
 {% block scripts %}
 <script>
 window.POS_CAN_OVERRIDE = {{ can_override_price|tojson }};
-const POS_HOLD_KEY = 'sembako_pos_hold_v1';
+const POS_HOLD_QUEUE_KEY = 'sembako_pos_hold_queue_v1';
+const POS_HOLD_KEY_LEGACY = 'sembako_pos_hold_v1';
+const POS_FULL_VIEW_CLASS = 'pos-full-view';
 
 let shiftOpen = false;
 let shiftSnapshot = null;
 
 let cart = [];
-let selectedMethod = 'tunai';
 let selectedCategory = 'all';
 let ajaxSearchResults = [];
 let searchDebounce = null;
+let promoDiscountApplied = 0;
+let promoDecisionMeta = null;
+let voucherDebounce = null;
 
 function qtyStep(satuan) {
   const s = String(satuan || '').toLowerCase();
@@ -327,7 +377,7 @@ function diskonManualVal() {
 }
 
 function totalAkhir() {
-  return Math.max(0, subtotalBruto() - diskonMemberAmount() - diskonManualVal());
+  return Math.max(0, subtotalBruto() - diskonMemberAmount() - diskonManualVal() - promoDiscountApplied);
 }
 
 function addToCart(id, nama, harga, stok, satuan, qtyAdd, raw) {
@@ -422,7 +472,104 @@ function clearCart() {
   if (cart.length === 0) return;
   if (!confirm('Kosongkan keranjang?')) return;
   cart = [];
+  promoDiscountApplied = 0;
   renderCart();
+}
+
+function holdQueueRead() {
+  try {
+    const raw = localStorage.getItem(POS_HOLD_QUEUE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr;
+  } catch (e) {
+    return [];
+  }
+}
+
+function holdQueueWrite(queue) {
+  localStorage.setItem(POS_HOLD_QUEUE_KEY, JSON.stringify(queue || []));
+}
+
+function holdQueueMigrateLegacy() {
+  try {
+    const raw = localStorage.getItem(POS_HOLD_KEY_LEGACY);
+    if (!raw) return;
+    const old = JSON.parse(raw);
+    if (!old || !Array.isArray(old.cart) || old.cart.length === 0) {
+      localStorage.removeItem(POS_HOLD_KEY_LEGACY);
+      return;
+    }
+    const queue = holdQueueRead();
+    const entry = {
+      id: 'hq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      label: 'Antrian lama',
+      at: old.at || Date.now(),
+      item_count: old.cart.length,
+      total: (old.cart || []).reduce((s, i) => s + ((parseFloat(i.harga) || 0) * (parseFloat(i.qty) || 0)), 0),
+      payload: old,
+    };
+    queue.unshift(entry);
+    holdQueueWrite(queue.slice(0, 20));
+    localStorage.removeItem(POS_HOLD_KEY_LEGACY);
+  } catch (e) {}
+}
+
+function holdQueueFmtTime(ts) {
+  const d = new Date(ts || Date.now());
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return hh + ':' + mm;
+}
+
+function defaultHoldQueueLabel() {
+  const memberSel = document.getElementById('memberSelect');
+  if (memberSel && memberSel.value && memberSel.selectedIndex >= 0) {
+    const txt = String(memberSel.options[memberSel.selectedIndex].textContent || '').trim();
+    if (txt) return txt.split('(')[0].trim();
+  }
+  return '';
+}
+
+function askHoldQueueLabel() {
+  const hint = defaultHoldQueueLabel();
+  const msg = hint
+    ? 'Nama antrian/pelanggan (opsional). Contoh: ' + hint
+    : 'Nama antrian/pelanggan (opsional).';
+  try {
+    const raw = prompt(msg, hint);
+    if (raw === null) return null;
+    const label = String(raw || '').trim().slice(0, 40);
+    return label;
+  } catch (e) {
+    return '';
+  }
+}
+
+function renderHoldQueuePanel() {
+  const panel = document.getElementById('holdQueuePanel');
+  const list = document.getElementById('holdQueueList');
+  if (!panel || !list) return;
+  const queue = holdQueueRead();
+  if (!queue.length) {
+    panel.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  panel.style.display = 'block';
+  list.innerHTML = queue.map((q, idx) =>
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg-soft-2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;">' +
+      '<div style="min-width:0;">' +
+        '<div style="font-size:12px;font-weight:600;">' + escapeHtml(String(q.label || ('Antrian ' + String(idx + 1)))) + ' · ' + escapeHtml(holdQueueFmtTime(q.at)) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);">' + String(q.item_count || 0) + ' item · ' + formatRupiah(parseFloat(q.total || 0)) + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">' +
+        '<button type="button" class="btn btn-outline btn-sm" onclick="recallCartById(\'' + String(q.id) + '\')">Ambil</button>' +
+        '<button type="button" class="btn btn-outline btn-sm" onclick="deleteHoldQueueItem(\'' + String(q.id) + '\')" title="Hapus antrian ini">Hapus</button>' +
+      '</div>' +
+    '</div>'
+  ).join('');
 }
 
 function holdCart() {
@@ -430,39 +577,48 @@ function holdCart() {
     showToast('Keranjang kosong', 'warning');
     return;
   }
+  const holdLabel = askHoldQueueLabel();
+  if (holdLabel === null) return;
   const payload = {
     cart,
     diskon: diskonManualVal(),
     memberId: document.getElementById('memberSelect').value,
     catatan: document.getElementById('catatanInput').value,
-    method: selectedMethod,
+    voucherCode: document.getElementById('voucherInput').value,
     at: Date.now()
   };
   try {
-    localStorage.setItem(POS_HOLD_KEY, JSON.stringify(payload));
+    const queue = holdQueueRead();
+    const entry = {
+      id: 'hq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      label: holdLabel || '',
+      at: payload.at,
+      item_count: payload.cart.length,
+      total: subtotalBruto(),
+      payload: payload,
+    };
+    queue.unshift(entry);
+    holdQueueWrite(queue.slice(0, 20));
     showToast('Keranjang ditahan', 'success');
     cart = [];
+    promoDiscountApplied = 0;
     document.getElementById('diskonInput').value = 0;
     document.getElementById('memberSelect').value = '';
     document.getElementById('catatanInput').value = '';
+    document.getElementById('voucherInput').value = '';
     renderCart();
+    renderHoldQueuePanel();
   } catch (e) {
     showToast('Tidak bisa menyimpan (penyimpanan penuh?)', 'error');
   }
 }
 
-function recallCart() {
-  let raw;
-  try {
-    raw = localStorage.getItem(POS_HOLD_KEY);
-  } catch (e) { return; }
-  if (!raw) {
-    showToast('Tidak ada keranjang tertahan', 'info');
-    return;
+function applyHeldPayload(payload) {
+  if (!payload || !Array.isArray(payload.cart) || payload.cart.length === 0) {
+    showToast('Data antrian tidak valid', 'warning');
+    return false;
   }
-  let payload;
-  try { payload = JSON.parse(raw); } catch (e) { return; }
-  if (cart.length > 0 && !confirm('Ganti keranjang aktif dengan yang tertahan?')) return;
+  if (cart.length > 0 && !confirm('Ganti keranjang aktif dengan antrian terpilih?')) return false;
   cart = (payload.cart || []).map(i => ({
     ...i,
     tiers: i.tiers || buildTiersFromRaw(i),
@@ -474,12 +630,43 @@ function recallCart() {
   document.getElementById('diskonInput').value = payload.diskon || 0;
   document.getElementById('memberSelect').value = payload.memberId || '';
   document.getElementById('catatanInput').value = payload.catatan || '';
-  if (payload.method) {
-    const b = document.querySelector('#payModal .method-btn[data-method="' + payload.method + '"]');
-    if (b) setMethod(payload.method, b);
-  }
+  document.getElementById('voucherInput').value = payload.voucherCode || '';
   renderCart();
-  showToast('Keranjang diambil', 'success');
+  showToast('Antrian berhasil diambil', 'success');
+  return true;
+}
+
+function recallCartById(id) {
+  const queue = holdQueueRead();
+  const idx = queue.findIndex(q => String(q.id) === String(id));
+  if (idx < 0) {
+    showToast('Antrian tidak ditemukan', 'warning');
+    renderHoldQueuePanel();
+    return;
+  }
+  const picked = queue[idx];
+  if (!applyHeldPayload(picked.payload)) return;
+  queue.splice(idx, 1);
+  holdQueueWrite(queue);
+  renderHoldQueuePanel();
+}
+
+function recallLatestCart() {
+  const queue = holdQueueRead();
+  if (!queue.length) {
+    showToast('Tidak ada antrian tertahan', 'info');
+    return;
+  }
+  recallCartById(queue[0].id);
+}
+
+function deleteHoldQueueItem(id) {
+  const queue = holdQueueRead();
+  const next = queue.filter(q => String(q.id) !== String(id));
+  if (next.length === queue.length) return;
+  holdQueueWrite(next);
+  renderHoldQueuePanel();
+  showToast('Antrian dihapus', 'info');
 }
 
 function openPayModal() {
@@ -490,12 +677,31 @@ function openPayModal() {
     return;
   }
   updateTotals();
+  renderQuickPayPresets(totalAkhir());
   calcChange();
   document.getElementById('payModal').classList.add('active');
   setTimeout(function() {
-    const el = document.getElementById('bayarInput');
-    if (el && document.getElementById('cashSection').style.display !== 'none') el.focus();
+    const el = document.getElementById('payTunaiInput');
+    if (el) el.focus();
   }, 120);
+}
+
+function syncPosFullViewButton() {
+  const btn = document.getElementById('btnToggleFullView');
+  if (!btn) return;
+  const active = document.body.classList.contains(POS_FULL_VIEW_CLASS);
+  btn.textContent = active ? '↙ Keluar Full View' : '⛶ Full View';
+  btn.classList.toggle('btn-primary', active);
+  btn.classList.toggle('btn-outline', !active);
+}
+
+function setPosFullView(active) {
+  document.body.classList.toggle(POS_FULL_VIEW_CLASS, !!active);
+  syncPosFullViewButton();
+}
+
+function togglePosFullView() {
+  setPosFullView(!document.body.classList.contains(POS_FULL_VIEW_CLASS));
 }
 
 function closePayModal() {
@@ -578,7 +784,8 @@ function updateTotals() {
   const bruto = subtotalBruto();
   const dm = diskonMemberAmount();
   const manual = diskonManualVal();
-  const total = Math.max(0, bruto - dm - manual);
+  const totalNoPromo = Math.max(0, bruto - dm - manual);
+  const total = Math.max(0, totalNoPromo - promoDiscountApplied);
 
   document.getElementById('subtotalDisplay').textContent = formatRupiah(bruto);
   const dmRow = document.getElementById('diskonMemberRow');
@@ -589,54 +796,204 @@ function updateTotals() {
     dmRow.style.display = 'none';
   }
   document.getElementById('totalDisplay').textContent = formatRupiah(total);
+  const promoRow = document.getElementById('promoDiscountRow');
+  if (promoDiscountApplied > 0.001) {
+    promoRow.style.display = 'flex';
+    document.getElementById('promoDiscountDisplay').textContent = '− ' + formatRupiah(promoDiscountApplied);
+  } else {
+    promoRow.style.display = 'none';
+  }
   const payTot = document.getElementById('payModalTotal');
   if (payTot) payTot.textContent = formatRupiah(total);
 
-  if (total > 0) {
-    const multiples = [1, 2, 5, 10].map(m => Math.ceil(total / (m * 10000)) * m * 10000)
-      .filter((v, i, a) => a.indexOf(v) === i).slice(0, 4);
-    document.getElementById('quickCash').innerHTML = multiples.map(v =>
-      '<button type="button" class="pos-quick-cash-btn" onclick="setQuickCash(' + v + ')">' + formatRupiahShort(v) + '</button>'
-    ).join('');
-  } else {
-    document.getElementById('quickCash').innerHTML = '';
-  }
+  renderQuickPayPresets(total);
+  const fallbackDecision = {
+    winner: (promoDiscountApplied > dm ? 'voucher' : (dm > 0 ? 'member_tier' : (manual > 0 ? 'manual_only' : 'none'))),
+    reason: (promoDiscountApplied > dm
+      ? 'Voucher dipilih karena potongan lebih besar dari diskon member/tier.'
+      : (dm > 0
+        ? 'Diskon member/tier dipilih karena lebih besar atau sama dengan voucher.'
+        : (manual > 0 ? 'Tidak ada promo member/voucher. Hanya diskon manual yang diterapkan.' : 'Tidak ada promo aktif.'))),
+    candidates: {
+      member_discount: dm,
+      voucher_discount: promoDiscountApplied,
+      manual_discount: manual,
+    }
+  };
+  renderDiscountDecision(promoDecisionMeta || fallbackDecision);
   calcChange();
+}
+
+function renderDiscountDecision(meta) {
+  const reasonEl = document.getElementById('discountDecisionReason');
+  if (!reasonEl) return;
+  const m = meta || {};
+  const c = m.candidates || {};
+  const winner = String(m.winner || 'none').toLowerCase();
+  const winnerEl = document.getElementById('candWinner');
+  const winnerLabelMap = {
+    voucher: 'VOUCHER',
+    member_tier: 'MEMBER/TIER',
+    manual_only: 'MANUAL ONLY',
+    none: 'NONE',
+  };
+  const winnerBadgeMap = {
+    voucher: 'badge-success',
+    member_tier: 'badge-info',
+    manual_only: 'badge-warning',
+    none: 'badge-secondary',
+  };
+  document.getElementById('candMemberDiscount').textContent = formatRupiah(c.member_discount || 0);
+  document.getElementById('candVoucherDiscount').textContent = formatRupiah(c.voucher_discount || 0);
+  document.getElementById('candManualDiscount').textContent = formatRupiah(c.manual_discount || 0);
+  if (winnerEl) {
+    winnerEl.textContent = winnerLabelMap[winner] || String(winner || 'none').toUpperCase();
+    winnerEl.className = 'badge ' + (winnerBadgeMap[winner] || 'badge-secondary');
+  }
+  reasonEl.textContent = m.reason || 'Belum ada promo aktif.';
+}
+
+async function validateVoucherRealtime() {
+  const code = (document.getElementById('voucherInput').value || '').trim().toUpperCase();
+  const memberId = document.getElementById('memberSelect').value || '';
+  const subtotal = subtotalBruto();
+  const manual = diskonManualVal();
+  if (!code) {
+    promoDiscountApplied = 0;
+    promoDecisionMeta = null;
+    updateTotals();
+    return;
+  }
+  try {
+    const qs = new URLSearchParams({
+      code: code,
+      subtotal: String(subtotal),
+      member_id: String(memberId || ''),
+      manual_discount: String(manual || 0),
+    });
+    const res = await fetch('/pos/validate-voucher?' + qs.toString());
+    const data = await res.json();
+    if (data.ok) {
+      promoDiscountApplied = parseFloat(data.discount_preview || 0) || 0;
+      promoDecisionMeta = data.discount_decision || null;
+    } else {
+      promoDiscountApplied = 0;
+      promoDecisionMeta = data.discount_decision || {
+        winner: 'none',
+        reason: data.message || 'Voucher tidak valid.',
+        candidates: { member_discount: diskonMemberAmount(), voucher_discount: 0, manual_discount: manual },
+      };
+    }
+    updateTotals();
+  } catch (e) {
+    promoDecisionMeta = {
+      winner: 'none',
+      reason: 'Gagal validasi voucher. Sistem lanjut pakai perhitungan lokal.',
+      candidates: { member_discount: diskonMemberAmount(), voucher_discount: promoDiscountApplied, manual_discount: manual },
+    };
+    updateTotals();
+  }
 }
 
 function setQuickCash(val) {
-  document.getElementById('bayarInput').value = val;
+  document.getElementById('payTunaiInput').value = val;
   calcChange();
 }
 
-function recalculate() { updateTotals(); }
+function quickPayValue(total, extra) {
+  const base = Math.max(0, Math.ceil(Number(total) || 0));
+  return Math.max(0, base + Math.max(0, Number(extra) || 0));
+}
+
+function applyQuickPayPreset(extra) {
+  setQuickCash(quickPayValue(totalAkhir(), extra));
+}
+
+function renderQuickPayPresets(total) {
+  const host = document.getElementById('quickCash');
+  if (!host) return;
+  if (total <= 0) {
+    host.innerHTML = '';
+    return;
+  }
+  const presets = [
+    { label: 'Pas', extra: 0 },
+    { label: '10rb', value: 10000 },
+    { label: '20rb', value: 20000 },
+    { label: '50rb', value: 50000 },
+    { label: '100rb', value: 100000 },
+  ];
+  host.innerHTML = presets.map(p => {
+    if (Object.prototype.hasOwnProperty.call(p, 'value')) {
+      return '<button type="button" class="pos-quick-cash-btn" onclick="setQuickCash(' + p.value + ')" title="Set tunai ke ' +
+        escapeHtml(p.label) + '">' + escapeHtml(p.label) + '</button>';
+    }
+    return '<button type="button" class="pos-quick-cash-btn" onclick="applyQuickPayPreset(' + p.extra + ')" title="Set tunai ke ' +
+      escapeHtml(p.label) + ' dari total">' + escapeHtml(p.label) + '</button>';
+  }).join('');
+}
+
+function recalculate() {
+  if ((document.getElementById('voucherInput').value || '').trim()) {
+    validateVoucherRealtime();
+  } else {
+    updateTotals();
+  }
+}
+
+function paymentInputVal(id) {
+  const el = document.getElementById(id);
+  const v = parseFloat(el ? el.value : 0);
+  return isNaN(v) || v < 0 ? 0 : v;
+}
+
+function paymentBreakdown(total) {
+  const tunai = paymentInputVal('payTunaiInput');
+  const transfer = paymentInputVal('payTransferInput');
+  const qris = paymentInputVal('payQrisInput');
+  const kredit = paymentInputVal('payKreditInput');
+  const nonCash = transfer + qris;
+  const requiredTunai = Math.max(0, total - nonCash - kredit);
+  const kembalian = Math.max(0, tunai - requiredTunai);
+  const covered = tunai + nonCash + kredit;
+  const remaining = Math.max(0, total - covered);
+  return { tunai, transfer, qris, kredit, requiredTunai, kembalian, covered, remaining };
+}
 
 function calcChange() {
   const total = totalAkhir();
-  const bayar = parseFloat(document.getElementById('bayarInput').value) || 0;
-  const kembalian = bayar - total;
+  const pb = paymentBreakdown(total);
   document.querySelectorAll('#changeDisplay .change-value').forEach(s => {
-    s.textContent = formatRupiah(Math.max(0, kembalian));
+    s.textContent = formatRupiah(pb.kembalian);
   });
-  document.getElementById('checkoutBtn').disabled = cart.length === 0 || !shiftOpen ||
-    ((selectedMethod === 'tunai' || selectedMethod === 'transfer' || selectedMethod === 'qris') && kembalian < 0);
+  document.querySelectorAll('#remainingDisplay .change-value').forEach(s => {
+    s.textContent = formatRupiah(pb.remaining);
+  });
+  const dueRow = document.getElementById('debtDueRow');
+  if (dueRow) dueRow.style.display = pb.kredit > 0 ? 'block' : 'none';
+  document.getElementById('checkoutBtn').disabled = cart.length === 0 || !shiftOpen || pb.remaining > 0.0001;
 }
 
-function setMethod(method, btn) {
-  selectedMethod = method;
+function focusPaymentInput(method) {
+  method = String(method || '').toLowerCase();
+  const map = {
+    tunai: 'payTunaiInput',
+    transfer: 'payTransferInput',
+    qris: 'payQrisInput',
+    kredit: 'payKreditInput',
+  };
+  const targetId = map[method];
+  if (!targetId) return;
   document.querySelectorAll('#payModal .method-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const cashSection = document.getElementById('cashSection');
-  const dueRow = document.getElementById('debtDueRow');
-  if (method === 'kredit') {
-    cashSection.style.display = 'none';
-    document.getElementById('bayarInput').value = 0;
-    if (dueRow) dueRow.style.display = 'block';
-  } else {
-    cashSection.style.display = 'block';
-    if (dueRow) dueRow.style.display = 'none';
+  const btns = document.querySelectorAll('#payModal .method-btn');
+  const idxMap = { tunai: 0, transfer: 1, qris: 2, kredit: 3 };
+  const idx = idxMap[method];
+  if (typeof idx === 'number' && btns[idx]) btns[idx].classList.add('active');
+  const el = document.getElementById(targetId);
+  if (el) {
+    el.focus();
+    el.select();
   }
-  calcChange();
 }
 
 function filterProductGrid(q) {
@@ -767,9 +1124,19 @@ async function loadRecentTransactions() {
         '<div>' +
           '<a href="' + posReceiptHref(r.id) + '" target="_blank">' + escapeHtml(r.nomor) + '</a>' +
           '<span style="color:var(--text-muted);margin-left:6px;">' + escapeHtml(String(r.created_at)) + '</span>' +
+          (
+            r.can_return
+              ? '<span class="badge badge-success" style="margin-left:6px;">Eligible retur</span>'
+              : ('<span class="badge badge-secondary" style="margin-left:6px;" title="' + escapeHtml(String(r.return_block_reason || 'Belum bisa retur/tukar')) + '">Belum eligible</span>')
+          ) +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;">' +
           '<span style="font-weight:600;">' + formatRupiah(r.total) + '</span>' +
+          (
+            r.can_return
+              ? ('<a class="btn btn-outline btn-sm" href="' + String(r.return_url || '#') + '" title="Buka retur/tukar dari transaksi ini">↩ Retur/Tukar</a>')
+              : ('<button type="button" class="btn btn-outline btn-sm" disabled title="' + escapeHtml(String(r.return_block_reason || 'Hanya transaksi selesai yang bisa diretur')) + '">↩ Retur/Tukar</button>')
+          ) +
           '<button type="button" class="btn btn-outline btn-sm" onclick="repeatTransaction(' + r.id + ')" title="Ulangi item ke keranjang">↻</button>' +
         '</div>' +
       '</div>'
@@ -977,7 +1344,20 @@ document.getElementById('searchInput').addEventListener('keydown', function(e) {
   }
 });
 
-document.getElementById('memberSelect').addEventListener('change', () => updateTotals());
+document.getElementById('memberSelect').addEventListener('change', () => {
+  if ((document.getElementById('voucherInput').value || '').trim()) {
+    validateVoucherRealtime();
+  } else {
+    promoDecisionMeta = null;
+    updateTotals();
+  }
+});
+
+document.getElementById('voucherInput').addEventListener('input', function() {
+  this.value = (this.value || '').toUpperCase();
+  clearTimeout(voucherDebounce);
+  voucherDebounce = setTimeout(() => validateVoucherRealtime(), 280);
+});
 
 document.querySelectorAll('#categoryBar .pos-cat-chip').forEach(chip => {
   chip.addEventListener('click', function() {
@@ -991,16 +1371,17 @@ document.querySelectorAll('#categoryBar .pos-cat-chip').forEach(chip => {
 async function checkout() {
   if (cart.length === 0) return;
   const total = totalAkhir();
-  const bayar = (selectedMethod === 'kredit') ? 0 : (parseFloat(document.getElementById('bayarInput').value) || 0);
+  const pb = paymentBreakdown(total);
+  const bayar = pb.tunai + pb.transfer + pb.qris;
   const catatan = document.getElementById('catatanInput').value;
   const memberId = document.getElementById('memberSelect').value;
 
-  if (selectedMethod !== 'kredit' && bayar < total) {
-    showToast('Uang bayar kurang!', 'error');
+  if (pb.remaining > 0.0001) {
+    showToast('Pembayaran belum menutup total tagihan!', 'error');
     return;
   }
-  if (selectedMethod === 'kredit' && !memberId) {
-    showToast('Transaksi kredit wajib memilih member!', 'error');
+  if (pb.kredit > 0 && !memberId) {
+    showToast('Jika ada porsi kredit, wajib pilih member!', 'error');
     return;
   }
 
@@ -1013,6 +1394,12 @@ async function checkout() {
     if (window.POS_CAN_OVERRIDE && o.price_mode === 'manual') o.harga = i.harga;
     return o;
   });
+  const payments = [];
+  if (pb.tunai > 0) payments.push({ method: 'tunai', amount: pb.tunai });
+  if (pb.transfer > 0) payments.push({ method: 'transfer', amount: pb.transfer });
+  if (pb.qris > 0) payments.push({ method: 'qris', amount: pb.qris });
+  if (pb.kredit > 0) payments.push({ method: 'kredit', amount: pb.kredit });
+  const metodeSummary = payments.length <= 1 ? (payments[0] ? payments[0].method : 'tunai') : 'mixed';
 
   try {
     const csrf = document.querySelector('meta[name="csrf-token"]');
@@ -1025,11 +1412,13 @@ async function checkout() {
       body: JSON.stringify({
         items: payloadItems,
         bayar: bayar,
-        metode_bayar: selectedMethod,
+        metode_bayar: metodeSummary,
+        payments: payments,
         diskon: diskonManualVal(),
         catatan: catatan,
         member_id: memberId || null,
-        debt_jatuh_tempo: (selectedMethod === 'kredit' && document.getElementById('debtJatuhTempo') && document.getElementById('debtJatuhTempo').value)
+        voucher_code: (document.getElementById('voucherInput').value || '').trim().toUpperCase(),
+        debt_jatuh_tempo: (pb.kredit > 0 && document.getElementById('debtJatuhTempo') && document.getElementById('debtJatuhTempo').value)
           ? document.getElementById('debtJatuhTempo').value
           : null
       })
@@ -1037,14 +1426,21 @@ async function checkout() {
     const data = await res.json();
 
     if (data.success) {
+      promoDiscountApplied = data.promo_discount || 0;
       applyStockUpdates(data.stock_updates);
       closePayModal();
       showSuccessModal(data);
       cart = [];
       renderCart();
       document.getElementById('diskonInput').value = 0;
-      document.getElementById('bayarInput').value = '';
+      document.getElementById('payTunaiInput').value = '';
+      document.getElementById('payTransferInput').value = '';
+      document.getElementById('payQrisInput').value = '';
+      document.getElementById('payKreditInput').value = '';
       document.getElementById('catatanInput').value = '';
+      document.getElementById('voucherInput').value = '';
+      promoDiscountApplied = 0;
+      promoDecisionMeta = null;
       refreshMembersSelect();
       loadRecentTransactions();
     } else {
@@ -1063,6 +1459,23 @@ function showSuccessModal(data) {
   document.getElementById('successTotal').textContent = formatRupiah(data.total);
   document.getElementById('successBayar').textContent = formatRupiah(data.bayar);
   document.getElementById('successKembalian').textContent = formatRupiah(data.kembalian);
+  const payWrap = document.getElementById('successPayments');
+  if (payWrap) {
+    const labels = { tunai: 'Tunai', transfer: 'Transfer', qris: 'QRIS', kredit: 'Kredit' };
+    const parts = Array.isArray(data.payments) ? data.payments : [];
+    if (parts.length) {
+      payWrap.innerHTML = parts.map(p =>
+        '<div class="cart-row"><span>' + (labels[p.method] || String(p.method || '').toUpperCase()) + '</span><span class="fw-bold">' + formatRupiah(p.amount || 0) + '</span></div>'
+      ).join('');
+    } else {
+      payWrap.innerHTML = '';
+    }
+  }
+  const ds = document.getElementById('successDecisionSummary');
+  if (ds) {
+    const dd = data.discount_decision || {};
+    ds.textContent = dd.reason || '';
+  }
 
   const btnCetak = document.getElementById('btnCetakStruk');
   if (btnCetak && data.transaction_id) {
@@ -1094,6 +1507,14 @@ function formatRupiahShort(num) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    if (params.get('focus') === 'search' && window.history && window.history.replaceState) {
+      const clean = window.location.pathname + (window.location.hash || '');
+      window.history.replaceState({}, document.title, clean);
+    }
+  } catch (e) {}
+
   const bo = document.getElementById('btnOpenShift');
   const bc = document.getElementById('btnCloseShift');
   if (bo) bo.addEventListener('click', openShiftOpenModal);
@@ -1124,7 +1545,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (cd && !cd.querySelector('.change-value')) {
     cd.innerHTML = '<span class="change-label">💵 Kembalian</span><span class="change-value">Rp 0</span>';
   }
-  document.getElementById('cashSection').style.display = 'block';
+  focusPaymentInput('tunai');
   document.addEventListener('keydown', function(e) {
     if (e.key !== 'Escape') return;
     if (document.getElementById('payModal').classList.contains('active')) closePayModal();
@@ -1132,6 +1553,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('shiftCloseModal').classList.contains('active')) closeShiftCloseModal();
   });
   loadRecentTransactions();
+  holdQueueMigrateLegacy();
+  renderHoldQueuePanel();
+  syncPosFullViewButton();
   refreshShiftStatus();
   focusSearch();
 });

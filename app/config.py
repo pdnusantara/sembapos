@@ -21,6 +21,13 @@ def _is_postgres_uri(uri):
     return bool(uri and uri.startswith('postgresql'))
 
 
+def _env_bool(name, default=False):
+    raw = os.environ.get(name)
+    if raw is None:
+        return bool(default)
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 _DB_URL = _normalize_database_url(os.environ.get('DATABASE_URL'))
 _DEFAULT_SQLITE = 'sqlite:///' + os.path.join(BASE_DIR, '..', 'kasir.db')
 
@@ -40,3 +47,10 @@ class Config:
     # Setelah lewat masa tenggang, SUBSCRIPTION_EXPIRED_MODE: block_login | read_only
     SUBSCRIPTION_GRACE_DAYS = int(os.environ.get('SUBSCRIPTION_GRACE_DAYS', '0'))
     SUBSCRIPTION_EXPIRED_MODE = os.environ.get('SUBSCRIPTION_EXPIRED_MODE', 'block_login')
+    # Opsional: paksa string versi untuk URL /static/css/style.css (cache-bust). Kosong = pakai mtime file.
+    STATIC_ASSET_VERSION = (os.environ.get('STATIC_ASSET_VERSION') or '').strip() or None
+    # Hindari race CREATE TABLE di PostgreSQL multi-worker Gunicorn.
+    # Default: aktif untuk SQLite dev, nonaktif untuk PostgreSQL production.
+    AUTO_DB_CREATE_ALL = _env_bool('AUTO_DB_CREATE_ALL', default=not _is_postgres_uri(_DB_URL))
+    # Cutover FIFO HPP: bisa dimatikan sementara jika perlu rollback cepat.
+    FIFO_HPP_ENABLED = _env_bool('FIFO_HPP_ENABLED', default=True)

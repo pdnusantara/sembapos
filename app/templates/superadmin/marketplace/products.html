@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Produk Marketplace — Super Admin{% endblock %}
+{% block page_title %}Marketplace — Produk{% endblock %}
+{% block page_sub %}Kelola produk yang tersedia di marketplace{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+  <div>
+    <h2 style="margin:0;font-size:18px;font-weight:700;">📦 Produk Marketplace</h2>
+    <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">{{ pagination.total }} produk terdaftar</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="{{ url_for('superadmin.marketplace_sellers') }}" class="btn btn-sm btn-outline">🏪 Seller</a>
+    <a href="{{ url_for('superadmin.marketplace_orders') }}" class="btn btn-sm btn-outline">📋 Orders</a>
+    <a href="{{ url_for('superadmin.marketplace_reports') }}" class="btn btn-sm btn-outline">📊 Laporan</a>
+    <a href="{{ url_for('superadmin.marketplace_product_import') }}" class="btn btn-sm btn-outline">📥 Import CSV</a>
+    <a href="{{ url_for('superadmin.marketplace_product_add') }}" class="btn btn-sm btn-primary">+ Tambah Produk</a>
+  </div>
+</div>
+
+<!-- FILTER -->
+<div class="card" style="padding:14px 16px;margin-bottom:16px;">
+  <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Cari</label>
+      <input type="text" name="q" value="{{ q }}" class="form-control" style="width:200px;"
+             placeholder="Nama produk…">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Seller</label>
+      <select name="seller" class="form-control" style="width:160px;">
+        <option value="">Semua Seller</option>
+        {% for s in sellers %}
+        <option value="{{ s.id }}" {% if seller_id == s.id %}selected{% endif %}>{{ s.nama }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Kategori</label>
+      <select name="category" class="form-control" style="width:160px;">
+        <option value="">Semua Kategori</option>
+        {% for c in categories %}
+        <option value="{{ c.id }}" {% if category_id == c.id %}selected{% endif %}>{{ c.icon }} {{ c.nama }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-outline btn-sm">🔍 Filter</button>
+    {% if q or seller_id or category_id %}
+    <a href="{{ url_for('superadmin.marketplace_products') }}" class="btn btn-sm"
+       style="background:transparent;border:1px solid var(--border);color:var(--text-muted);">✕ Reset</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- TABLE -->
+<div class="card" style="overflow:hidden;">
+  {% if products %}
+  <div style="overflow-x:auto;">
+    <table class="table" style="margin:0;">
+      <thead>
+        <tr>
+          <th>Produk</th>
+          <th>Seller</th>
+          <th>Kategori</th>
+          <th style="text-align:right">Harga</th>
+          <th style="text-align:center">Stok</th>
+          <th style="text-align:center">Status</th>
+          <th style="text-align:right">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px;">
+              {% if product.gambar_utama %}
+              <img src="{{ url_for('static', filename=product.gambar_utama) }}" alt=""
+                   style="width:44px;height:44px;border-radius:6px;object-fit:cover;border:1px solid var(--border);">
+              {% else %}
+              <div style="width:44px;height:44px;border-radius:6px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📦</div>
+              {% endif %}
+              <div>
+                <div style="font-weight:600;font-size:13px;">{{ product.nama | truncate(50) }}</div>
+                {% if product.sku %}
+                <div style="font-size:11px;color:var(--text-muted);">SKU: {{ product.sku }}</div>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <td style="font-size:13px;">{{ product.seller.nama }}</td>
+          <td style="font-size:13px;">
+            {% if product.category %}{{ product.category.icon }} {{ product.category.nama }}
+            {% else %}<span style="color:var(--text-muted);">—</span>{% endif %}
+          </td>
+          <td style="text-align:right;font-weight:700;color:var(--danger);">
+            Rp {{ "{:,.0f}".format(product.harga) }}
+            {% if product.harga_grosir %}
+            <div style="font-size:11px;color:var(--warning);font-weight:400;">
+              Grosir: Rp {{ "{:,.0f}".format(product.harga_grosir) }} (min.{{ product.min_qty_grosir }})
+            </div>
+            {% endif %}
+          </td>
+          <td style="text-align:center;">
+            <span {% if product.stok == 0 %}style="color:var(--danger);font-weight:700;"{% endif %}>
+              {{ product.stok }} {{ product.satuan or 'pcs' }}
+            </span>
+          </td>
+          <td style="text-align:center;">
+            <span class="badge {% if product.aktif %}badge-success{% else %}badge-danger{% endif %}">
+              {{ 'Aktif' if product.aktif else 'Off' }}
+            </span>
+          </td>
+          <td style="text-align:right;">
+            <div style="display:flex;justify-content:flex-end;gap:6px;">
+              <a href="{{ url_for('superadmin.marketplace_product_edit', product_id=product.id) }}"
+                 class="btn btn-sm btn-outline">✏️ Edit</a>
+              {% if not product.order_items %}
+              <form method="POST" action="{{ url_for('superadmin.marketplace_product_delete', product_id=product.id) }}"
+                    style="margin:0;" onsubmit="return confirm('Hapus produk ini?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- PAGINATION -->
+  {% if pagination.pages > 1 %}
+  <div style="padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;">
+    {% if pagination.has_prev %}
+    <a class="btn btn-sm btn-outline" href="{{ url_for('superadmin.marketplace_products', q=q, seller=seller_id, category=category_id, page=pagination.prev_num) }}">‹</a>
+    {% endif %}
+    {% for p in pagination.iter_pages() %}
+      {% if p %}
+      <a class="btn btn-sm {% if p == pagination.page %}btn-primary{% else %}btn-outline{% endif %}"
+         href="{{ url_for('superadmin.marketplace_products', q=q, seller=seller_id, category=category_id, page=p) }}">{{ p }}</a>
+      {% else %}
+      <span class="btn btn-sm btn-outline" style="pointer-events:none;opacity:.5;">…</span>
+      {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+    <a class="btn btn-sm btn-outline" href="{{ url_for('superadmin.marketplace_products', q=q, seller=seller_id, category=category_id, page=pagination.next_num) }}">›</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div style="padding:60px;text-align:center;">
+    <div style="font-size:48px;margin-bottom:12px;">📦</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px;">Belum ada produk</div>
+    <a href="{{ url_for('superadmin.marketplace_product_add') }}" class="btn btn-primary">+ Tambah Produk</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

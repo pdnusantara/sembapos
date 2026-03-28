@@ -54,10 +54,20 @@
     </div>
     
     <div style="border-top:1px dashed #000;margin-top:10px;padding-top:10px;">
+      {% set pay_labels = {'tunai':'Tunai','transfer':'Transfer','qris':'QRIS','kredit':'Kredit'} %}
+      {% if trx.payments %}
+        {% for p in trx.payments %}
+        <div style="display:flex;justify-content:space-between;">
+          <span>Bayar ({{ pay_labels.get(p.method, p.method|upper) }})</span>
+          <span>{{ "{:,.0f}".format(p.amount or 0).replace(",",".") }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
       <div style="display:flex;justify-content:space-between;">
         <span>Bayar ({{ trx.metode_bayar|upper }})</span>
         <span>{{ "{:,.0f}".format(trx.bayar).replace(",",".") }}</span>
       </div>
+      {% endif %}
       <div style="display:flex;justify-content:space-between;">
         <span>Kembalian</span>
         <span>{{ "{:,.0f}".format(trx.kembalian).replace(",",".") }}</span>

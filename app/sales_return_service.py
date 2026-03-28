@@ -14,6 +14,7 @@ from .models import (
     Debt,
     Member,
 )
+from .fifo_costing import consume_fifo_cost, restore_fifo_from_transaction_item
 
 
 def qty_already_returned(source_transaction_item_id):
@@ -202,6 +203,12 @@ def process_sales_return(
                 keterangan=f'Retur #{nomor}',
             )
         )
+        restore_fifo_from_transaction_item(
+            tenant_id=tenant_id,
+            source_transaction_item=ti,
+            qty_return=qty,
+            actor_user_id=user.id,
+        )
 
     if member:
         poin_cut = int(total_retur // 10000)
@@ -340,16 +347,26 @@ def _create_replacement_sale(
         if float(product.stok) < qty:
             raise ValueError(f"Stok {product.nama} berubah, ulangi.")
         stok_sebelum = float(product.stok)
-        db.session.add(
-            TransactionItem(
-                transaction_id=trx.id,
-                product_id=product.id,
-                nama_produk=product.nama,
-                harga=harga,
-                qty=qty,
-                subtotal=harga * qty,
-            )
+        trx_item = TransactionItem(
+            transaction_id=trx.id,
+            product_id=product.id,
+            nama_produk=product.nama,
+            harga=harga,
+            qty=qty,
+            subtotal=harga * qty,
         )
+        db.session.add(trx_item)
+        db.session.flush()
+        cost_info = consume_fifo_cost(
+            tenant_id=tenant_id,
+            product=product,
+            transaction_item_id=trx_item.id,
+            qty_needed=qty,
+            actor_user_id=user.id,
+        )
+        total_cost = float(cost_info.get('total_cost') or 0)
+        trx_item.modal_snapshot = total_cost
+        trx_item.hpp_snapshot = (total_cost / qty) if qty > 0 else 0.0
         product.stok -= qty
         db.session.add(
             StockMovement(

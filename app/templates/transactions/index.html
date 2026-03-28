@@ -4,6 +4,8 @@
 {% block page_sub %}Filter periode, retur, cabang, status — ringkasan total nota vs retur vs netto{% endblock %}
 
 {% block content %}
+{% set pay_badge = {'tunai':'primary','transfer':'info','qris':'success','kredit':'danger','mixed':'warning'} %}
+{% set pay_label = {'tunai':'TUNAI','transfer':'TRANSFER','qris':'QRIS','kredit':'KREDIT','mixed':'CAMPURAN'} %}
 <div class="tx2-page">
   <section class="tx2-shell" aria-label="Ringkasan & filter transaksi">
     <div class="tx2-top">
@@ -145,8 +147,8 @@
               <td>{{ t.user.nama if t.user else '—' }}</td>
               <td>{{ t.member.nama if t.member else '—' }}</td>
               <td>
-                <span class="badge badge-{{ 'primary' if t.metode_bayar == 'tunai' else ('info' if t.metode_bayar == 'transfer' else 'success') }}">
-                  {{ t.metode_bayar|upper }}
+                <span class="badge badge-{{ pay_badge.get(t.metode_bayar, 'secondary') }}">
+                  {{ pay_label.get(t.metode_bayar, t.metode_bayar|upper) }}
                 </span>
               </td>
               <td class="tx2-total">
@@ -211,7 +213,7 @@
           </div>
           <div class="tx2-mobile-meta">
             <span class="badge {{ 'badge-danger' if t.status == 'batal' else 'badge-success' }}">{{ 'Batal' if t.status == 'batal' else 'Selesai' }}</span>
-            <span class="badge badge-{{ 'primary' if t.metode_bayar == 'tunai' else ('info' if t.metode_bayar == 'transfer' else 'success') }}">{{ t.metode_bayar|upper }}</span>
+            <span class="badge badge-{{ pay_badge.get(t.metode_bayar, 'secondary') }}">{{ pay_label.get(t.metode_bayar, t.metode_bayar|upper) }}</span>
             <span class="tx2-mobile-line">Cabang: {{ t.branch.nama if t.branch else '—' }}</span>
             <span class="tx2-mobile-line">Kasir: {{ t.user.nama if t.user else '—' }}</span>
             <span class="tx2-mobile-line">Member: {{ t.member.nama if t.member else '—' }}</span>

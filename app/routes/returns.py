@@ -114,6 +114,12 @@ def create_from_transaction(tid):
         return redir
 
     tenant_id = current_user.tenant_id
+    back_to = (request.args.get('back_to') or '').strip()
+    return_form_url = (
+        url_for('returns.create_from_transaction', tid=tid, back_to=back_to)
+        if back_to
+        else url_for('returns.create_from_transaction', tid=tid)
+    )
     trx = (
         Transaction.query.options(selectinload(Transaction.items), selectinload(Transaction.member))
         .filter_by(id=tid, tenant_id=tenant_id)
@@ -160,7 +166,7 @@ def create_from_transaction(tid):
         jenis = request.form.get('jenis', 'retur')
         if jenis == 'tukar' and not shift:
             flash('Buka shift kasir di halaman POS untuk memproses tukar barang.', 'warning')
-            return redirect(url_for('returns.create_from_transaction', tid=tid))
+            return redirect(return_form_url)
 
         line_inputs = []
         for it in trx.items:
@@ -172,7 +178,7 @@ def create_from_transaction(tid):
                 qv = float(raw)
             except ValueError:
                 flash(f'Qty retur tidak valid untuk {it.nama_produk}.', 'danger')
-                return redirect(url_for('returns.create_from_transaction', tid=tid))
+                return redirect(return_form_url)
             if qv > 0:
                 line_inputs.append({'transaction_item_id': it.id, 'qty': qv})
 
@@ -228,6 +234,7 @@ def create_from_transaction(tid):
         items_meta=items_meta,
         products_tukar=products_tukar,
         shift=shift,
+        back_to=back_to,
         refund_methods=[x for x in ('tunai', 'transfer', 'qris', 'potong_hutang', 'tanpa_uang') if x in REFUND_METHODS],
     )
 

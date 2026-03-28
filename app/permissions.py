@@ -19,6 +19,7 @@ PERMISSION_MODULES = (
     ('debts', 'Hutang piutang'),
     ('reports', 'Laporan penjualan'),
     ('operating_expenses', 'Biaya operasional'),
+    ('marketplace', 'Marketplace (Kuningan)'),
 )
 
 MODULE_CODES = frozenset(k for k, _ in PERMISSION_MODULES)

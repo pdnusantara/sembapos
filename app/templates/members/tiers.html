@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Tier Member{% endblock %}
+{% block page_title %}Tier Loyalty Member{% endblock %}
+{% block page_sub %}Kelola ambang level Silver/Gold/Platinum{% endblock %}
+
+{% block content %}
+<div class="card mb-3 tier-page-toolbar">
+  <div class="text-muted">Kelola tier loyalty member</div>
+  <button type="button" class="btn btn-primary" onclick="openTierModal()">+ Tambah tier</button>
+</div>
+
+<div class="card">
+  <div class="card-header"><div class="card-title">Daftar tier</div></div>
+  <div class="table-wrapper admin-table-responsive tier-table-responsive">
+    <table class="table">
+      <thead>
+        <tr><th>Kode</th><th>Nama</th><th>Min. Spend</th><th>Benefit Diskon</th><th>Status</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+      {% for t in tiers %}
+        <tr>
+          <td data-label="Kode"><code>{{ t.kode }}</code></td>
+          <td data-label="Nama">{{ t.nama }}</td>
+          <td data-label="Min. Spend">Rp {{ "{:,.0f}".format(t.min_spend).replace(",",".") }}</td>
+          <td data-label="Benefit">{{ t.benefit_discount_pct|int }}%</td>
+          <td data-label="Status">{{ 'Aktif' if t.aktif else 'Nonaktif' }}</td>
+          <td data-label="Aksi">
+            <div class="tier-row-actions">
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              data-id="{{ t.id }}"
+              data-kode="{{ t.kode }}"
+              data-nama="{{ t.nama }}"
+              data-min-spend="{{ t.min_spend }}"
+              data-discount="{{ t.benefit_discount_pct }}"
+              data-sort-order="{{ t.sort_order }}"
+              data-aktif="{{ 1 if t.aktif else 0 }}"
+              onclick="openTierModal(this)"
+            >Edit</button>
+            <form method="POST" action="{{ url_for('members.delete_tier', id=t.id) }}" onsubmit="return confirm('Hapus tier {{ t.nama }}?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button class="btn btn-outline btn-sm" type="submit">Delete</button>
+            </form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="admin-table-empty">Belum ada data tier.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="tierModal" onclick="if(event.target===this) closeTierModal()">
+  <div class="modal tier-modal" onclick="event.stopPropagation()">
+    <div class="card-header tier-modal-head">
+      <div class="card-title" id="tierModalTitle">Tambah tier</div>
+    </div>
+    <form method="POST" id="tierForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="tier_id" id="tierId">
+      <div class="form-group"><label class="form-label">Kode</label><input class="form-control" id="tierKode" name="kode" required placeholder="silver"></div>
+      <div class="form-group"><label class="form-label">Nama</label><input class="form-control" id="tierNama" name="nama" required placeholder="Silver"></div>
+      <div class="form-group"><label class="form-label">Min belanja rolling</label><input class="form-control" id="tierMinSpend" type="number" name="min_spend" min="0" step="1000" value="0"></div>
+      <div class="form-group"><label class="form-label">Diskon benefit (%)</label><input class="form-control" id="tierDiscount" type="number" name="benefit_discount_pct" min="0" max="100" step="0.1" value="0"></div>
+      <div class="form-group"><label class="form-label">Urutan</label><input class="form-control" id="tierSortOrder" type="number" name="sort_order" value="0"></div>
+      <label class="tier-active-check"><input type="checkbox" id="tierAktif" name="aktif" checked> Aktif</label>
+      <div class="tier-form-actions">
+        <button class="btn btn-primary" id="tierSaveBtn" type="submit">Simpan tier</button>
+        <button class="btn btn-outline" type="button" onclick="closeTierModal()">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openTierModal(btn) {
+  const modal = document.getElementById('tierModal');
+  const title = document.getElementById('tierModalTitle');
+  const tierId = document.getElementById('tierId');
+  const tierKode = document.getElementById('tierKode');
+  const tierNama = document.getElementById('tierNama');
+  const tierMinSpend = document.getElementById('tierMinSpend');
+  const tierDiscount = document.getElementById('tierDiscount');
+  const tierSortOrder = document.getElementById('tierSortOrder');
+  const tierAktif = document.getElementById('tierAktif');
+  const saveBtn = document.getElementById('tierSaveBtn');
+  if (!btn) {
+    title.textContent = 'Tambah tier';
+    tierId.value = '';
+    tierKode.value = '';
+    tierNama.value = '';
+    tierMinSpend.value = '0';
+    tierDiscount.value = '0';
+    tierSortOrder.value = '0';
+    tierAktif.checked = true;
+    saveBtn.textContent = 'Simpan tier';
+  } else {
+    title.textContent = 'Update tier';
+    tierId.value = btn.dataset.id || '';
+    tierKode.value = btn.dataset.kode || '';
+    tierNama.value = btn.dataset.nama || '';
+    tierMinSpend.value = btn.dataset.minSpend || '0';
+    tierDiscount.value = btn.dataset.discount || '0';
+    tierSortOrder.value = btn.dataset.sortOrder || '0';
+    tierAktif.checked = (btn.dataset.aktif === '1');
+    saveBtn.textContent = 'Update tier';
+  }
+  modal.classList.add('active');
+}
+
+function closeTierModal() {
+  document.getElementById('tierModal').classList.remove('active');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('tierModal').classList.contains('active')) {
+    closeTierModal();
+  }
+});
+</script>
+{% endblock %}

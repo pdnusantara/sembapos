@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}{{ product.nama }} — Marketplace{% endblock %}
+{% block page_title %}Detail Produk{% endblock %}
+{% block page_sub %}{{ product.seller.nama }}{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketplace.css', v=marketplace_css_v) }}">
+{% endblock %}
+
+{% block content %}
+<div class="mk-page">
+  <!-- TOP BAR -->
+  <div class="mk-topbar">
+    <a href="{{ url_for('marketplace.index') }}" class="mk-topbar__brand">🛍️ <span>Marketplace</span></a>
+    <form class="mk-topbar__search" method="GET" action="{{ url_for('marketplace.index') }}">
+      <input type="text" name="q" placeholder="Cari produk…">
+      <button type="submit">🔍</button>
+    </form>
+    <div class="mk-topbar__actions">
+      <a href="{{ url_for('marketplace.cart') }}" class="mk-cart-btn">
+        🛒 Keranjang
+        {% if cart_count > 0 %}<span class="mk-cart-badge">{{ cart_count }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('marketplace.orders') }}" class="mk-order-btn">📋 Pesanan</a>
+    </div>
+  </div>
+
+  <!-- BREADCRUMB -->
+  <div class="mk-page-title">
+    <a href="{{ url_for('marketplace.index') }}">Marketplace</a>
+    <span class="mk-page-title__sep">›</span>
+    {% if product.category %}
+    <a href="{{ url_for('marketplace.index', category=product.category_id) }}">{{ product.category.nama }}</a>
+    <span class="mk-page-title__sep">›</span>
+    {% endif %}
+    <span class="mk-page-title__current">{{ product.nama | truncate(50) }}</span>
+  </div>
+
+  <!-- DETAIL GRID -->
+  <div class="mk-detail" style="margin-top: 0; padding-top: 20px;">
+    <!-- GALLERY -->
+    <div>
+      <div class="mk-gallery">
+        <div class="mk-gallery__main" id="mainImg" onclick="openLightbox()">
+          {% if product.gambar_utama %}
+          <img id="mainImgEl" src="{{ url_for('static', filename=product.gambar_utama) }}" alt="{{ product.nama }}">
+          {% elif product.images %}
+          <img id="mainImgEl" src="{{ url_for('static', filename=product.images[0].url) }}" alt="{{ product.nama }}">
+          {% else %}
+          <div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:80px;color:#bbb;">📦</div>
+          {% endif %}
+        </div>
+        {% set all_imgs = [] %}
+        {% if product.gambar_utama %}{% set _ = all_imgs.append(product.gambar_utama) %}{% endif %}
+        {% for img in product.images %}{% set _ = all_imgs.append(img.url) %}{% endfor %}
+        {% if all_imgs | length > 1 %}
+        <div class="mk-gallery__thumbs">
+          {% for img_url in all_imgs %}
+          <div class="mk-gallery__thumb {% if loop.first %}active{% endif %}"
+               onclick="switchImg(this, '{{ url_for('static', filename=img_url) }}')">
+            <img src="{{ url_for('static', filename=img_url) }}" alt="Foto {{ loop.index }}">
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- DESCRIPTION -->
+      {% if product.deskripsi %}
+      <div class="mk-product-desc" style="margin-top: 16px;">
+        <div class="mk-product-desc__title">Deskripsi Produk</div>
+        <div class="mk-product-desc__content">{{ product.deskripsi }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- PRODUCT INFO + ADD TO CART -->
+    <div>
+      <div class="mk-product-info">
+        <a href="{{ url_for('marketplace.index', seller=product.seller_id) }}" class="mk-product-info__seller">
+          🏪 {{ product.seller.nama }}
+        </a>
+        <div class="mk-product-info__name">{{ product.nama }}</div>
+        <div class="mk-product-info__price">Rp {{ "{:,.0f}".format(product.harga) }}</div>
+        {% if product.harga_grosir and product.min_qty_grosir %}
+        <div class="mk-product-info__price-grosir">
+          🏷️ Harga grosir <strong>Rp {{ "{:,.0f}".format(product.harga_grosir) }}</strong>
+          untuk min. {{ product.min_qty_grosir }} {{ product.satuan or 'pcs' }}
+        </div>
+        {% endif %}
+
+        <hr class="mk-divider">
+
+        <div class="mk-product-info__meta">
+          <div class="mk-meta-row">
+            <span class="mk-meta-label">Satuan</span>
+            <span class="mk-meta-value">{{ product.satuan or 'pcs' }}</span>
+          </div>
+          {% if product.berat_gram %}
+          <div class="mk-meta-row">
+            <span class="mk-meta-label">Berat</span>
+            <span class="mk-meta-value">{{ product.berat_gram }} gram</span>
+          </div>
+          {% endif %}
+          {% if product.sku %}
+          <div class="mk-meta-row">
+            <span class="mk-meta-label">SKU</span>
+            <span class="mk-meta-value">{{ product.sku }}</span>
+          </div>
+          {% endif %}
+          <div class="mk-meta-row">
+            <span class="mk-meta-label">Stok</span>
+            <span class="mk-meta-value {% if product.stok == 0 %}style="color:var(--mk-red)"{% endif %}">
+              {% if product.stok > 0 %}{{ product.stok }} {{ product.satuan or 'pcs' }} tersedia
+              {% else %}<span style="color:var(--mk-red)">⛔ Stok Habis</span>{% endif %}
+            </span>
+          </div>
+          {% if product.category %}
+          <div class="mk-meta-row">
+            <span class="mk-meta-label">Kategori</span>
+            <span class="mk-meta-value">{{ product.category.icon }} {{ product.category.nama }}</span>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if product.stok > 0 %}
+        <form method="POST" action="{{ url_for('marketplace.cart_add') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="product_id" value="{{ product.id }}">
+          <div class="mk-qty-row">
+            <span class="mk-qty-label">Jumlah:</span>
+            <div class="mk-qty-ctrl">
+              <button type="button" onclick="changeQty(-1)">−</button>
+              <input type="number" id="qtyInput" name="qty" value="{{ cart_qty if cart_qty > 0 else 1 }}"
+                     min="1" max="{{ product.stok }}">
+              <button type="button" onclick="changeQty(1)">+</button>
+            </div>
+            <span style="font-size:12px;color:var(--mk-gray-600)">/ {{ product.stok }} tersedia</span>
+          </div>
+          <div class="mk-btn-row" style="margin-top: 12px;">
+            <button type="submit" class="mk-btn-outline" name="redirect_to" value="">
+              🛒 Tambah ke Keranjang
+            </button>
+            <button type="submit" class="mk-btn-primary" name="redirect_to" value="cart">
+              ⚡ Beli Sekarang
+            </button>
+          </div>
+        </form>
+        {% else %}
+        <div class="mk-stock-empty-msg">
+          ⛔ Stok Habis — Produk tidak tersedia saat ini
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- RELATED PRODUCTS -->
+  {% if related %}
+  <div class="mk-related">
+    <div class="mk-section-title">Produk Lainnya dari {{ product.seller.nama }}</div>
+    <div class="mk-product-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));">
+      {% for rp in related %}
+      <a href="{{ url_for('marketplace.product_detail', product_id=rp.id) }}" class="mk-card">
+        <div class="mk-card__img-wrap">
+          {% if rp.gambar_utama %}
+          <img class="mk-card__img" src="{{ url_for('static', filename=rp.gambar_utama) }}" alt="{{ rp.nama }}">
+          {% else %}
+          <div class="mk-card__img-placeholder">📦</div>
+          {% endif %}
+        </div>
+        <div class="mk-card__body">
+          <div class="mk-card__name">{{ rp.nama }}</div>
+          <div class="mk-card__price">Rp {{ "{:,.0f}".format(rp.harga) }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- LIGHTBOX -->
+<div class="mk-lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="mk-lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightboxImg" src="" alt="Foto produk">
+</div>
+
+<script>
+function changeQty(delta) {
+  const inp = document.getElementById('qtyInput');
+  let v = parseInt(inp.value) + delta;
+  const mn = parseInt(inp.min) || 1;
+  const mx = parseInt(inp.max) || 9999;
+  if (v < mn) v = mn;
+  if (v > mx) v = mx;
+  inp.value = v;
+}
+function switchImg(thumb, url) {
+  document.getElementById('mainImgEl').src = url;
+  document.querySelectorAll('.mk-gallery__thumb').forEach(t => t.classList.remove('active'));
+  thumb.classList.add('active');
+}
+function openLightbox() {
+  const el = document.getElementById('mainImgEl');
+  if (!el) return;
+  document.getElementById('lightboxImg').src = el.src;
+  document.getElementById('lightbox').classList.add('active');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('active');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+</script>
+{% endblock %}

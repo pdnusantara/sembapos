@@ -68,6 +68,30 @@
           <label class="form-label">Alamat</label>
           <input type="text" name="alamat" class="form-control" value="{{ tenant.alamat or '' }}">
         </div>
+        <div class="form-group">
+          <label class="form-label">Provinsi</label>
+          <select name="provinsi" id="provinsiSelect" class="form-control">
+            <option value="">Pilih provinsi...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kab/Kota</label>
+          <select name="kab_kota" id="kabSelect" class="form-control" disabled>
+            <option value="">Pilih kab/kota...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kecamatan</label>
+          <select name="kecamatan" id="kecSelect" class="form-control" disabled>
+            <option value="">Pilih kecamatan...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Desa/Kelurahan</label>
+          <select name="desa" id="desaSelect" class="form-control" disabled>
+            <option value="">Pilih desa/kelurahan...</option>
+          </select>
+        </div>
         <div class="form-group" style="grid-column:1/-1;">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
             <input type="checkbox" name="aktif" value="1" {% if tenant.aktif %}checked{% endif %}>
@@ -104,5 +128,112 @@ if (syncEl) {
     if (this.checked) applyPaketDefaults();
   });
 }
+
+// Wilayah Indonesia (dropdown berjenjang) + preload nilai tenant
+const EXISTING = {
+  provinsi: {{ (tenant.provinsi or '')|tojson }},
+  kab_kota: {{ (tenant.kab_kota or '')|tojson }},
+  kecamatan: {{ (tenant.kecamatan or '')|tojson }},
+  desa: {{ (tenant.desa or '')|tojson }},
+};
+const provinsiSelect = document.getElementById('provinsiSelect');
+const kabSelect = document.getElementById('kabSelect');
+const kecSelect = document.getElementById('kecSelect');
+const desaSelect = document.getElementById('desaSelect');
+
+function resetSelect(el, placeholder, disabled=true) {
+  el.innerHTML = `<option value="">${placeholder}</option>`;
+  el.disabled = disabled;
+}
+
+function fillSelect(el, items, placeholder, selectedValue='') {
+  resetSelect(el, placeholder, false);
+  for (const item of items) {
+    const opt = document.createElement('option');
+    opt.value = item.nama;
+    opt.textContent = item.nama;
+    opt.dataset.code = item.id;
+    if (selectedValue && item.nama === selectedValue) opt.selected = true;
+    el.appendChild(opt);
+  }
+}
+
+async function fetchJSON(url) {
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error('Gagal load wilayah');
+  return await res.json();
+}
+
+async function loadProvinsi() {
+  const data = await fetchJSON('{{ url_for("superadmin.wilayah_provinsi") }}');
+  fillSelect(provinsiSelect, data, 'Pilih provinsi...', EXISTING.provinsi);
+  const id = provinsiSelect.selectedOptions[0]?.dataset.code;
+  if (id) await loadKab(id);
+}
+
+async function loadKab(provId) {
+  const data = await fetchJSON(`{{ url_for("superadmin.wilayah_kabupaten", prov_id="PID") }}`.replace('PID', provId));
+  fillSelect(kabSelect, data, 'Pilih kab/kota...', EXISTING.kab_kota);
+  const id = kabSelect.selectedOptions[0]?.dataset.code;
+  if (id) await loadKec(id);
+}
+
+async function loadKec(kabId) {
+  const data = await fetchJSON(`{{ url_for("superadmin.wilayah_kecamatan", kab_id="KID") }}`.replace('KID', kabId));
+  fillSelect(kecSelect, data, 'Pilih kecamatan...', EXISTING.kecamatan);
+  const id = kecSelect.selectedOptions[0]?.dataset.code;
+  if (id) await loadDesa(id);
+}
+
+async function loadDesa(kecId) {
+  const data = await fetchJSON(`{{ url_for("superadmin.wilayah_desa", kec_id="CID") }}`.replace('CID', kecId));
+  fillSelect(desaSelect, data, 'Pilih desa/kelurahan...', EXISTING.desa);
+}
+
+provinsiSelect.addEventListener('change', async function() {
+  const id = this.selectedOptions[0]?.dataset.code;
+  resetSelect(kabSelect, 'Pilih kab/kota...', true);
+  resetSelect(kecSelect, 'Pilih kecamatan...', true);
+  resetSelect(desaSelect, 'Pilih desa/kelurahan...', true);
+  if (!id) return;
+  EXISTING.kab_kota = '';
+  EXISTING.kecamatan = '';
+  EXISTING.desa = '';
+  try {
+    await loadKab(id);
+  } catch (e) {
+    resetSelect(kabSelect, 'Gagal load kab/kota', true);
+  }
+});
+
+kabSelect.addEventListener('change', async function() {
+  const id = this.selectedOptions[0]?.dataset.code;
+  resetSelect(kecSelect, 'Pilih kecamatan...', true);
+  resetSelect(desaSelect, 'Pilih desa/kelurahan...', true);
+  if (!id) return;
+  EXISTING.kecamatan = '';
+  EXISTING.desa = '';
+  try {
+    await loadKec(id);
+  } catch (e) {
+    resetSelect(kecSelect, 'Gagal load kecamatan', true);
+  }
+});
+
+kecSelect.addEventListener('change', async function() {
+  const id = this.selectedOptions[0]?.dataset.code;
+  resetSelect(desaSelect, 'Pilih desa/kelurahan...', true);
+  if (!id) return;
+  EXISTING.desa = '';
+  try {
+    await loadDesa(id);
+  } catch (e) {
+    resetSelect(desaSelect, 'Gagal load desa/kelurahan', true);
+  }
+});
+
+loadProvinsi().catch(() => {
+  resetSelect(provinsiSelect, 'Gagal load provinsi', true);
+});
 </script>
 {% endblock %}

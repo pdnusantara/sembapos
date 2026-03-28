@@ -4,6 +4,8 @@
 {% block page_sub %}{{ 'Harian: ' + tanggal if mode == 'harian' else 'Bulanan: ' + bulan }}{% endblock %}
 
 {% block content %}
+{% set pay_badge = {'tunai':'primary','transfer':'info','qris':'success','kredit':'danger','mixed':'warning'} %}
+{% set pay_label = {'tunai':'TUNAI','transfer':'TRANSFER','qris':'QRIS','kredit':'KREDIT','mixed':'CAMPURAN'} %}
 <div class="page-shell report-page">
 <!-- Filter -->
 <div class="card report-filter-card mb-3">
@@ -26,7 +28,56 @@
       <input type="month" name="bulan" class="form-control" value="{{ bulan }}">
     </div>
     {% endif %}
+    {% if current_user.role != 'kasir' %}
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Cabang</label>
+      <select name="branch_id" class="form-control">
+        <option value="">Semua cabang</option>
+        {% for b in branches %}
+        <option value="{{ b.id }}" {% if selected_branch_id and selected_branch_id|int == b.id %}selected{% endif %}>{{ b.nama }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Kasir</label>
+      <select name="cashier_id" class="form-control">
+        <option value="">Semua kasir</option>
+        {% for u in cashiers %}
+        <option value="{{ u.id }}" {% if selected_cashier_id and selected_cashier_id|int == u.id %}selected{% endif %}>{{ u.nama }} ({{ u.role }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Metode</label>
+      <select name="metode_bayar" class="form-control">
+        <option value="" {% if not selected_metode %}selected{% endif %}>Semua</option>
+        <option value="tunai" {% if selected_metode == 'tunai' %}selected{% endif %}>Tunai</option>
+        <option value="transfer" {% if selected_metode == 'transfer' %}selected{% endif %}>Transfer</option>
+        <option value="qris" {% if selected_metode == 'qris' %}selected{% endif %}>QRIS</option>
+        <option value="kredit" {% if selected_metode == 'kredit' %}selected{% endif %}>Kredit</option>
+        <option value="mixed" {% if selected_metode == 'mixed' %}selected{% endif %}>Campuran</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Member scope</label>
+      <select name="member_scope" class="form-control">
+        <option value="all" {% if member_scope == 'all' %}selected{% endif %}>Semua</option>
+        <option value="member" {% if member_scope == 'member' %}selected{% endif %}>Hanya member</option>
+        <option value="non_member" {% if member_scope == 'non_member' %}selected{% endif %}>Non-member</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;display:flex;align-items:flex-end;gap:8px;">
+      <label class="form-label" style="margin:0;">
+        <input type="checkbox" name="compare_prev" value="1" {% if compare_prev %}checked{% endif %}>
+        Bandingkan periode sebelumnya
+      </label>
+    </div>
     <button type="submit" class="btn btn-primary">🔍 Tampilkan</button>
+    <a
+      class="btn btn-outline"
+      href="{{ url_for('reports.export_item_detail', mode=mode, tanggal=tanggal, bulan=bulan, branch_id=selected_branch_id, cashier_id=selected_cashier_id, metode_bayar=selected_metode, member_scope=member_scope, compare_prev=('1' if compare_prev else '0')) }}"
+    >⬇ Export detail item</a>
   </form>
 </div>
 
@@ -39,6 +90,9 @@
         <div class="stat-value">Rp {{ "{:,.0f}".format(total_omset_kotor).replace(",",".") }}</div>
         <div class="stat-label">Omset kotor</div>
         <div class="stat-sublabel">Subtotal barang (sebelum diskon) · {{ total_transaksi }} transaksi</div>
+        {% if compare_prev and prev_metrics %}
+        <div class="stat-sublabel">Prev: Rp {{ "{:,.0f}".format(prev_metrics.total_omset_kotor).replace(",",".") }}</div>
+        {% endif %}
       </div>
     </div>
     <div class="stat-card stat-card--diskon" title="Total potongan harga di nota">
@@ -47,6 +101,9 @@
         <div class="stat-value">Rp {{ "{:,.0f}".format(total_diskon_nota).replace(",",".") }}</div>
         <div class="stat-label">Diskon nota</div>
         <div class="stat-sublabel">Manual + diskon member</div>
+        {% if compare_prev and prev_metrics %}
+        <div class="stat-sublabel">Prev: Rp {{ "{:,.0f}".format(prev_metrics.total_diskon_nota).replace(",",".") }}</div>
+        {% endif %}
       </div>
     </div>
     <div class="stat-card primary">
@@ -55,6 +112,9 @@
         <div class="stat-value">Rp {{ "{:,.0f}".format(total_penjualan).replace(",",".") }}</div>
         <div class="stat-label">Penjualan bersih</div>
         <div class="stat-sublabel">Setelah diskon (yang dibayar)</div>
+        {% if compare_prev and prev_metrics %}
+        <div class="stat-sublabel">Prev: Rp {{ "{:,.0f}".format(prev_metrics.total_penjualan).replace(",",".") }}</div>
+        {% endif %}
       </div>
     </div>
     <div class="stat-card danger" title="Perkiraan: Σ qty × harga beli master produk">
@@ -62,7 +122,10 @@
       <div class="stat-info">
         <div class="stat-value">Rp {{ "{:,.0f}".format(total_hpp).replace(",",".") }}</div>
         <div class="stat-label">HPP (estimasi)</div>
-        <div class="stat-sublabel">Berdasarkan harga beli saat ini</div>
+        <div class="stat-sublabel">Snapshot item dulu, fallback harga beli master</div>
+        {% if compare_prev and prev_metrics %}
+        <div class="stat-sublabel">Prev: Rp {{ "{:,.0f}".format(prev_metrics.total_hpp).replace(",",".") }}</div>
+        {% endif %}
       </div>
     </div>
     <div class="stat-card success">
@@ -71,6 +134,9 @@
         <div class="stat-value {% if total_laba_kotor < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(total_laba_kotor).replace(",",".") }}</div>
         <div class="stat-label">Laba kotor</div>
         <div class="stat-sublabel">Penjualan bersih − HPP</div>
+        {% if compare_prev and prev_metrics %}
+        <div class="stat-sublabel">Prev: Rp {{ "{:,.0f}".format(prev_metrics.total_laba_kotor).replace(",",".") }}</div>
+        {% endif %}
       </div>
     </div>
     <div class="stat-card danger">
@@ -79,6 +145,9 @@
         <div class="stat-value">Rp {{ "{:,.0f}".format(total_biaya_operasional).replace(",",".") }}</div>
         <div class="stat-label">Biaya operasional</div>
         <div class="stat-sublabel">Beban operasional periode ini</div>
+        {% if compare_prev and prev_metrics %}
+        <div class="stat-sublabel">Prev: Rp {{ "{:,.0f}".format(prev_total_biaya_operasional).replace(",",".") }}</div>
+        {% endif %}
       </div>
     </div>
     <div class="stat-card primary">
@@ -87,13 +156,106 @@
         <div class="stat-value {% if laba_setelah_operasional < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(laba_setelah_operasional).replace(",",".") }}</div>
         <div class="stat-label">Laba setelah operasional</div>
         <div class="stat-sublabel">Laba kotor − biaya operasional</div>
+        {% if compare_prev and prev_metrics %}
+        <div class="stat-sublabel">Prev: Rp {{ "{:,.0f}".format(prev_laba_setelah_operasional).replace(",",".") }}</div>
+        {% endif %}
       </div>
     </div>
   </div>
-  <p class="report-sales-hint">HPP/laba kotor bersifat perkiraan (harga beli dari master produk saat ini). Biaya operasional diambil dari modul Biaya Operasional pada periode yang sama.</p>
+  <p class="report-sales-hint">HPP/laba kotor prioritas dari snapshot per item transaksi (FIFO-ready), fallback ke harga beli master bila snapshot belum ada. Biaya operasional diambil dari modul Biaya Operasional pada periode yang sama.</p>
 </section>
 
-<div style="margin-top:4px;">
+<div class="report-block">
+  <div class="card">
+    <div class="card-header"><div class="card-title">Tren 7 hari (berdasarkan filter aktif)</div></div>
+    <div class="card-body">
+      <div class="report-trend-wrap">
+        <canvas id="reportTrendChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="report-block">
+  <div class="card">
+    <div class="card-header"><div class="card-title">Alert Otomatis</div></div>
+    <div class="card-body">
+      <div class="d-flex" style="gap:10px;flex-wrap:wrap;">
+        <span class="badge badge-danger">Transaksi laba negatif: {{ alerts.neg_margin_count }}</span>
+        <span class="badge badge-warning">Diskon tinggi (>=20%): {{ alerts.discount_high_count }}</span>
+        <span class="badge badge-info">Item fallback HPP master: {{ alerts.fallback_item_count }}</span>
+        <span class="badge badge-warning">Event fallback FIFO: {{ alerts.fallback_events }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="report-block">
+  <div class="card">
+    <div class="card-header"><div class="card-title">Top / Bottom Contributor</div></div>
+    <div class="contrib-wrap">
+      <div class="contrib-grid">
+        <div class="contrib-card">
+          <div class="contrib-title">Top Produk (Laba)</div>
+          {% for p in top_products[:5] %}
+          <div class="contrib-row">
+            <div><span class="contrib-rank">#{{ loop.index }}</span>{{ p.nama_produk }}</div>
+            <div class="fw-bold">Rp {{ "{:,.0f}".format(p.profit).replace(",", ".") }}</div>
+          </div>
+          {% else %}
+          <div class="text-muted">Belum ada data.</div>
+          {% endfor %}
+        </div>
+
+        <div class="contrib-card">
+          <div class="contrib-title">Bottom Produk (Laba)</div>
+          {% for p in bottom_products[:5] %}
+          <div class="contrib-row">
+            <div><span class="contrib-rank">#{{ loop.index }}</span>{{ p.nama_produk }}</div>
+            <div class="fw-bold {% if p.profit < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(p.profit).replace(",", ".") }}</div>
+          </div>
+          {% else %}
+          <div class="text-muted">Belum ada data.</div>
+          {% endfor %}
+        </div>
+
+        <div class="contrib-card">
+          <div class="contrib-title">Top Transaksi (Laba)</div>
+          {% for t in top_transactions[:5] %}
+          <div class="contrib-row">
+            <div>
+              <span class="contrib-rank">#{{ loop.index }}</span>
+              {{ t.nomor }}<br>
+              <small class="text-muted contrib-meta">{{ t.kasir }}</small>
+            </div>
+            <div class="fw-bold">Rp {{ "{:,.0f}".format(t.profit).replace(",", ".") }}</div>
+          </div>
+          {% else %}
+          <div class="text-muted">Belum ada data.</div>
+          {% endfor %}
+        </div>
+
+        <div class="contrib-card">
+          <div class="contrib-title">Bottom Transaksi (Laba)</div>
+          {% for t in bottom_transactions[:5] %}
+          <div class="contrib-row">
+            <div>
+              <span class="contrib-rank">#{{ loop.index }}</span>
+              {{ t.nomor }}<br>
+              <small class="text-muted contrib-meta">{{ t.kasir }}</small>
+            </div>
+            <div class="fw-bold {% if t.profit < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(t.profit).replace(",", ".") }}</div>
+          </div>
+          {% else %}
+          <div class="text-muted">Belum ada data.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="report-block">
   <div class="card">
     <div class="card-header">
       <div class="card-title">💳 Ringkasan Metode Pembayaran</div>
@@ -113,8 +275,8 @@
           {% set pct = ((p.total / total_penjualan) * 100) if total_penjualan > 0 else 0 %}
           <tr>
             <td>
-              <span class="badge badge-{{ 'primary' if p.metode == 'tunai' else ('info' if p.metode == 'transfer' else ('success' if p.metode == 'qris' else 'warning')) }}">
-                {{ p.metode|upper }}
+              <span class="badge badge-{{ pay_badge.get(p.metode, 'secondary') }}">
+                {{ pay_label.get(p.metode, p.metode|upper) }}
               </span>
             </td>
             <td>{{ p.count }}</td>
@@ -130,31 +292,115 @@
   </div>
 </div>
 
-<div style="margin-top:4px;">
+<div class="report-block">
   <div class="card">
     <div class="card-header">
-      <div class="card-title">🧾 Detail Transaksi</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div class="card-title">🧾 Detail Transaksi + HPP per Produk</div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-sm btn-outline" id="expandAllTrxBtn">Buka semua</button>
+          <button type="button" class="btn btn-sm btn-outline" id="collapseAllTrxBtn">Tutup semua</button>
+        </div>
+      </div>
     </div>
     <div class="table-wrapper report-table-wrap">
       <table class="table">
         <thead>
-          <tr><th>No. Transaksi</th><th>Kasir</th><th>Metode</th><th>Total</th><th>Waktu</th></tr>
+          <tr>
+            <th>No. Transaksi</th>
+            <th>Kasir</th>
+            <th>Metode</th>
+            <th class="text-end">Total jual</th>
+            <th class="text-end">Total HPP</th>
+            <th class="text-end">Laba kotor</th>
+            <th>Waktu</th>
+          </tr>
         </thead>
         <tbody>
           {% for t in transactions %}
+          {% set ns = namespace(total_hpp=0) %}
+          {% for it in t.items %}
+            {% set unit_hpp = (it.hpp_snapshot if it.hpp_snapshot is not none else ((it.product.harga_beli if it.product else 0) or 0)) %}
+            {% set line_hpp = (it.qty or 0) * unit_hpp %}
+            {% set ns.total_hpp = ns.total_hpp + line_hpp %}
+          {% endfor %}
+          {% set trx_laba = (t.total or 0) - ns.total_hpp %}
           <tr>
             <td style="font-family:monospace;color:var(--primary-light);font-weight:600;">{{ t.nomor }}</td>
             <td>{{ t.user.nama if t.user else '—' }}</td>
             <td>
-              <span class="badge badge-{{ 'primary' if t.metode_bayar=='tunai' else ('info' if t.metode_bayar=='transfer' else 'success') }}">
-                {{ t.metode_bayar|upper }}
+              <span class="badge badge-{{ pay_badge.get(t.metode_bayar, 'secondary') }}">
+                {{ pay_label.get(t.metode_bayar, t.metode_bayar|upper) }}
               </span>
             </td>
-            <td class="fw-bold">Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</td>
-            <td class="text-muted">{{ t.created_at.strftime('%d/%m %H:%M') }}</td>
+            <td class="fw-bold text-end">Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</td>
+            <td class="text-end">Rp {{ "{:,.0f}".format(ns.total_hpp).replace(",",".") }}</td>
+            <td class="text-end {% if trx_laba < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(trx_laba).replace(",",".") }}</td>
+            <td class="text-muted">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <span>{{ t.created_at.strftime('%d/%m %H:%M') }}</span>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline trx-toggle-btn"
+                  data-target="trx-detail-{{ t.id }}"
+                  aria-expanded="false"
+                >
+                  Lihat detail
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr id="trx-detail-{{ t.id }}" class="trx-detail-row" style="display:none;">
+            <td colspan="7" style="background:rgba(124,58,237,.06);">
+              <div style="padding:8px 4px 10px 4px;">
+                <div style="font-weight:600;margin-bottom:6px;">Rincian produk (qty, harga jual, HPP, laba)</div>
+                {% if t.payments %}
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                  {% for p in t.payments %}
+                  <span class="badge badge-{{ pay_badge.get(p.method, 'secondary') }}">
+                    {{ pay_label.get(p.method, p.method|upper) }}: Rp {{ "{:,.0f}".format(p.amount or 0).replace(",",".") }}
+                  </span>
+                  {% endfor %}
+                </div>
+                {% endif %}
+                <div class="table-wrapper">
+                  <table class="table" style="margin:0;">
+                    <thead>
+                      <tr>
+                        <th>Produk</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Harga jual /unit</th>
+                        <th class="text-end">HPP /unit</th>
+                        <th class="text-end">Subtotal jual</th>
+                        <th class="text-end">Subtotal HPP</th>
+                        <th class="text-end">Laba baris</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for it in t.items %}
+                      {% set unit_hpp = (it.hpp_snapshot if it.hpp_snapshot is not none else ((it.product.harga_beli if it.product else 0) or 0)) %}
+                      {% set line_hpp = (it.qty or 0) * unit_hpp %}
+                      {% set line_profit = (it.subtotal or 0) - line_hpp %}
+                      <tr>
+                        <td>{{ it.nama_produk }}</td>
+                        <td class="text-end">{{ "{:,.2f}".format(it.qty or 0).replace(",",".") }}</td>
+                        <td class="text-end">Rp {{ "{:,.0f}".format(it.harga or 0).replace(",",".") }}</td>
+                        <td class="text-end">Rp {{ "{:,.0f}".format(unit_hpp).replace(",",".") }}</td>
+                        <td class="text-end">Rp {{ "{:,.0f}".format(it.subtotal or 0).replace(",",".") }}</td>
+                        <td class="text-end">Rp {{ "{:,.0f}".format(line_hpp).replace(",",".") }}</td>
+                        <td class="text-end {% if line_profit < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(line_profit).replace(",",".") }}</td>
+                      </tr>
+                      {% else %}
+                      <tr><td colspan="7" class="text-muted" style="text-align:center;">Tidak ada item pada transaksi ini.</td></tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted);">📭 Tidak ada transaksi</td></tr>
+          <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);">📭 Tidak ada transaksi</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -162,4 +408,103 @@
   </div>
 </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  (function () {
+    var storageKey = 'reports_trx_open_rows_v1';
+    var openMap = {};
+    try {
+      openMap = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+    } catch (e) {
+      openMap = {};
+    }
+
+    function saveMap() {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(openMap));
+      } catch (e) {}
+    }
+
+    function setRowState(targetId, shouldOpen) {
+      var row = document.getElementById(targetId);
+      if (!row) return;
+      row.style.display = shouldOpen ? 'table-row' : 'none';
+      var btn = document.querySelector('.trx-toggle-btn[data-target="' + targetId + '"]');
+      if (btn) {
+        btn.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        btn.textContent = shouldOpen ? 'Sembunyikan' : 'Lihat detail';
+      }
+      if (shouldOpen) {
+        openMap[targetId] = true;
+      } else {
+        delete openMap[targetId];
+      }
+    }
+
+    document.querySelectorAll('.trx-toggle-btn').forEach(function (btn) {
+      var targetId = btn.getAttribute('data-target');
+      if (!targetId) return;
+      setRowState(targetId, !!openMap[targetId]);
+      btn.addEventListener('click', function () {
+        var row = document.getElementById(targetId);
+        if (!row) return;
+        var opened = row.style.display !== 'none';
+        setRowState(targetId, !opened);
+        saveMap();
+      });
+    });
+
+    var expandAllBtn = document.getElementById('expandAllTrxBtn');
+    var collapseAllBtn = document.getElementById('collapseAllTrxBtn');
+    if (expandAllBtn) {
+      expandAllBtn.addEventListener('click', function () {
+        document.querySelectorAll('.trx-detail-row').forEach(function (row) {
+          if (!row.id) return;
+          setRowState(row.id, true);
+        });
+        saveMap();
+      });
+    }
+    if (collapseAllBtn) {
+      collapseAllBtn.addEventListener('click', function () {
+        document.querySelectorAll('.trx-detail-row').forEach(function (row) {
+          if (!row.id) return;
+          setRowState(row.id, false);
+        });
+        saveMap();
+      });
+    }
+  })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  (function () {
+    var el = document.getElementById('reportTrendChart');
+    if (!el || typeof Chart === 'undefined') return;
+    var series = {{ trend_series|tojson }};
+    new Chart(el, {
+      type: 'line',
+      data: {
+        labels: series.labels,
+        datasets: [
+          { label: 'Omzet', data: series.omzet, tension: 0.25 },
+          { label: 'HPP', data: series.hpp, tension: 0.25 },
+          { label: 'Laba', data: series.profit, tension: 0.25 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top' }
+        },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  })();
+</script>
 {% endblock %}

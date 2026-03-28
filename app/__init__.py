@@ -27,6 +27,7 @@ def create_app():
     login_manager.login_message_category = 'warning'
 
     from .routes.auth import auth_bp
+    from .routes.landing import landing_bp
     from .routes.dashboard import dashboard_bp
     from .routes.pos import pos_bp
     from .routes.products import products_bp
@@ -42,11 +43,13 @@ def create_app():
     from .routes.operating_expenses import operating_expenses_bp
     from .routes.shifts import shifts_bp
     from .routes.returns import returns_bp
+    from .routes.marketplace import marketplace_bp
     from .permissions import register_module_guards
 
     register_module_guards()
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(landing_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(pos_bp)
     app.register_blueprint(products_bp)
@@ -62,14 +65,45 @@ def create_app():
     app.register_blueprint(operating_expenses_bp)
     app.register_blueprint(shifts_bp)
     app.register_blueprint(returns_bp)
+    app.register_blueprint(marketplace_bp)
+
+    @app.context_processor
+    def _inject_static_css_version():
+        """Nginx mem-cache /static lama (immutable); ?v= memaksa browser ambil CSS baru."""
+        from flask import current_app
+
+        override = current_app.config.get('STATIC_ASSET_VERSION')
+        if override:
+            v = str(override)
+        else:
+            path = os.path.join(current_app.static_folder, 'css', 'style.css')
+            try:
+                v = str(int(os.path.getmtime(path)))
+            except OSError:
+                v = '0'
+        path_landing = os.path.join(current_app.static_folder, 'css', 'landing.css')
+        try:
+            landing_css_v = str(int(os.path.getmtime(path_landing)))
+        except OSError:
+            landing_css_v = v
+        path_mkt = os.path.join(current_app.static_folder, 'css', 'marketplace.css')
+        try:
+            marketplace_css_v = str(int(os.path.getmtime(path_mkt)))
+        except OSError:
+            marketplace_css_v = v
+        return dict(static_css_v=v, landing_css_v=landing_css_v, marketplace_css_v=marketplace_css_v)
 
     upload_root = os.path.join(app.static_folder, 'uploads', 'products')
     os.makedirs(upload_root, exist_ok=True)
 
     with app.app_context():
-        db.create_all()
+        # create_all aman untuk dev SQLite, tapi pada PostgreSQL + multi-worker
+        # bisa race condition saat startup jika diaktifkan bersamaan.
+        if app.config.get('AUTO_DB_CREATE_ALL', True):
+            db.create_all()
         _ensure_branch_tenant_kode_unique_index()
         _ensure_product_price_tiers_columns()
+        _ensure_tenant_location_columns()
         _seed_tenant_packages()
 
     @app.before_request
@@ -176,6 +210,20 @@ def create_app():
     def _template_time():
         from datetime import datetime
         return {'utc_now': datetime.utcnow}
+
+    @app.context_processor
+    def _marketplace_pending_count():
+        from flask_login import current_user
+        from .models import MarketplaceOrder
+        if not current_user.is_authenticated:
+            return {'marketplace_pending_count': 0}
+        if not getattr(current_user, 'is_superadmin', False):
+            return {'marketplace_pending_count': 0}
+        try:
+            count = MarketplaceOrder.query.filter_by(status='pending').count()
+        except Exception:
+            count = 0
+        return {'marketplace_pending_count': count}
 
     @app.context_processor
     def _inject_permissions():
@@ -293,6 +341,32 @@ def _ensure_product_price_tiers_columns():
             statements.append('ALTER TABLE products ADD COLUMN min_qty_grosir_2 FLOAT')
         if 'harga_jual_grosir_2' not in cols:
             statements.append('ALTER TABLE products ADD COLUMN harga_jual_grosir_2 FLOAT')
+        if not statements:
+            return
+        with db.engine.begin() as conn:
+            for stmt in statements:
+                conn.execute(text(stmt))
+    except Exception:
+        pass
+
+
+def _ensure_tenant_location_columns():
+    """Compat schema lama: tambah kolom lokasi tenant jika belum ada."""
+    from sqlalchemy import inspect, text
+    try:
+        insp = inspect(db.engine)
+        if 'tenants' not in insp.get_table_names():
+            return
+        cols = {c['name'] for c in insp.get_columns('tenants')}
+        statements = []
+        if 'provinsi' not in cols:
+            statements.append('ALTER TABLE tenants ADD COLUMN provinsi VARCHAR(100)')
+        if 'kab_kota' not in cols:
+            statements.append('ALTER TABLE tenants ADD COLUMN kab_kota VARCHAR(100)')
+        if 'kecamatan' not in cols:
+            statements.append('ALTER TABLE tenants ADD COLUMN kecamatan VARCHAR(100)')
+        if 'desa' not in cols:
+            statements.append('ALTER TABLE tenants ADD COLUMN desa VARCHAR(100)')
         if not statements:
             return
         with db.engine.begin() as conn:

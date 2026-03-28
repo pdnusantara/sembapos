@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Import Produk CSV — Marketplace{% endblock %}
+{% block page_title %}Import Produk Marketplace{% endblock %}
+{% block page_sub %}Upload CSV untuk tambah/update produk sekaligus{% endblock %}
+
+{% block content %}
+<div style="max-width:860px;">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+    <div>
+      <h2 style="margin:0;font-size:18px;font-weight:700;">📥 Import Produk via CSV</h2>
+      <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Tambah atau perbarui banyak produk sekaligus menggunakan file CSV.</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a href="{{ url_for('superadmin.marketplace_product_import_sample') }}" class="btn btn-sm btn-outline">
+        ⬇️ Unduh Contoh CSV
+      </a>
+      <a href="{{ url_for('superadmin.marketplace_products') }}" class="btn btn-sm btn-outline">← Kembali</a>
+    </div>
+  </div>
+
+  <!-- UPLOAD FORM -->
+  <div class="card" style="padding:24px;margin-bottom:20px;">
+    <form method="POST" enctype="multipart/form-data" id="import-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="margin-bottom:16px;">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">File CSV</label>
+        <input type="file" name="csv_file" id="csv_file" accept=".csv"
+               required
+               style="display:block;width:100%;padding:8px;border:2px dashed var(--border);border-radius:8px;font-size:13px;cursor:pointer;box-sizing:border-box;">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Format: .csv, encoding UTF-8 atau Latin-1. Maks. 10 MB.</div>
+      </div>
+      <button type="submit" class="btn btn-primary" id="import-submit-btn">
+        📤 Upload &amp; Import
+      </button>
+    </form>
+  </div>
+
+  <!-- COLUMN REFERENCE -->
+  <div class="card" style="padding:20px;margin-bottom:20px;">
+    <h3 style="margin:0 0 14px;font-size:15px;font-weight:700;">📋 Referensi Kolom CSV</h3>
+    <div style="overflow-x:auto;">
+      <table class="table" style="margin:0;font-size:13px;">
+        <thead>
+          <tr>
+            <th>Kolom</th>
+            <th>Wajib?</th>
+            <th>Keterangan</th>
+            <th>Contoh</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>nama</code></td>
+            <td><span class="badge badge-danger">Ya</span></td>
+            <td>Nama produk</td>
+            <td>Beras Premium 5kg</td>
+          </tr>
+          <tr>
+            <td><code>harga</code></td>
+            <td><span class="badge badge-danger">Ya</span></td>
+            <td>Harga satuan (angka)</td>
+            <td>75000</td>
+          </tr>
+          <tr>
+            <td><code>seller_id</code></td>
+            <td><span class="badge badge-danger">Ya</span></td>
+            <td>ID seller dari tabel di bawah</td>
+            <td>1</td>
+          </tr>
+          <tr>
+            <td><code>sku</code></td>
+            <td><span class="badge" style="background:var(--warning);color:#000;">Opsional</span></td>
+            <td>Kode SKU unik; jika ada, produk dengan SKU+seller sama akan diperbarui (upsert)</td>
+            <td>BRS-5KG</td>
+          </tr>
+          <tr>
+            <td><code>category_id</code></td>
+            <td><span class="badge" style="background:var(--warning);color:#000;">Opsional</span></td>
+            <td>ID kategori dari tabel di bawah</td>
+            <td>2</td>
+          </tr>
+          <tr>
+            <td><code>satuan</code></td>
+            <td><span class="badge" style="background:var(--warning);color:#000;">Opsional</span></td>
+            <td>Satuan produk (default: pcs)</td>
+            <td>karung</td>
+          </tr>
+          <tr>
+            <td><code>harga_grosir</code></td>
+            <td><span class="badge" style="background:var(--warning);color:#000;">Opsional</span></td>
+            <td>Harga grosir (kosongkan jika tidak ada)</td>
+            <td>70000</td>
+          </tr>
+          <tr>
+            <td><code>min_qty_grosir</code></td>
+            <td><span class="badge" style="background:var(--warning);color:#000;">Opsional</span></td>
+            <td>Minimum qty untuk harga grosir</td>
+            <td>10</td>
+          </tr>
+          <tr>
+            <td><code>stok</code></td>
+            <td><span class="badge" style="background:var(--warning);color:#000;">Opsional</span></td>
+            <td>Jumlah stok (default: 0)</td>
+            <td>100</td>
+          </tr>
+          <tr>
+            <td><code>berat_gram</code></td>
+            <td><span class="badge" style="background:var(--warning);color:#000;">Opsional</span></td>
+            <td>Berat dalam gram</td>
+            <td>5000</td>
+          </tr>
+          <tr>
+            <td><code>deskripsi</code></td>
+            <td><span class="badge" style="background:var(--warning);color:#000;">Opsional</span></td>
+            <td>Deskripsi produk</td>
+            <td>Beras premium kualitas terbaik</td>
+          </tr>
+          <tr>
+            <td><code>aktif</code></td>
+            <td><span class="badge" style="background:var(--warning);color:#000;">Opsional</span></td>
+            <td>1 = aktif, 0 = nonaktif (default: 1)</td>
+            <td>1</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SELLER & CATEGORY REFERENCE -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+    <div class="card" style="padding:16px;">
+      <h3 style="margin:0 0 12px;font-size:14px;font-weight:700;">🏪 Daftar Seller (seller_id)</h3>
+      {% if sellers %}
+      <table class="table" style="margin:0;font-size:12px;">
+        <thead><tr><th>ID</th><th>Nama</th></tr></thead>
+        <tbody>
+          {% for s in sellers %}
+          <tr><td>{{ s.id }}</td><td>{{ s.nama }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="font-size:13px;color:var(--text-muted);">Belum ada seller aktif.</p>
+      {% endif %}
+    </div>
+
+    <div class="card" style="padding:16px;">
+      <h3 style="margin:0 0 12px;font-size:14px;font-weight:700;">🏷️ Daftar Kategori (category_id)</h3>
+      {% if categories %}
+      <table class="table" style="margin:0;font-size:12px;">
+        <thead><tr><th>ID</th><th>Nama</th></tr></thead>
+        <tbody>
+          {% for c in categories %}
+          <tr><td>{{ c.id }}</td><td>{{ c.icon }} {{ c.nama }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="font-size:13px;color:var(--text-muted);">Belum ada kategori aktif.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{% block scripts %}
+<script>
+document.getElementById('import-form').addEventListener('submit', function() {
+  var btn = document.getElementById('import-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Mengimpor…';
+});
+</script>
+{% endblock %}
+{% endblock %}

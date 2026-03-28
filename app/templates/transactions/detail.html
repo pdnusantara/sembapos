@@ -4,6 +4,8 @@
 {% block page_sub %}{{ trx.created_at.strftime('%d/%m/%Y %H:%M') }} · {{ trx.branch.nama if trx.branch else '—' }}{% endblock %}
 
 {% block content %}
+{% set pay_badge = {'tunai':'primary','transfer':'info','qris':'success','kredit':'danger','mixed':'warning'} %}
+{% set pay_label = {'tunai':'TUNAI','transfer':'TRANSFER','qris':'QRIS','kredit':'KREDIT','mixed':'CAMPURAN'} %}
 <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
   <a href="{{ url_for('transactions.index') }}" class="btn btn-outline">← Kembali ke riwayat</a>
   {% if trx.status == 'selesai' %}
@@ -36,12 +38,23 @@
         {% if trx.status == 'batal' %}<span class="badge badge-danger">Batal</span>{% else %}<span class="badge badge-success">Selesai</span>{% endif %}
       </div>
       <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Kasir</span><span>{{ trx.user.nama if trx.user else '—' }}</span></div>
-      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Metode</span><span class="badge badge-{{ 'primary' if trx.metode_bayar=='tunai' else ('info' if trx.metode_bayar=='transfer' else 'success') }}">{{ trx.metode_bayar|upper }}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Metode</span><span class="badge badge-{{ pay_badge.get(trx.metode_bayar, 'secondary') }}">{{ pay_label.get(trx.metode_bayar, trx.metode_bayar|upper) }}</span></div>
       <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Subtotal</span><span>Rp {{ "{:,.0f}".format(trx.subtotal).replace(",",".") }}</span></div>
       <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Diskon</span><span>Rp {{ "{:,.0f}".format(trx.diskon).replace(",",".") }}</span></div>
       <div style="display:flex;justify-content:space-between;gap:12px;font-weight:700;"><span>Total</span><span style="color:var(--primary-light);">Rp {{ "{:,.0f}".format(trx.total).replace(",",".") }}</span></div>
       <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Bayar</span><span>Rp {{ "{:,.0f}".format(trx.bayar).replace(",",".") }}</span></div>
       <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Kembalian</span><span>Rp {{ "{:,.0f}".format(trx.kembalian).replace(",",".") }}</span></div>
+      {% if trx.payments %}
+      <div style="padding:8px 0;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px;">
+        <div class="text-muted" style="font-size:12px;">Breakdown pembayaran</div>
+        {% for p in trx.payments %}
+        <div style="display:flex;justify-content:space-between;gap:12px;">
+          <span>{{ pay_label.get(p.method, p.method|upper) }}</span>
+          <span style="font-weight:600;">Rp {{ "{:,.0f}".format(p.amount or 0).replace(",",".") }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% if trx.member %}
       <div style="display:flex;justify-content:space-between;gap:12px;"><span class="text-muted">Member</span><span>{{ trx.member.nama }} · {{ trx.member.telepon }}</span></div>
       {% endif %}

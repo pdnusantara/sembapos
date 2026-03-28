@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Order {{ order.nomor }} — Seller Center{% endblock %}
+{% block page_title %}Detail Order Marketplace{% endblock %}
+{% block page_sub %}{{ order.nomor }}{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketplace.css', v=marketplace_css_v) }}">
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+  <a href="{{ url_for('superadmin.marketplace_orders') }}" class="btn btn-sm btn-outline">← Order List</a>
+  <h2 style="margin:0;font-size:16px;font-weight:700;">📦 {{ order.nomor }}</h2>
+  <span class="mk-status mk-status--{{ order.status }}" style="font-size:12px;">{{ order.status_label }}</span>
+  <a href="{{ url_for('superadmin.marketplace_order_invoice', order_id=order.id) }}"
+     target="_blank" class="btn btn-sm btn-success" style="margin-left:auto;">
+    🖨️ Cetak Surat Jalan
+  </a>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;">
+  <!-- LEFT -->
+  <div>
+    <!-- UPDATE STATUS -->
+    {% if order.status not in ('delivered', 'cancelled') %}
+    <div class="card" style="padding:20px;margin-bottom:16px;border-left:3px solid var(--primary);">
+      <h3 style="margin:0 0 14px;font-size:14px;font-weight:700;">⚡ Update Status Pesanan</h3>
+      <form method="POST" action="{{ url_for('superadmin.marketplace_order_status', order_id=order.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:160px;">
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:5px;">Status Baru</label>
+            <select name="status" class="form-control" required>
+              {% for code, label in all_statuses %}
+              {% if code != order.status %}
+              <option value="{{ code }}">{{ label }}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div style="flex:2;min-width:200px;">
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:5px;">Catatan (opsional)</label>
+            <input type="text" name="catatan" class="form-control" placeholder="Misal: Resi JNE 1234567890">
+          </div>
+          <button type="submit" class="btn btn-primary" onclick="return confirm('Update status pesanan ini?')">
+            ✅ Update Status
+          </button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+
+    <!-- ORDER ITEMS -->
+    <div class="card" style="overflow:hidden;margin-bottom:16px;">
+      <div style="padding:14px 16px;font-weight:700;font-size:14px;border-bottom:1px solid var(--border);">
+        🏪 {{ order.seller.nama }} — Produk Dipesan
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="table" style="margin:0;">
+          <thead>
+            <tr>
+              <th>Produk</th>
+              <th style="text-align:center">Qty</th>
+              <th style="text-align:right">Harga</th>
+              <th style="text-align:right">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in order.items %}
+            <tr>
+              <td>
+                <div style="font-weight:500;">{{ item.nama_produk }}</div>
+                <div style="font-size:11px;color:var(--text-muted);">{{ item.satuan or 'pcs' }}</div>
+              </td>
+              <td style="text-align:center;">{{ item.qty }}</td>
+              <td style="text-align:right;">Rp {{ "{:,.0f}".format(item.harga) }}</td>
+              <td style="text-align:right;font-weight:700;color:var(--danger);">Rp {{ "{:,.0f}".format(item.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="text-align:right;font-weight:700;">Total</td>
+              <td style="text-align:right;font-weight:700;font-size:16px;color:var(--danger);">
+                Rp {{ "{:,.0f}".format(order.total) }}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- STATUS HISTORY TIMELINE -->
+    <div class="card" style="padding:20px;">
+      <h3 style="margin:0 0 16px;font-size:14px;font-weight:700;">📋 Riwayat Status</h3>
+      <div class="mk-timeline">
+        {% for h in order.status_history %}
+        <div class="mk-timeline-item">
+          <div class="mk-timeline-dot {% if loop.last %}mk-timeline-dot--active{% endif %}">
+            {% if h.to_status == 'delivered' %}✅
+            {% elif h.to_status == 'cancelled' %}❌
+            {% elif h.to_status == 'shipped' %}🚚
+            {% elif h.to_status == 'processing' %}⚙️
+            {% elif h.to_status == 'confirmed' %}✔️
+            {% else %}⏳{% endif %}
+          </div>
+          <div class="mk-timeline-body">
+            <div class="mk-timeline-status">
+              {% if h.from_status %}
+              <span style="color:var(--text-muted);font-weight:400;">{{ status_labels.get(h.from_status, h.from_status) }}</span>
+              → {% endif %}
+              {{ status_labels.get(h.to_status, h.to_status) }}
+            </div>
+            {% if h.catatan %}
+            <div class="mk-timeline-note">{{ h.catatan }}</div>
+            {% endif %}
+            <div class="mk-timeline-time">
+              {{ h.created_at.strftime('%d %b %Y, %H:%M') }}
+              {% if h.changed_by %}· oleh {{ h.changed_by.nama }}{% endif %}
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p style="color:var(--text-muted);font-size:13px;">Belum ada riwayat status.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div>
+    <!-- TENANT INFO -->
+    <div class="card" style="padding:18px;margin-bottom:14px;">
+      <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">Info Tenant</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+        <div><strong>{{ order.tenant.nama }}</strong></div>
+        {% if order.tenant.kab_kota %}<div>📍 {{ order.tenant.kab_kota }}</div>{% endif %}
+        {% if order.tenant.telepon %}<div>📞 {{ order.tenant.telepon }}</div>{% endif %}
+        {% if order.tenant.email %}<div>✉️ {{ order.tenant.email }}</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- PENGIRIMAN -->
+    <div class="card" style="padding:18px;margin-bottom:14px;">
+      <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">Alamat Pengiriman</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+        <div><strong>{{ order.nama_penerima or '—' }}</strong></div>
+        {% if order.telepon_penerima %}<div>📞 {{ order.telepon_penerima }}</div>{% endif %}
+        <div style="line-height:1.5;">{{ order.alamat_kirim or '—' }}</div>
+        {% if order.catatan %}
+        <div style="padding:8px;background:var(--bg-hover);border-radius:4px;color:var(--text-muted);">
+          📝 {{ order.catatan }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ORDER INFO -->
+    <div class="card" style="padding:18px;">
+      <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">Ringkasan</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:var(--text-muted);">No. Order</span>
+          <span style="font-weight:600;">{{ order.nomor }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:var(--text-muted);">Tanggal</span>
+          <span>{{ order.created_at.strftime('%d %b %Y %H:%M') }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:var(--text-muted);">Seller</span>
+          <span>{{ order.seller.nama }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border);margin-top:4px;">
+          <span style="font-weight:700;">Total</span>
+          <span style="font-weight:700;color:var(--danger);font-size:16px;">Rp {{ "{:,.0f}".format(order.total) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

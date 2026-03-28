@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block title %}Laba Kotor Harian{% endblock %}
+{% block page_title %}📈 Laba Kotor Harian{% endblock %}
+{% block page_sub %}Penjualan - retur - HPP - biaya operasional{% endblock %}
+
+{% block content %}
+<div class="gpd-page">
+  <section class="card gpd-filter-card">
+    <form method="GET" action="{{ url_for('reports.gross_profit_daily') }}" class="gpd-filter-form">
+      <div class="form-group">
+        <label class="form-label" for="gpd-date-from">Dari</label>
+        <input id="gpd-date-from" type="date" name="date_from" class="form-control" value="{{ date_from }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="gpd-date-to">Sampai</label>
+        <input id="gpd-date-to" type="date" name="date_to" class="form-control" value="{{ date_to }}">
+      </div>
+      {% if branches %}
+      <div class="form-group">
+        <label class="form-label" for="gpd-branch">Cabang</label>
+        <select id="gpd-branch" name="branch_id" class="form-control">
+          <option value="" {% if not selected_branch_id %}selected{% endif %}>Semua cabang</option>
+          {% for b in branches %}
+          <option value="{{ b.id }}" {% if selected_branch_id == (b.id|string) %}selected{% endif %}>{{ b.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="gpd-filter-actions">
+        <button type="submit" class="btn btn-primary">Terapkan</button>
+        <a href="{{ url_for('reports.gross_profit_daily_export_csv', date_from=date_from, date_to=date_to, branch_id=selected_branch_id) }}" class="btn btn-outline">Export CSV</a>
+      </div>
+    </form>
+    <div class="gpd-chips">
+      <a href="{{ chip_today }}" class="gpd-chip{% if is_preset_today %} is-active{% endif %}">Hari ini</a>
+      <a href="{{ chip_7 }}" class="gpd-chip{% if is_preset_7 %} is-active{% endif %}">7 hari</a>
+      <a href="{{ chip_30 }}" class="gpd-chip{% if is_preset_30 %} is-active{% endif %}">30 hari</a>
+    </div>
+    <p class="gpd-note">
+      Mode HPP: <strong>{{ hpp_mode_used }}</strong>.
+      {% if hpp_mode_note %}{{ hpp_mode_note }}{% else %}Snapshot diprioritaskan, fallback ke harga beli master.{% endif %}
+    </p>
+  </section>
+
+  <section class="gpd-kpi-grid" aria-label="Ringkasan KPI laba">
+    <article class="stat-card warning"><div class="stat-icon warning">💳</div><div class="stat-info"><div class="stat-value">Rp {{ "{:,.0f}".format(totals.sales).replace(",", ".") }}</div><div class="stat-label">Penjualan kotor</div></div></article>
+    <article class="stat-card danger"><div class="stat-icon danger">↩️</div><div class="stat-info"><div class="stat-value">Rp {{ "{:,.0f}".format(totals.returns).replace(",", ".") }}</div><div class="stat-label">Retur</div></div></article>
+    <article class="stat-card primary"><div class="stat-icon primary">💰</div><div class="stat-info"><div class="stat-value">Rp {{ "{:,.0f}".format(totals.net_sales).replace(",", ".") }}</div><div class="stat-label">Penjualan bersih</div></div></article>
+    <article class="stat-card danger"><div class="stat-icon danger">📦</div><div class="stat-info"><div class="stat-value">Rp {{ "{:,.0f}".format(totals.hpp).replace(",", ".") }}</div><div class="stat-label">HPP</div></div></article>
+    <article class="stat-card success"><div class="stat-icon success">📈</div><div class="stat-info"><div class="stat-value {% if totals.gross_profit < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(totals.gross_profit).replace(",", ".") }}</div><div class="stat-label">Laba kotor</div><div class="stat-sublabel">Margin {{ "{:,.2f}".format(totals.gross_margin_pct).replace(".", ",") }}%</div></div></article>
+    <article class="stat-card warning"><div class="stat-icon warning">💸</div><div class="stat-info"><div class="stat-value">Rp {{ "{:,.0f}".format(totals.opex).replace(",", ".") }}</div><div class="stat-label">Biaya operasional</div><div class="stat-sublabel">Rasio {{ "{:,.2f}".format(totals.opex_ratio_pct).replace(".", ",") }}%</div></div></article>
+    <article class="stat-card primary gpd-kpi-wide"><div class="stat-icon primary">🧮</div><div class="stat-info"><div class="stat-value {% if totals.operating_profit < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(totals.operating_profit).replace(",", ".") }}</div><div class="stat-label">Laba operasional</div><div class="stat-sublabel">Laba kotor - biaya operasional</div></div></article>
+  </section>
+
+  <section class="card gpd-alerts">
+    <div class="gpd-alert-item">Hari rugi: <strong>{{ alerts.loss_days_count }}</strong></div>
+    <div class="gpd-alert-item">Margin tipis (&lt;10%): <strong>{{ alerts.thin_margin_count }}</strong></div>
+    <div class="gpd-alert-item">Biaya tinggi (&gt;30%): <strong>{{ alerts.heavy_opex_count }}</strong></div>
+    <div class="gpd-alert-item">Hari terburuk: <strong>{% if alerts.worst_operating_day %}{{ alerts.worst_operating_day.date }} (Rp {{ "{:,.0f}".format(alerts.worst_operating_day.operating_profit).replace(",", ".") }}){% else %}-{% endif %}</strong></div>
+  </section>
+
+  <section class="card gpd-chart-card">
+    <div class="card-header"><div class="card-title">Tren harian</div></div>
+    <div class="gpd-chart-wrap">
+      <canvas id="gpdChart"></canvas>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header"><div class="card-title">Ringkasan per hari</div></div>
+    <div class="table-wrapper">
+      <table class="table gpd-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th><th>Kotor</th><th>Retur</th><th>Bersih</th><th>HPP</th><th>Laba kotor</th><th>Biaya</th><th>Laba operasional</th><th>Margin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in daily_rows %}
+          <tr>
+            <td>{{ r.date }}</td>
+            <td>Rp {{ "{:,.0f}".format(r.sales).replace(",", ".") }}</td>
+            <td>Rp {{ "{:,.0f}".format(r.returns).replace(",", ".") }}</td>
+            <td>Rp {{ "{:,.0f}".format(r.net_sales).replace(",", ".") }}</td>
+            <td>Rp {{ "{:,.0f}".format(r.hpp).replace(",", ".") }}</td>
+            <td class="{% if r.gross_profit < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(r.gross_profit).replace(",", ".") }}</td>
+            <td>Rp {{ "{:,.0f}".format(r.opex).replace(",", ".") }}</td>
+            <td class="{% if r.operating_profit < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(r.operating_profit).replace(",", ".") }}</td>
+            <td>{{ "{:,.2f}".format(r.gross_margin_pct).replace(".", ",") }}%</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" class="admin-table-empty">Belum ada data pada periode ini.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="gpd-bottom-grid">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Breakdown per cabang</div></div>
+      <div class="table-wrapper">
+        <table class="table gpd-table">
+          <thead><tr><th>Cabang</th><th>Bersih</th><th>HPP</th><th>Biaya</th><th>Laba operasional</th></tr></thead>
+          <tbody>
+            {% for b in branch_rows %}
+            <tr>
+              <td>{{ b.nama }}</td>
+              <td>Rp {{ "{:,.0f}".format(b.net_sales).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(b.hpp).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(b.opex).replace(",", ".") }}</td>
+              <td class="{% if b.operating_profit < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(b.operating_profit).replace(",", ".") }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="admin-table-empty">Tidak ada data cabang.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Top produk (omzet)</div></div>
+      <div class="table-wrapper">
+        <table class="table gpd-table">
+          <thead><tr><th>Produk</th><th>Qty</th><th>Omzet</th><th>HPP</th><th>Laba kotor</th></tr></thead>
+          <tbody>
+            {% for p in top_products %}
+            <tr>
+              <td>{{ p.nama_produk }}</td>
+              <td>{{ "{:,.2f}".format(p.qty).replace(".", ",") }}</td>
+              <td>Rp {{ "{:,.0f}".format(p.sales).replace(",", ".") }}</td>
+              <td>Rp {{ "{:,.0f}".format(p.hpp).replace(",", ".") }}</td>
+              <td class="{% if p.gross_profit < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(p.gross_profit).replace(",", ".") }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="admin-table-empty">Tidak ada data produk.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(() => {
+  const el = document.getElementById('gpdChart');
+  if (!el || typeof Chart === 'undefined') return;
+  const labels = {{ chart_labels|tojson }};
+  const netSales = {{ chart_net_sales|tojson }};
+  const hpp = {{ chart_hpp|tojson }};
+  const opex = {{ chart_opex|tojson }};
+  const operating = {{ chart_operating|tojson }};
+
+  new Chart(el, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Penjualan bersih', data: netSales, borderColor: '#6c63ff', backgroundColor: 'rgba(108,99,255,0.15)', tension: 0.25, fill: false },
+        { label: 'HPP', data: hpp, borderColor: '#ff6b6b', backgroundColor: 'rgba(255,107,107,0.15)', tension: 0.25, fill: false },
+        { label: 'Biaya operasional', data: opex, borderColor: '#f6ad55', backgroundColor: 'rgba(246,173,85,0.15)', tension: 0.25, fill: false },
+        { label: 'Laba operasional', data: operating, borderColor: '#00d4aa', backgroundColor: 'rgba(0,212,170,0.15)', tension: 0.25, fill: false },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          ticks: {
+            callback: function(value) { return 'Rp ' + Number(value).toLocaleString('id-ID'); }
+          }
+        }
+      },
+      plugins: {
+        legend: { labels: { boxWidth: 12 } }
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -4,6 +4,47 @@
 {% block page_sub %}{{ total_users }} pengguna terdaftar{% if total_pages > 1 %} · halaman {{ page }}/{{ total_pages }}{% endif %}{% endblock %}
 
 {% block content %}
+<style>
+  .admin-users-add-cta {
+    transition: transform .2s ease, box-shadow .2s ease;
+  }
+  .admin-users-add-cta.is-sticky {
+    position: fixed;
+    top: 74px;
+    right: 18px;
+    z-index: 120;
+    box-shadow: 0 10px 24px rgba(0,0,0,.22);
+  }
+  .admin-users-modal .modal {
+    width: min(92vw, 520px) !important;
+    max-width: 520px !important;
+    border-radius: 14px;
+    transform: translateY(10px) scale(.98);
+    opacity: 0;
+    transition: transform .2s ease, opacity .2s ease;
+  }
+  .admin-users-modal.active .modal {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  .admin-users-modal {
+    transition: opacity .2s ease;
+  }
+  @media (max-width: 640px) {
+    .admin-users-add-cta.is-sticky {
+      top: 64px;
+      right: 10px;
+      left: 10px;
+    }
+    .admin-users-add-cta.is-sticky .btn {
+      width: 100%;
+    }
+    .admin-users-modal .modal {
+      width: min(94vw, 420px) !important;
+    }
+  }
+</style>
+
 <div class="card mb-3 admin-users-filter-card">
   <form method="GET" class="product-filter-form admin-users-filter" action="{{ url_for('admin.users') }}">
     <div class="form-group admin-users-filter__field">
@@ -45,8 +86,13 @@
   </form>
 </div>
 
-<div class="layout-two-col layout-two-col--wide admin-users-layout">
-  <div class="card admin-users-list-card">
+<div class="card admin-users-list-card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div class="card-title">📋 Daftar Pengguna</div>
+      <div id="adminUsersAddCta" class="admin-users-add-cta">
+        <button type="button" class="btn btn-primary" onclick="openAddUserModal()">➕ Tambah Pengguna</button>
+      </div>
+    </div>
     <div class="table-wrapper table-sticky admin-table-responsive" style="max-height:none;">
       <table class="table">
         <thead>
@@ -128,11 +174,15 @@
       {% endif %}
     </div>
     {% endif %}
-  </div>
+</div>
 
-  <div class="card admin-users-add-card">
-    <div class="card-header"><div class="card-title">➕ Tambah Pengguna</div></div>
-    <form method="POST" action="{{ url_for('admin.add_user') }}" class="admin-users-add-form">
+<div class="modal-overlay admin-users-modal" id="addUserModal" onclick="if(event.target===this){closeAddUserModal();}">
+  <div class="modal" style="max-width:560px;width:min(94vw,560px);padding:0;overflow:hidden;" onclick="event.stopPropagation()">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--border);">
+      <div class="card-title">➕ Tambah Pengguna</div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="closeAddUserModal()">Tutup</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin.add_user') }}" class="admin-users-add-form" style="padding:16px 18px;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div class="form-group">
         <label class="form-label">Nama lengkap *</label>
@@ -198,6 +248,40 @@
     </form>
   </div>
 </div>
+
+<script>
+function openAddUserModal() {
+  const modal = document.getElementById('addUserModal');
+  if (!modal) return;
+  modal.classList.add('active');
+  const firstInput = modal.querySelector('input[name="nama"]');
+  if (firstInput) {
+    setTimeout(() => firstInput.focus(), 60);
+  }
+}
+
+function closeAddUserModal() {
+  const modal = document.getElementById('addUserModal');
+  if (!modal) return;
+  modal.classList.remove('active');
+}
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') closeAddUserModal();
+});
+
+(function () {
+  const cta = document.getElementById('adminUsersAddCta');
+  if (!cta) return;
+  const stickyAt = 220;
+  function syncSticky() {
+    if (window.scrollY > stickyAt) cta.classList.add('is-sticky');
+    else cta.classList.remove('is-sticky');
+  }
+  window.addEventListener('scroll', syncSticky, { passive: true });
+  syncSticky();
+})();
+</script>
 
 <div class="card mt-3 admin-users-audit-card">
   <div class="card-header"><div class="card-title">📋 Log aktivitas (25 terakhir)</div></div>

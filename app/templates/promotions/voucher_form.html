@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if voucher else 'Buat' }} Voucher{% endblock %}
+{% block page_title %}{{ 'Edit' if voucher else 'Buat' }} Voucher{% endblock %}
+
+{% block content %}
+<div style="max-width:760px;">
+  <div class="card">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Kode</label><input class="form-control" name="kode" required value="{{ voucher.kode if voucher else '' }}"></div>
+        <div class="form-group"><label class="form-label">Nama voucher</label><input class="form-control" name="nama" required value="{{ voucher.nama if voucher else '' }}"></div>
+        <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Deskripsi</label><input class="form-control" name="deskripsi" value="{{ voucher.deskripsi if voucher else '' }}"></div>
+        <div class="form-group"><label class="form-label">Tipe diskon</label>
+          <select class="form-control" name="discount_type">
+            <option value="fixed" {% if voucher and voucher.discount_type=='fixed' %}selected{% endif %}>Nominal</option>
+            <option value="percent" {% if voucher and voucher.discount_type=='percent' %}selected{% endif %}>Persen</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Nilai diskon</label><input class="form-control" type="number" step="0.01" name="discount_value" value="{{ voucher.discount_value if voucher else 0 }}"></div>
+        <div class="form-group"><label class="form-label">Maks diskon (opsional)</label><input class="form-control" type="number" step="0.01" name="max_discount" value="{{ voucher.max_discount if voucher and voucher.max_discount else '' }}"></div>
+        <div class="form-group"><label class="form-label">Min belanja</label><input class="form-control" type="number" step="0.01" name="min_spend" value="{{ voucher.min_spend if voucher else 0 }}"></div>
+        <div class="form-group"><label class="form-label">Mulai</label><input class="form-control" type="datetime-local" name="start_at" value="{{ voucher.start_at.strftime('%Y-%m-%dT%H:%M') if voucher else '' }}" required></div>
+        <div class="form-group"><label class="form-label">Berakhir</label><input class="form-control" type="datetime-local" name="end_at" value="{{ voucher.end_at.strftime('%Y-%m-%dT%H:%M') if voucher else '' }}" required></div>
+        <div class="form-group"><label class="form-label">Kuota global (opsional)</label><input class="form-control" type="number" name="max_usage_global" value="{{ voucher.max_usage_global if voucher and voucher.max_usage_global else '' }}"></div>
+        <div class="form-group"><label class="form-label">Kuota per member (opsional)</label><input class="form-control" type="number" name="max_usage_per_member" value="{{ voucher.max_usage_per_member if voucher and voucher.max_usage_per_member else '' }}"></div>
+      </div>
+
+      <div class="form-group" style="margin-top:8px;">
+        <div class="form-label">Scope kategori (kosong = semua kategori)</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;">
+          {% for c in categories %}
+          <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="category_ids" value="{{ c.id }}" {% if c.id in selected_scope %}checked{% endif %}> {{ c.nama }}</label>
+          {% endfor %}
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:8px;"><input type="checkbox" name="active" {% if not voucher or voucher.active %}checked{% endif %}> Voucher aktif</label>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn btn-primary" type="submit">Simpan</button>
+        <a class="btn btn-outline" href="{{ url_for('members.vouchers') }}">Kembali</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

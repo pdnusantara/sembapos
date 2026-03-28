@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block title %}FIFO Health{% endblock %}
+{% block page_title %}FIFO health monitor{% endblock %}
+{% block page_sub %}Deteksi mismatch stok vs layer FIFO dan quick-fix untuk gap layer{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label">Cari produk / barcode</label>
+          <input type="text" name="q" class="form-control" value="{{ q }}" placeholder="Contoh: beras / 8991">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Tampilkan</label>
+          <select name="show" class="form-control">
+            <option value="issue" {% if show == 'issue' %}selected{% endif %}>Hanya issue</option>
+            <option value="all" {% if show == 'all' %}selected{% endif %}>Semua</option>
+          </select>
+        </div>
+        <div class="col-md-4 d-flex gap-2">
+          <button type="submit" class="btn btn-primary">Terapkan</button>
+          <a class="btn btn-outline" href="{{ url_for('reports.fifo_health') }}">Reset</a>
+          <a class="btn btn-outline" href="{{ url_for('reports.stok') }}">Kembali ke laporan stok</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-3">
+        <span class="badge bg-secondary">Total: {{ summary.total }}</span>
+        <span class="badge bg-danger">Missing layer: {{ summary.missing }}</span>
+        <span class="badge bg-warning text-dark">Over layer: {{ summary.over }}</span>
+        <span class="badge bg-success">OK: {{ summary.ok }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Produk</th>
+            <th>Barcode</th>
+            <th class="text-end">Stok</th>
+            <th class="text-end">Qty layer</th>
+            <th class="text-end">Gap</th>
+            <th class="text-end">Nilai layer</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.product.nama }}</td>
+            <td class="text-muted">{{ r.product.barcode or '—' }}</td>
+            <td class="text-end">{{ "{:,.2f}".format(r.stok_qty).replace(",",".") }}</td>
+            <td class="text-end">{{ "{:,.2f}".format(r.layer_qty).replace(",",".") }}</td>
+            <td class="text-end">{{ "{:,.2f}".format(r.gap_qty).replace(",",".") }}</td>
+            <td class="text-end">Rp {{ "{:,.0f}".format(r.layer_value).replace(",",".") }}</td>
+            <td>
+              {% if r.status == 'missing_layer' %}
+                <span class="badge badge-danger">Missing layer</span>
+              {% elif r.status == 'over_layer' %}
+                <span class="badge badge-warning">Over layer</span>
+              {% else %}
+                <span class="badge badge-success">OK</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if can_reconcile and r.status == 'missing_layer' %}
+              <form method="POST" action="{{ url_for('reports.fifo_health_reconcile', product_id=r.product.id) }}" onsubmit="return confirm('Tambahkan layer FIFO sesuai gap stok untuk produk ini?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button class="btn btn-sm btn-outline">Quick-fix gap</button>
+              </form>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-center text-muted py-4">Tidak ada data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Keranjang Belanja — Marketplace{% endblock %}
+{% block page_title %}Keranjang Belanja{% endblock %}
+{% block page_sub %}{{ items | length }} item{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketplace.css', v=marketplace_css_v) }}">
+{% endblock %}
+
+{% block content %}
+<div class="mk-page">
+  <div class="mk-topbar">
+    <a href="{{ url_for('marketplace.index') }}" class="mk-topbar__brand">🛍️ <span>Marketplace</span></a>
+    <form class="mk-topbar__search" method="GET" action="{{ url_for('marketplace.index') }}">
+      <input type="text" name="q" placeholder="Cari produk…">
+      <button type="submit">🔍</button>
+    </form>
+    <div class="mk-topbar__actions">
+      <a href="{{ url_for('marketplace.cart') }}" class="mk-cart-btn">
+        🛒 Keranjang
+        {% if cart_count > 0 %}<span class="mk-cart-badge">{{ cart_count }}</span>{% endif %}
+      </a>
+    </div>
+  </div>
+
+  <div class="mk-page-title">
+    <a href="{{ url_for('marketplace.index') }}">Marketplace</a>
+    <span class="mk-page-title__sep">›</span>
+    <span class="mk-page-title__current">Keranjang Belanja</span>
+  </div>
+
+  <div class="mk-cart-layout">
+    <!-- ITEMS -->
+    <div>
+      <div class="mk-cart-items">
+        <div class="mk-cart-header">
+          🛒 Keranjang Belanja
+          {% if items %}<span style="color:var(--mk-gray-600);font-weight:400;font-size:13px;margin-left:6px;">({{ items|length }} item)</span>{% endif %}
+        </div>
+        {% if items %}
+        {% for item in items %}
+        <div class="mk-cart-item">
+          <div class="mk-cart-item__img">
+            {% if item.product.gambar_utama %}
+            <img src="{{ url_for('static', filename=item.product.gambar_utama) }}" alt="{{ item.product.nama }}">
+            {% else %}
+            <div class="mk-cart-item__placeholder">📦</div>
+            {% endif %}
+          </div>
+          <div class="mk-cart-item__info">
+            <div class="mk-cart-item__name">
+              <a href="{{ url_for('marketplace.product_detail', product_id=item.product.id) }}"
+                 style="color:inherit;text-decoration:none;">{{ item.product.nama }}</a>
+            </div>
+            <div class="mk-cart-item__seller">🏪 {{ item.product.seller.nama }}</div>
+            <div class="mk-cart-item__price-row">
+              <span class="mk-cart-item__price">Rp {{ "{:,.0f}".format(item.harga) }}</span>
+              <span style="font-size:12px;color:var(--mk-gray-600)">× {{ item.qty }} = <strong>Rp {{ "{:,.0f}".format(item.subtotal) }}</strong></span>
+            </div>
+          </div>
+          <div class="mk-cart-item__actions">
+            <form method="POST" action="{{ url_for('marketplace.cart_update') }}" style="display:flex;align-items:center;gap:8px;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="product_id" value="{{ item.product.id }}">
+              <input type="hidden" name="action" value="update">
+              <div class="mk-cart-qty">
+                <button type="submit" name="qty" value="{{ item.qty - 1 }}">−</button>
+                <input type="number" value="{{ item.qty }}" min="1" max="{{ item.product.stok }}"
+                       onchange="this.form.elements['qty'][1].value=this.value; this.form.submit()">
+                <button type="submit" name="qty" value="{{ item.qty + 1 }}">+</button>
+              </div>
+            </form>
+            <form method="POST" action="{{ url_for('marketplace.cart_update') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="product_id" value="{{ item.product.id }}">
+              <input type="hidden" name="action" value="remove">
+              <button type="submit" class="mk-cart-delete" title="Hapus">🗑️</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="padding:48px;text-align:center;">
+          <div style="font-size:64px;margin-bottom:16px;">🛒</div>
+          <div style="font-size:16px;font-weight:600;color:var(--mk-gray-800);margin-bottom:8px;">Keranjang Kosong</div>
+          <div style="font-size:13px;color:var(--mk-gray-600);margin-bottom:20px;">Belum ada produk yang Anda tambahkan.</div>
+          <a href="{{ url_for('marketplace.index') }}" class="mk-btn-primary" style="text-decoration:none;display:inline-flex;">
+            🛍️ Mulai Belanja
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- SUMMARY -->
+    {% if items %}
+    <div>
+      <div class="mk-cart-summary">
+        <div class="mk-cart-summary__title">📋 Ringkasan Belanja</div>
+        <div class="mk-summary-row">
+          <span>Total ({{ items|length }} item)</span>
+          <span>Rp {{ "{:,.0f}".format(total) }}</span>
+        </div>
+        <div class="mk-summary-total">
+          <span>Total Pembayaran</span>
+          <span>Rp {{ "{:,.0f}".format(total) }}</span>
+        </div>
+        <div style="margin-top: 16px;">
+          <a href="{{ url_for('marketplace.checkout') }}" class="mk-btn-primary" style="width:100%;box-sizing:border-box;display:flex;">
+            🚀 Lanjutkan ke Checkout
+          </a>
+        </div>
+        <div style="margin-top: 10px;">
+          <a href="{{ url_for('marketplace.index') }}" class="mk-btn-outline" style="width:100%;box-sizing:border-box;display:flex;">
+            ← Lanjutkan Belanja
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

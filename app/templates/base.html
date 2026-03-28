@@ -17,8 +17,9 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+  {% block head_extra %}{% endblock %}
 </head>
 <body>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -100,6 +101,14 @@
         <a href="{{ url_for('members.index') }}" class="nav-item {% if request.blueprint == 'members' %}active{% endif %}">
           <span class="nav-icon">👤</span> Member
         </a>
+        {% if current_user.role in ('superadmin','admin') %}
+        <a href="{{ url_for('members.tiers') }}" class="nav-item {% if request.endpoint == 'members.tiers' %}active{% endif %}">
+          <span class="nav-icon">🏷️</span> Tier loyalty
+        </a>
+        <a href="{{ url_for('members.vouchers') }}" class="nav-item {% if request.endpoint in ('members.vouchers','members.voucher_form','members.voucher_redemptions') %}active{% endif %}">
+          <span class="nav-icon">🎟️</span> Voucher promo
+        </a>
+        {% endif %}
         {% endif %}
         {% if perm('debts') %}
         <a href="{{ url_for('debts.index') }}" class="nav-item {% if request.blueprint == 'debts' %}active{% endif %}">
@@ -125,6 +134,12 @@
         <a href="{{ url_for('reports.sales_breakdown') }}" class="nav-item {% if request.endpoint == 'reports.sales_breakdown' %}active{% endif %}">
           <span class="nav-icon">📈</span> Produk &amp; Kategori
         </a>
+        <a href="{{ url_for('reports.gross_profit_daily') }}" class="nav-item {% if request.endpoint in ('reports.gross_profit_daily', 'reports.gross_profit_daily_export_csv') %}active{% endif %}">
+          <span class="nav-icon">🧮</span> Laba kotor harian
+        </a>
+        <a href="{{ url_for('reports.members_insight') }}" class="nav-item {% if request.endpoint == 'reports.members_insight' %}active{% endif %}">
+          <span class="nav-icon">👥</span> Members insight
+        </a>
         {% endif %}
         {% if perm('returns') %}
         <a href="{{ url_for('returns.index') }}" class="nav-item {% if request.blueprint == 'returns' %}active{% endif %}">
@@ -133,6 +148,21 @@
         {% endif %}
       </div>
       {% endif %}
+      {% endif %}
+
+      {% if not current_user.is_superadmin and current_user.tenant and 'kuningan' in (current_user.tenant.kab_kota or '').lower() %}
+      <div class="nav-group">
+        <div class="nav-group-label">Marketplace</div>
+        <a href="{{ url_for('marketplace.index') }}" class="nav-item {% if request.blueprint == 'marketplace' and request.endpoint == 'marketplace.index' %}active{% endif %}">
+          <span class="nav-icon">🛍️</span> Belanja
+        </a>
+        <a href="{{ url_for('marketplace.cart') }}" class="nav-item {% if request.endpoint == 'marketplace.cart' %}active{% endif %}">
+          <span class="nav-icon">🛒</span> Keranjang
+        </a>
+        <a href="{{ url_for('marketplace.orders') }}" class="nav-item {% if request.endpoint in ('marketplace.orders', 'marketplace.order_detail') %}active{% endif %}">
+          <span class="nav-icon">📋</span> Pesanan Saya
+        </a>
+      </div>
       {% endif %}
 
       {% if current_user.is_admin %}
@@ -154,6 +184,12 @@
         </a>
         <a href="{{ url_for('superadmin.audit_logs') }}" class="nav-item {% if request.endpoint == 'superadmin.audit_logs' %}active{% endif %}">
           <span class="nav-icon">📜</span> Log audit
+        </a>
+        <a href="{{ url_for('superadmin.marketplace_sellers') }}" class="nav-item {% if request.blueprint == 'superadmin' and 'marketplace' in (request.endpoint or '') %}active{% endif %}">
+          <span class="nav-icon">🛍️</span> Marketplace
+          {% if marketplace_pending_count > 0 %}
+          <span class="nav-badge">{{ marketplace_pending_count }}</span>
+          {% endif %}
         </a>
         {% endif %}
       </div>

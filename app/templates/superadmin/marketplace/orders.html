@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Order Marketplace — Seller Center{% endblock %}
+{% block page_title %}Marketplace — Seller Center{% endblock %}
+{% block page_sub %}Kelola pesanan masuk dari tenant{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketplace.css', v=marketplace_css_v) }}">
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+  <div>
+    <h2 style="margin:0;font-size:18px;font-weight:700;">📋 Order Masuk Marketplace</h2>
+    <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Semua pesanan dari tenant Kuningan</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="{{ url_for('superadmin.marketplace_sellers') }}" class="btn btn-sm btn-outline">🏪 Seller</a>
+    <a href="{{ url_for('superadmin.marketplace_products') }}" class="btn btn-sm btn-outline">📦 Produk</a>
+  </div>
+</div>
+
+<!-- STATS -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;">
+  <div class="card" style="padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:700;color:var(--primary);">{{ stats.total }}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Total Order</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:700;color:#f57f17;">{{ stats.pending }}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Menunggu</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:700;color:#1565c0;">{{ stats.processing }}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Diproses</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:700;color:#6a1b9a;">{{ stats.shipped }}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Dikirim</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:700;color:#1b5e20;">{{ stats.delivered }}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Selesai</div>
+  </div>
+  <div class="card" style="padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:700;color:var(--danger);">{{ stats.cancelled }}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Dibatalkan</div>
+  </div>
+</div>
+
+<!-- FILTER -->
+<div class="card" style="padding:14px 16px;margin-bottom:16px;">
+  <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Cari No. / Penerima</label>
+      <input type="text" name="q" value="{{ q }}" class="form-control" style="width:200px;" placeholder="Nomor order atau nama…">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Status</label>
+      <select name="status" class="form-control" style="width:160px;">
+        <option value="">Semua Status</option>
+        {% for code, label in all_statuses %}
+        <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Seller</label>
+      <select name="seller" class="form-control" style="width:150px;">
+        <option value="">Semua Seller</option>
+        {% for s in sellers %}
+        <option value="{{ s.id }}" {% if seller_id == s.id %}selected{% endif %}>{{ s.nama }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-outline btn-sm">🔍 Filter</button>
+    {% if q or status_filter or seller_id %}
+    <a href="{{ url_for('superadmin.marketplace_orders') }}" class="btn btn-sm"
+       style="background:transparent;border:1px solid var(--border);color:var(--text-muted);">✕ Reset</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- TABLE -->
+<div class="card" style="overflow:hidden;">
+  {% if orders %}
+  <div style="overflow-x:auto;">
+    <table class="table" style="margin:0;">
+      <thead>
+        <tr>
+          <th>No. Order</th>
+          <th>Tenant</th>
+          <th>Seller</th>
+          <th style="text-align:center">Item</th>
+          <th style="text-align:right">Total</th>
+          <th style="text-align:center">Status</th>
+          <th>Tanggal</th>
+          <th style="text-align:right">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+        <tr>
+          <td style="font-weight:700;color:var(--primary);font-size:13px;">{{ order.nomor }}</td>
+          <td style="font-size:13px;">{{ order.tenant.nama }}</td>
+          <td style="font-size:13px;">{{ order.seller.nama }}</td>
+          <td style="text-align:center;">{{ order.items | length }}</td>
+          <td style="text-align:right;font-weight:700;color:var(--danger);">Rp {{ "{:,.0f}".format(order.total) }}</td>
+          <td style="text-align:center;">
+            <span class="mk-status mk-status--{{ order.status }}" style="font-size:11px;">{{ order.status_label }}</span>
+          </td>
+          <td style="font-size:12px;color:var(--text-muted);">{{ order.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td style="text-align:right;">
+            <a href="{{ url_for('superadmin.marketplace_order_detail', order_id=order.id) }}"
+               class="btn btn-sm btn-primary">👁️ Detail</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pagination.pages > 1 %}
+  <div style="padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;">
+    {% if pagination.has_prev %}
+    <a class="btn btn-sm btn-outline" href="{{ url_for('superadmin.marketplace_orders', q=q, status=status_filter, seller=seller_id, page=pagination.prev_num) }}">‹</a>
+    {% endif %}
+    {% for p in pagination.iter_pages() %}
+      {% if p %}
+      <a class="btn btn-sm {% if p == pagination.page %}btn-primary{% else %}btn-outline{% endif %}"
+         href="{{ url_for('superadmin.marketplace_orders', q=q, status=status_filter, seller=seller_id, page=p) }}">{{ p }}</a>
+      {% else %}
+      <span style="padding:0 6px;color:var(--text-muted);">…</span>
+      {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+    <a class="btn btn-sm btn-outline" href="{{ url_for('superadmin.marketplace_orders', q=q, status=status_filter, seller=seller_id, page=pagination.next_num) }}">›</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div style="padding:60px;text-align:center;">
+    <div style="font-size:48px;margin-bottom:12px;">📋</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Belum ada order</div>
+    <div style="font-size:13px;color:var(--text-muted);">Order dari tenant akan muncul di sini.</div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

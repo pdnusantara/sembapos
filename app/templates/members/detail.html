@@ -26,11 +26,18 @@
       <div class="stat-label">Total Hutang</div>
     </div>
   </div>
+  <div class="stat-card">
+    <div class="stat-icon">🏷️</div>
+    <div class="stat-info">
+      <div class="stat-value" style="font-size:16px;">{{ member.tier.nama if member.tier else '—' }}</div>
+      <div class="stat-label">Tier Saat Ini</div>
+    </div>
+  </div>
 </div>
 
 <div class="layout-two-col">
   <div class="card">
-    <div class="card-header"><div class="card-title">🧾 10 Transaksi Terakhir</div></div>
+    <div class="card-header"><div class="card-title">🧾 20 Transaksi Terakhir</div></div>
     <div class="table-wrapper">
       <table class="table">
         <thead>
@@ -57,7 +64,57 @@
   </div>
 
   <div class="card">
-    <div class="card-header"><div class="card-title">📖 Biodata Member</div></div>
+    <div class="card-header"><div class="card-title">📖 Profil & Insight Member</div></div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--text-muted);">Segment</div>
+      <div><span class="badge badge-info">{{ segment }}</span></div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--text-muted);">Rolling Spend ({{ member.rolling_last_days or 365 }} hari)</div>
+      <div style="font-weight:600;">Rp {{ "{:,.0f}".format(rolling_spend).replace(",",".") }}</div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--text-muted);">Frekuensi transaksi (rolling)</div>
+      <div>{{ total_tx_rolling }} transaksi · AOV Rp {{ "{:,.0f}".format(aov_rolling).replace(",",".") }}</div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--text-muted);">Lifetime transaksi</div>
+      <div>{{ total_tx }} transaksi</div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--text-muted);">Kunjungan pertama / terakhir</div>
+      <div>
+        {{ first_tx.created_at.strftime('%d/%m/%Y %H:%M') if first_tx else '—' }}
+        / {{ last_tx.created_at.strftime('%d/%m/%Y %H:%M') if last_tx else '—' }}
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Produk favorit</div>
+      {% for p in top_products %}
+      <div style="display:flex;justify-content:space-between;gap:8px;"><span>{{ p.nama }}</span><span>Rp {{ "{:,.0f}".format(p.omzet).replace(",",".") }}</span></div>
+      {% else %}
+      <div class="text-muted">Belum ada data</div>
+      {% endfor %}
+    </div>
+
+    <div style="margin-top:14px;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Kategori favorit</div>
+      {% for c in top_categories %}
+      <div style="display:flex;justify-content:space-between;gap:8px;"><span>{{ c.nama }}</span><span>Rp {{ "{:,.0f}".format(c.omzet).replace(",",".") }}</span></div>
+      {% else %}
+      <div class="text-muted">Belum ada data</div>
+      {% endfor %}
+    </div>
+
+    <div style="margin-top:14px;">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Riwayat voucher</div>
+      {% for r in voucher_history[:5] %}
+      <div style="display:flex;justify-content:space-between;gap:8px;"><span>{{ r.voucher.kode if r.voucher else '-' }}</span><span>Rp {{ "{:,.0f}".format(r.discount_amount).replace(",",".") }}</span></div>
+      {% else %}
+      <div class="text-muted">Belum ada voucher digunakan</div>
+      {% endfor %}
+    </div>
     
     <div style="margin-bottom:12px;">
       <div style="font-size:11px;color:var(--text-muted);">Nama Lengkap</div>
