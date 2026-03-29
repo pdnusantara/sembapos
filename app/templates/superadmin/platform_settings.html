@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Pengaturan Platform{% endblock %}
+{% block page_title %}⚙️ Pengaturan Platform{% endblock %}
+{% block page_sub %}Konfigurasi global platform{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Pengaturan Platform', '', true)]) }}
+
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+  <a href="{{ url_for('superadmin.settings') }}" class="btn btn-outline">🕐 Zona Waktu Pribadi</a>
+</div>
+
+<form method="POST" action="{{ url_for('superadmin.platform_settings') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+  <div class="card mb-3">
+    <div class="card-header"><div class="card-title">🏷️ Platform</div></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+      {% for key, label, default in setting_keys %}
+      {% if key in ('platform_name', 'default_tenant_timezone', 'maintenance_mode') %}
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">{{ label }}</label>
+        {% if key == 'maintenance_mode' %}
+        <select name="{{ key }}" class="form-control">
+          <option value="0" {% if current_settings[key] != '1' %}selected{% endif %}>Nonaktif</option>
+          <option value="1" {% if current_settings[key] == '1' %}selected{% endif %}>Aktif (semua tenant diblokir)</option>
+        </select>
+        {% else %}
+        <input type="text" name="{{ key }}" value="{{ current_settings[key] }}" class="form-control" placeholder="{{ default }}">
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header"><div class="card-title">📅 Langganan</div></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+      {% for key, label, default in setting_keys %}
+      {% if key in ('default_grace_days', 'expired_mode', 'notif_expiring_days') %}
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">{{ label }}</label>
+        {% if key == 'expired_mode' %}
+        <select name="{{ key }}" class="form-control">
+          <option value="block_login" {% if current_settings[key] == 'block_login' %}selected{% endif %}>Block Login</option>
+          <option value="read_only" {% if current_settings[key] == 'read_only' %}selected{% endif %}>Read Only</option>
+        </select>
+        {% else %}
+        <input type="number" name="{{ key }}" value="{{ current_settings[key] }}" class="form-control" min="0" placeholder="{{ default }}">
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header"><div class="card-title">📧 SMTP Email</div></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+      {% for key, label, default in setting_keys %}
+      {% if key.startswith('smtp_') %}
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">{{ label }}</label>
+        <input type="{{ 'password' if key == 'smtp_pass' else 'text' }}" name="{{ key }}" value="{{ current_settings[key] }}" class="form-control" placeholder="{{ default or '—' }}">
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header"><div class="card-title">💬 WhatsApp Gateway</div></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+      {% for key, label, default in setting_keys %}
+      {% if key.startswith('wa_') %}
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">{{ label }}</label>
+        <input type="{{ 'password' if 'token' in key else 'text' }}" name="{{ key }}" value="{{ current_settings[key] }}" class="form-control" placeholder="{{ default or '—' }}">
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Simpan Pengaturan</button>
+  <a href="{{ url_for('superadmin.sa_dashboard') }}" class="btn btn-outline" style="margin-left:8px;">Batal</a>
+</form>
+{% endblock %}

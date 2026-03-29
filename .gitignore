@@ -38,3 +38,6 @@ htmlcov/
 *.egg-info/
 dist/
 build/
+
+# Cadangan DB buatan server (pg_dump / salinan lokal)
+backups/

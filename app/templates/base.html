@@ -185,11 +185,26 @@
           <span class="nav-icon">⚙️</span> Pengaturan
         </a>
         {% else %}
+        <a href="{{ url_for('superadmin.sa_dashboard') }}" class="nav-item {% if request.endpoint == 'superadmin.sa_dashboard' %}active{% endif %}">
+          <span class="nav-icon">📊</span> Dashboard
+        </a>
         <a href="{{ url_for('superadmin.index') }}" class="nav-item {% if request.endpoint in ('superadmin.index', 'superadmin.view_tenant', 'superadmin.edit_tenant', 'superadmin.add_tenant', 'superadmin.export_csv', 'superadmin.tenant_plan_history') %}active{% endif %}">
           <span class="nav-icon">🏢</span> Daftar tenant
         </a>
+        <a href="{{ url_for('superadmin.tenant_health') }}" class="nav-item {% if request.endpoint == 'superadmin.tenant_health' %}active{% endif %}">
+          <span class="nav-icon">🩺</span> Health tenant
+        </a>
         <a href="{{ url_for('superadmin.paket_index') }}" class="nav-item {% if request.endpoint in ('superadmin.paket_index', 'superadmin.paket_add', 'superadmin.paket_edit') %}active{% endif %}">
           <span class="nav-icon">📦</span> Paket tenant
+        </a>
+        <a href="{{ url_for('superadmin.billing_index') }}" class="nav-item {% if 'billing' in (request.endpoint or '') %}active{% endif %}">
+          <span class="nav-icon">💳</span> Billing
+        </a>
+        <a href="{{ url_for('superadmin.leads_index') }}" class="nav-item {% if 'lead' in (request.endpoint or '') %}active{% endif %}">
+          <span class="nav-icon">📩</span> Leads
+        </a>
+        <a href="{{ url_for('superadmin.announcements_index') }}" class="nav-item {% if 'announcement' in (request.endpoint or '') %}active{% endif %}">
+          <span class="nav-icon">📢</span> Pengumuman
         </a>
         <a href="{{ url_for('superadmin.audit_logs') }}" class="nav-item {% if request.endpoint == 'superadmin.audit_logs' %}active{% endif %}">
           <span class="nav-icon">📜</span> Log audit
@@ -200,7 +215,13 @@
           <span class="nav-badge">{{ marketplace_pending_count }}</span>
           {% endif %}
         </a>
-        <a href="{{ url_for('superadmin.settings') }}" class="nav-item {% if request.endpoint == 'superadmin.settings' %}active{% endif %}">
+        <a href="{{ url_for('superadmin.backup_page') }}" class="nav-item {% if 'backup' in (request.endpoint or '') %}active{% endif %}">
+          <span class="nav-icon">💾</span> Backup
+        </a>
+        <a href="{{ url_for('superadmin.superadmin_users') }}" class="nav-item {% if 'superadmin_user' in (request.endpoint or '') %}active{% endif %}">
+          <span class="nav-icon">🔑</span> Admin Platform
+        </a>
+        <a href="{{ url_for('superadmin.platform_settings') }}" class="nav-item {% if request.endpoint in ('superadmin.platform_settings', 'superadmin.settings') %}active{% endif %}">
           <span class="nav-icon">⚙️</span> Pengaturan
         </a>
         {% endif %}
@@ -284,6 +305,16 @@
       {% elif subscription_banner.kind == 'expiring_soon' %}
       <strong>📅 Segera perpanjang.</strong> Langganan tenant berakhir {{ subscription_banner.until.strftime('%d/%m/%Y %H:%M') }} UTC.
       {% endif %}
+    </div>
+    {% endif %}
+    {% if active_announcements %}
+    <div class="announcement-banners-stack" role="region" aria-label="Pengumuman platform">
+    {% for ann in active_announcements %}
+    <div class="announcement-banner" style="padding:10px 16px;font-size:13px;line-height:1.45;border-bottom:1px solid var(--border);background:{% if ann.tipe == 'warning' %}rgba(200,160,0,0.2){% elif ann.tipe == 'danger' %}rgba(180,60,60,0.15){% elif ann.tipe == 'success' %}rgba(60,180,80,0.15){% else %}rgba(80,120,200,0.12){% endif %};color:var(--text-light);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+      <span><strong>{{ ann.judul }}</strong> — {{ ann.isi }}</span>
+      <button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;flex-shrink:0;" title="Sembunyikan di halaman ini">✕</button>
+    </div>
+    {% endfor %}
     </div>
     {% endif %}
     <!-- TOPBAR -->

@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Leads — Super Admin{% endblock %}
+{% block page_title %}📩 Lead Capture{% endblock %}
+{% block page_sub %}Calon tenant dari landing page{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Leads', '', true)]) }}
+
+<div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr));margin-bottom:16px;">
+  <div class="stat-card primary"><div class="stat-info"><div class="stat-value">{{ stats.new }}</div><div class="stat-label">Baru</div></div></div>
+  <div class="stat-card warning"><div class="stat-info"><div class="stat-value">{{ stats.contacted }}</div><div class="stat-label">Dihubungi</div></div></div>
+  <div class="stat-card success"><div class="stat-info"><div class="stat-value">{{ stats.converted }}</div><div class="stat-label">Dikonversi</div></div></div>
+  <div class="stat-card danger"><div class="stat-info"><div class="stat-value">{{ stats.rejected }}</div><div class="stat-label">Ditolak</div></div></div>
+</div>
+
+<div class="page-list-toolbar mb-3" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    {% for code, label in lead_statuses %}
+    <a href="{{ url_for('superadmin.leads_index', status=code, q=q) }}" class="btn btn-outline btn-sm {% if status_filter == code %}active{% endif %}">{{ label }}</a>
+    {% endfor %}
+    {% if status_filter %}
+    <a href="{{ url_for('superadmin.leads_index', q=q) }}" class="btn btn-outline btn-sm">Semua</a>
+    {% endif %}
+  </div>
+  <form method="get" action="{{ url_for('superadmin.leads_index') }}" style="display:flex;gap:8px;">
+    {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+    <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Cari nama, WA, jenis usaha...">
+    <button type="submit" class="btn btn-outline btn-sm">Cari</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Daftar Lead ({{ total }})</div>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr><th>Nama</th><th>Jenis Usaha</th><th>WA</th><th>Lokasi</th><th>Sumber</th><th>Status</th><th>Tanggal</th><th>Trial</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+        {% for lead in leads %}
+        <tr>
+          <td style="font-weight:600;">{{ lead.nama }}</td>
+          <td>{{ lead.jenis_usaha or '-' }}</td>
+          <td style="font-size:12px;">{{ lead.no_wa or '-' }}</td>
+          <td style="font-size:12px;">{{ lead.kabupaten or '-' }}</td>
+          <td><span class="badge badge-info" style="font-size:10px;">{{ lead.source }}</span></td>
+          <td>
+            <span class="badge {% if lead.status == 'new' %}badge-primary{% elif lead.status == 'contacted' %}badge-warning{% elif lead.status == 'converted' %}badge-success{% else %}badge-danger{% endif %}">
+              {{ lead.status }}
+            </span>
+          </td>
+          <td class="text-muted" style="font-size:12px;">{{ lead.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td style="font-size:11px;max-width:200px;">
+            {% if lead.trial_tenant_id %}
+              {% if lead.trial_expired_at and utc_now() <= lead.trial_expired_at %}
+              <span class="badge badge-success" style="font-size:9px;">Trial aktif</span>
+              {% else %}
+              <span class="badge badge-warning" style="font-size:9px;">Trial berakhir</span>
+              {% endif %}
+              {% if lead.trial_username %}
+              <div style="margin-top:4px;font-family:monospace;">{{ lead.trial_username }}</div>
+              {% endif %}
+              {% if lead.trial_password %}
+              <div style="color:var(--text-muted);word-break:break-all;">{{ lead.trial_password }}</div>
+              {% endif %}
+              {% if lead.trial_expired_at %}
+              <div class="text-muted" style="font-size:10px;">Exp {{ lead.trial_expired_at.strftime('%d/%m/%Y') }}</div>
+              {% endif %}
+              {% if lead.trial_tenant_id %}
+              <a href="{{ url_for('superadmin.view_tenant', id=lead.trial_tenant_id) }}" class="btn btn-outline btn-sm" style="margin-top:6px;padding:2px 6px;font-size:10px;">Tenant</a>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              <form method="POST" action="{{ url_for('superadmin.lead_update_status', id=lead.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <select name="status" onchange="this.form.submit()" class="form-control" style="font-size:11px;padding:2px 4px;min-width:90px;">
+                  {% for code, label in lead_statuses %}
+                  <option value="{{ code }}" {% if lead.status == code %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </form>
+              {% if lead.status != 'converted' %}
+              <form method="POST" action="{{ url_for('superadmin.lead_convert', id=lead.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm" title="Konversi ke tenant">🏢</button>
+              </form>
+              {% endif %}
+              <form method="POST" action="{{ url_for('superadmin.lead_delete', id=lead.id) }}" style="display:inline;" onsubmit="return confirm('Hapus lead ini?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger);">🗑️</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:40px;">Belum ada lead</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if total_pages > 1 %}
+  <div style="padding:12px 16px;display:flex;gap:8px;justify-content:center;align-items:center;">
+    {% if page > 1 %}<a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.leads_index', page=page-1, status=status_filter, q=q) }}">←</a>{% endif %}
+    <span class="text-muted" style="font-size:13px;">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}<a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.leads_index', page=page+1, status=status_filter, q=q) }}">→</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

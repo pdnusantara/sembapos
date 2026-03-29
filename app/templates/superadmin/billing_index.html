@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Billing — Super Admin{% endblock %}
+{% block page_title %}💳 Billing & Invoice{% endblock %}
+{% block page_sub %}Kelola tagihan langganan tenant{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Billing', '', true)]) }}
+
+<div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:16px;">
+  <div class="stat-card warning"><div class="stat-info"><div class="stat-value">{{ stats.unpaid }}</div><div class="stat-label">Belum Bayar</div></div></div>
+  <div class="stat-card danger"><div class="stat-info"><div class="stat-value">{{ stats.overdue }}</div><div class="stat-label">Overdue</div></div></div>
+  <div class="stat-card success"><div class="stat-info"><div class="stat-value">{{ stats.paid }}</div><div class="stat-label">Lunas</div></div></div>
+  <div class="stat-card primary"><div class="stat-info"><div class="stat-value" style="font-size:14px;">Rp {{ "{:,.0f}".format(stats.total_unpaid).replace(",",".") }}</div><div class="stat-label">Total Outstanding</div></div></div>
+</div>
+
+<div class="page-list-toolbar mb-3" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="{{ url_for('superadmin.billing_add') }}" class="btn btn-primary">+ Buat Invoice</a>
+    <a href="{{ url_for('superadmin.billing_index') }}" class="btn btn-outline btn-sm {% if not status_filter %}active{% endif %}">Semua</a>
+    <a href="{{ url_for('superadmin.billing_index', status='unpaid') }}" class="btn btn-outline btn-sm {% if status_filter == 'unpaid' %}active{% endif %}">Unpaid</a>
+    <a href="{{ url_for('superadmin.billing_index', status='overdue') }}" class="btn btn-outline btn-sm {% if status_filter == 'overdue' %}active{% endif %}">Overdue</a>
+    <a href="{{ url_for('superadmin.billing_index', status='paid') }}" class="btn btn-outline btn-sm {% if status_filter == 'paid' %}active{% endif %}">Paid</a>
+  </div>
+  <form method="get" style="display:flex;gap:8px;">
+    <select name="tenant" class="form-control" style="min-width:160px;" onchange="this.form.submit()">
+      <option value="">Semua tenant</option>
+      {% for t in tenants %}
+      <option value="{{ t.id }}" {% if tenant_filter == t.id %}selected{% endif %}>{{ t.nama }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr><th>No. Invoice</th><th>Tenant</th><th>Nominal</th><th>Periode</th><th>Status</th><th>Tgl Bayar</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+        {% for inv in invoices %}
+        <tr>
+          <td style="font-weight:600;font-family:monospace;">{{ inv.nomor }}</td>
+          <td>{{ inv.tenant.nama if inv.tenant else '-' }}</td>
+          <td style="white-space:nowrap;">Rp {{ "{:,.0f}".format(inv.nominal).replace(",",".") }}</td>
+          <td style="font-size:12px;">
+            {% if inv.periode_mulai %}{{ inv.periode_mulai.strftime('%d/%m/%y') }}{% endif %}
+            {% if inv.periode_akhir %} — {{ inv.periode_akhir.strftime('%d/%m/%y') }}{% endif %}
+          </td>
+          <td>
+            <span class="badge {% if inv.status == 'paid' %}badge-success{% elif inv.status == 'overdue' %}badge-danger{% elif inv.status == 'cancelled' %}badge-info{% else %}badge-warning{% endif %}">
+              {{ inv.status.upper() }}
+            </span>
+          </td>
+          <td class="text-muted" style="font-size:12px;">{{ inv.tanggal_bayar.strftime('%d/%m/%Y') if inv.tanggal_bayar else '-' }}</td>
+          <td>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              {% if inv.status in ('unpaid', 'overdue') %}
+              <form method="POST" action="{{ url_for('superadmin.billing_pay', id=inv.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="metode_bayar" value="transfer"/>
+                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--success);" onclick="return confirm('Tandai lunas?')">✅</button>
+              </form>
+              <form method="POST" action="{{ url_for('superadmin.billing_cancel', id=inv.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger);" onclick="return confirm('Batalkan invoice?')">✕</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center;padding:40px;">Belum ada invoice</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if total_pages > 1 %}
+  <div style="padding:12px 16px;display:flex;gap:8px;justify-content:center;align-items:center;">
+    {% if page > 1 %}<a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.billing_index', page=page-1, status=status_filter, tenant=tenant_filter) }}">←</a>{% endif %}
+    <span class="text-muted" style="font-size:13px;">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}<a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.billing_index', page=page+1, status=status_filter, tenant=tenant_filter) }}">→</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

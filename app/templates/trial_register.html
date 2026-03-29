@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0f1a">
+  <meta name="robots" content="noindex,follow">
+  <title>Daftar trial gratis — SembaPOS</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+  <style>
+    .trial-wizard { position: relative; min-height: 280px; }
+    .trial-step { display: none; animation: fadeIn 0.2s ease; }
+    .trial-step.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .trial-progress { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; text-align: center; }
+    .trial-progress-bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; margin-bottom: 16px; overflow: hidden; }
+    .trial-progress-fill { height: 100%; background: var(--primary); border-radius: 2px; transition: width 0.25s ease; }
+    .trial-nav { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+    .trial-nav .btn { flex: 1; min-width: 120px; }
+    .trial-hint { font-size: 12px; color: var(--text-muted); margin-top: 8px; line-height: 1.45; }
+  </style>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-bg"></div>
+  <div class="login-card" style="max-width: 440px;">
+    <div class="login-logo">
+      <div class="logo-circle">🎁</div>
+      <h1>Trial 30 hari</h1>
+      <p>Isi data bertahap — akun toko langsung aktif paket Basic.</p>
+      <p style="margin-top:10px;font-size:13px;"><a href="{{ url_for('landing.index') }}" style="color:var(--primary-light);">← Beranda</a>
+        &nbsp;·&nbsp; <a href="{{ url_for('auth.login') }}" style="color:var(--primary-light);">Sudah punya akun?</a></p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else category }}" style="margin-bottom:12px;">
+            <span>{{ message }}</span>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="trial-progress" id="trialProgressLabel">Langkah 1 dari 6</div>
+    <div class="trial-progress-bar"><div class="trial-progress-fill" id="trialProgressFill" style="width:16.66%;"></div></div>
+
+    <form method="POST" action="{{ url_for('landing.trial_register') }}" id="trialForm" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="provinsi" id="in_provinsi" value="">
+      <input type="hidden" name="kabupaten" id="in_kabupaten" value="">
+      <input type="hidden" name="kecamatan" id="in_kecamatan" value="">
+      <input type="hidden" name="desa" id="in_desa" value="">
+
+      <div class="trial-wizard">
+        <!-- Step 1: identitas -->
+        <div class="trial-step active" data-step="1">
+          <div class="form-group">
+            <label class="form-label">Nama lengkap</label>
+            <input type="text" name="nama" id="inp_nama" class="form-control" required autocomplete="name" placeholder="Nama Anda" maxlength="120" value="{{ request.form.get('nama', '') }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nomor WhatsApp</label>
+            <input type="tel" name="no_wa" id="inp_no_wa" class="form-control" required autocomplete="tel" placeholder="08xxxxxxxxxx" maxlength="30" value="{{ request.form.get('no_wa', '') }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nama toko</label>
+            <input type="text" name="nama_toko" id="inp_nama_toko" class="form-control" required placeholder="Nama usaha / toko" maxlength="100" value="{{ request.form.get('nama_toko', '') }}">
+          </div>
+          <p class="trial-hint">Lanjut ke jenis usaha & lokasi wilayah Indonesia.</p>
+        </div>
+
+        <!-- Step 2: jenis usaha -->
+        <div class="trial-step" data-step="2">
+          <div class="form-group">
+            <label class="form-label">Jenis usaha</label>
+            <select name="jenis_usaha" id="inp_jenis" class="form-control" required>
+              <option value="">— Pilih —</option>
+              {% for val, label in jenis_usaha_choices %}
+              <option value="{{ val }}" {% if request.form.get('jenis_usaha') == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <p class="trial-hint">Pilih yang paling mendekati bisnis Anda.</p>
+        </div>
+
+        <!-- Step 3: provinsi -->
+        <div class="trial-step" data-step="3">
+          <div class="form-group">
+            <label class="form-label">Provinsi</label>
+            <select id="selProv" class="form-control" aria-label="Provinsi">
+              <option value="">Memuat…</option>
+            </select>
+          </div>
+          <p class="trial-hint">Pilih provinsi tempat toko berada.</p>
+        </div>
+
+        <!-- Step 4: kabupaten -->
+        <div class="trial-step" data-step="4">
+          <div class="form-group">
+            <label class="form-label">Kabupaten / Kota</label>
+            <select id="selKab" class="form-control" aria-label="Kabupaten atau kota" disabled>
+              <option value="">Pilih provinsi terlebih dahulu</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Step 5: kecamatan -->
+        <div class="trial-step" data-step="5">
+          <div class="form-group">
+            <label class="form-label">Kecamatan</label>
+            <select id="selKec" class="form-control" aria-label="Kecamatan" disabled>
+              <option value="">Pilih kabupaten/kota terlebih dahulu</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Step 6: desa + kirim -->
+        <div class="trial-step" data-step="6">
+          <div class="form-group">
+            <label class="form-label">Desa / Kelurahan</label>
+            <select id="selDesa" class="form-control" aria-label="Desa atau kelurahan" disabled>
+              <option value="">Pilih kecamatan terlebih dahulu</option>
+            </select>
+          </div>
+          <p class="trial-hint">Dengan mendaftar, Anda menyetujui pembuatan akun uji coba. Satu nomor WhatsApp hanya untuk satu trial aktif.</p>
+        </div>
+      </div>
+
+      <div class="trial-nav">
+        <button type="button" class="btn btn-outline" id="btnBack" style="display:none;">Kembali</button>
+        <button type="button" class="btn btn-primary" id="btnNext">Lanjut</button>
+        <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit" style="display:none;flex:2;">Buat akun trial</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function() {
+  const totalSteps = 6;
+  let step = 1;
+  let provinsiLoaded = false;
+  let provId = '';
+  let kabId = '';
+  let kecId = '';
+
+  const el = (id) => document.getElementById(id);
+  const progressLabel = el('trialProgressLabel');
+  const progressFill = el('trialProgressFill');
+  const btnBack = el('btnBack');
+  const btnNext = el('btnNext');
+  const btnSubmit = el('btnSubmit');
+  const form = el('trialForm');
+
+  function showStep(n) {
+    document.querySelectorAll('.trial-step').forEach(function(box) {
+      box.classList.toggle('active', parseInt(box.getAttribute('data-step'), 10) === n);
+    });
+    step = n;
+    progressLabel.textContent = 'Langkah ' + n + ' dari ' + totalSteps;
+    progressFill.style.width = (100 * n / totalSteps) + '%';
+    btnBack.style.display = n > 1 ? 'block' : 'none';
+    btnNext.style.display = n < totalSteps ? 'block' : 'none';
+    btnSubmit.style.display = n === totalSteps ? 'block' : 'none';
+    if (n === 3 && !provinsiLoaded) loadProvinsi();
+  }
+
+  function alertStep(msg) {
+    alert(msg);
+  }
+
+  const WU = {
+    provinsi: '{{ url_for("landing.trial_wilayah_provinsi") }}',
+    kab: function(id) { return '{{ url_for("landing.trial_wilayah_kabupaten", prov_id="__ID__") }}'.replace('__ID__', encodeURIComponent(id)); },
+    kec: function(id) { return '{{ url_for("landing.trial_wilayah_kecamatan", kab_id="__ID__") }}'.replace('__ID__', encodeURIComponent(id)); },
+    desa: function(id) { return '{{ url_for("landing.trial_wilayah_desa", kec_id="__ID__") }}'.replace('__ID__', encodeURIComponent(id)); }
+  };
+
+  async function loadProvinsi() {
+    const sel = el('selProv');
+    sel.innerHTML = '<option value="">Memuat…</option>';
+    try {
+      const r = await fetch(WU.provinsi);
+      const data = await r.json();
+      sel.innerHTML = '<option value="">— Pilih provinsi —</option>';
+      (data || []).forEach(function(row) {
+        const o = document.createElement('option');
+        o.value = row.id;
+        o.textContent = row.nama;
+        o.setAttribute('data-nama', row.nama);
+        sel.appendChild(o);
+      });
+      provinsiLoaded = true;
+    } catch (e) {
+      sel.innerHTML = '<option value="">Gagal memuat provinsi</option>';
+    }
+  }
+
+  el('selProv').addEventListener('change', function() {
+    provId = this.value;
+    el('in_provinsi').value = '';
+    el('selKab').innerHTML = '<option value="">Memuat…</option>';
+    el('selKab').disabled = true;
+    el('in_kabupaten').value = '';
+    el('selKec').innerHTML = '<option value="">— Pilih kecamatan —</option>';
+    el('selKec').disabled = true;
+    el('in_kecamatan').value = '';
+    el('selDesa').innerHTML = '<option value="">— Pilih desa/kelurahan —</option>';
+    el('selDesa').disabled = true;
+    el('in_desa').value = '';
+    kabId = '';
+    kecId = '';
+  });
+
+  async function loadKabupaten(pid) {
+    const sel = el('selKab');
+    sel.innerHTML = '<option value="">Memuat…</option>';
+    sel.disabled = false;
+    try {
+      const r = await fetch(WU.kab(pid));
+      const data = await r.json();
+      sel.innerHTML = '<option value="">— Pilih kabupaten/kota —</option>';
+      (data || []).forEach(function(row) {
+        const o = document.createElement('option');
+        o.value = row.id;
+        o.textContent = row.nama;
+        o.setAttribute('data-nama', row.nama);
+        sel.appendChild(o);
+      });
+    } catch (e) {
+      sel.innerHTML = '<option value="">Gagal memuat data</option>';
+    }
+  }
+
+  el('selKab').addEventListener('change', function() {
+    kabId = this.value;
+    el('in_kabupaten').value = '';
+    el('selKec').innerHTML = '<option value="">Memuat…</option>';
+    el('selKec').disabled = true;
+    el('in_kecamatan').value = '';
+    el('selDesa').innerHTML = '<option value="">— Pilih desa/kelurahan —</option>';
+    el('selDesa').disabled = true;
+    el('in_desa').value = '';
+    kecId = '';
+  });
+
+  async function loadKecamatan(kid) {
+    const sel = el('selKec');
+    sel.innerHTML = '<option value="">Memuat…</option>';
+    sel.disabled = false;
+    try {
+      const r = await fetch(WU.kec(kid));
+      const data = await r.json();
+      sel.innerHTML = '<option value="">— Pilih kecamatan —</option>';
+      (data || []).forEach(function(row) {
+        const o = document.createElement('option');
+        o.value = row.id;
+        o.textContent = row.nama;
+        o.setAttribute('data-nama', row.nama);
+        sel.appendChild(o);
+      });
+    } catch (e) {
+      sel.innerHTML = '<option value="">Gagal memuat data</option>';
+    }
+  }
+
+  el('selKec').addEventListener('change', function() {
+    kecId = this.value;
+    el('in_kecamatan').value = '';
+    el('selDesa').innerHTML = '<option value="">Memuat…</option>';
+    el('selDesa').disabled = true;
+    el('in_desa').value = '';
+  });
+
+  async function loadDesa(kid) {
+    const sel = el('selDesa');
+    sel.innerHTML = '<option value="">Memuat…</option>';
+    sel.disabled = false;
+    try {
+      const r = await fetch(WU.desa(kid));
+      const data = await r.json();
+      sel.innerHTML = '<option value="">— Pilih desa/kelurahan —</option>';
+      (data || []).forEach(function(row) {
+        const o = document.createElement('option');
+        o.value = row.id;
+        o.textContent = row.nama;
+        o.setAttribute('data-nama', row.nama);
+        sel.appendChild(o);
+      });
+    } catch (e) {
+      sel.innerHTML = '<option value="">Gagal memuat data</option>';
+    }
+  }
+
+  btnBack.addEventListener('click', function() {
+    if (step > 1) showStep(step - 1);
+  });
+
+  btnNext.addEventListener('click', async function() {
+    if (step === 1) {
+      if (!el('inp_nama').value.trim()) { alertStep('Isi nama lengkap.'); return; }
+      if (!el('inp_no_wa').value.trim()) { alertStep('Isi nomor WhatsApp.'); return; }
+      if (!el('inp_nama_toko').value.trim()) { alertStep('Isi nama toko.'); return; }
+      showStep(2);
+      return;
+    }
+    if (step === 2) {
+      if (!el('inp_jenis').value) { alertStep('Pilih jenis usaha.'); return; }
+      showStep(3);
+      return;
+    }
+    if (step === 3) {
+      const sp = el('selProv');
+      if (!sp.value) { alertStep('Pilih provinsi.'); return; }
+      const opt = sp.options[sp.selectedIndex];
+      el('in_provinsi').value = opt.getAttribute('data-nama') || opt.textContent || '';
+      await loadKabupaten(sp.value);
+      showStep(4);
+      return;
+    }
+    if (step === 4) {
+      const sk = el('selKab');
+      if (!sk.value) { alertStep('Pilih kabupaten/kota.'); return; }
+      const opt = sk.options[sk.selectedIndex];
+      el('in_kabupaten').value = opt.getAttribute('data-nama') || opt.textContent || '';
+      await loadKecamatan(sk.value);
+      showStep(5);
+      return;
+    }
+    if (step === 5) {
+      const sk = el('selKec');
+      if (!sk.value) { alertStep('Pilih kecamatan.'); return; }
+      const opt = sk.options[sk.selectedIndex];
+      el('in_kecamatan').value = opt.getAttribute('data-nama') || opt.textContent || '';
+      await loadDesa(sk.value);
+      showStep(6);
+      return;
+    }
+  });
+
+  form.addEventListener('submit', function(ev) {
+    if (step !== 6) {
+      ev.preventDefault();
+      return;
+    }
+    const sd = el('selDesa');
+    if (!sd.value) {
+      ev.preventDefault();
+      alertStep('Pilih desa/kelurahan.');
+      return;
+    }
+    const opt = sd.options[sd.selectedIndex];
+    el('in_desa').value = opt.getAttribute('data-nama') || opt.textContent || '';
+  });
+
+  showStep(1);
+})();
+</script>
+</body>
+</html>

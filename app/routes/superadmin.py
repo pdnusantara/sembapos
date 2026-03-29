@@ -4,7 +4,10 @@ import os
 import re
 import secrets
 import string
+import shutil as shutil_mod
+import subprocess
 from io import StringIO
+from urllib.parse import parse_qs, unquote, urlparse, urlunparse
 from functools import wraps
 from datetime import datetime, timedelta, time
 
@@ -33,9 +36,14 @@ from ..models import (
     User,
     Branch,
     Transaction,
+    Product,
     SuperadminAuditLog,
     TenantPackage,
     TenantPlanHistory,
+    LeadCapture,
+    AppSetting,
+    TenantInvoice,
+    Announcement,
     MarketplaceSeller,
     MarketplaceCategory,
     MarketplaceProduct,
@@ -156,6 +164,17 @@ def _parse_expiry_date(s):
         return None
 
 
+def _parse_date_start_utc(s):
+    """Tanggal mulai (awal hari UTC naive) — untuk pengumuman / field 'dari tanggal'."""
+    if not s or not str(s).strip():
+        return None
+    try:
+        d = datetime.strptime(str(s).strip()[:10], '%Y-%m-%d').date()
+        return datetime.combine(d, time(0, 0, 0))
+    except ValueError:
+        return None
+
+
 def _log_sa(action, tenant_id=None, detail=None):
     db.session.add(SuperadminAuditLog(
         actor_user_id=current_user.id,
@@ -205,6 +224,7 @@ def _tenant_query_filtered():
         selectinload(Tenant.branches),
         selectinload(Tenant.users),
         selectinload(Tenant.subscription),
+        selectinload(Tenant.lead_source),
     )
     if q:
         like = f'%{q}%'
@@ -1002,6 +1022,21 @@ def view_tenant(id):
         .all()
     )
 
+    from ..models import Supplier
+    onboarding_steps = []
+    has_products = Product.query.filter_by(tenant_id=id, aktif=True).count() > 0
+    has_supplier = Supplier.query.filter_by(tenant_id=id).first() is not None
+    has_tx = total_transaksi > 0
+    has_multi_user = len([u for u in users if u.aktif]) > 1
+    has_multi_branch = len([b for b in branches if b.aktif]) > 1
+    onboarding_steps.append({'label': 'Produk ditambahkan', 'done': has_products})
+    onboarding_steps.append({'label': 'Supplier ditambahkan', 'done': has_supplier})
+    onboarding_steps.append({'label': 'Transaksi pertama', 'done': has_tx})
+    onboarding_steps.append({'label': 'Multi-user aktif', 'done': has_multi_user})
+    onboarding_steps.append({'label': 'Cabang tambahan', 'done': has_multi_branch})
+    onboarding_done = sum(1 for s in onboarding_steps if s['done'])
+    onboarding_pct = int(100 * onboarding_done / len(onboarding_steps)) if onboarding_steps else 0
+
     return render_template(
         'superadmin/view_tenant.html',
         tenant=tenant,
@@ -1024,6 +1059,9 @@ def view_tenant(id):
         unlimited_threshold=UNLIMITED_THRESHOLD,
         paket_modul_ringkas=paket_modul_ringkas,
         plan_history_recent=plan_history_recent,
+        onboarding_steps=onboarding_steps,
+        onboarding_done=onboarding_done,
+        onboarding_pct=onboarding_pct,
     )
 
 
@@ -1055,6 +1093,7 @@ def _save_marketplace_image(file_obj, subfolder='sellers'):
 # ── CATEGORIES ────────────────────────────────────────────────
 
 @superadmin_bp.route('/marketplace/categories', methods=['GET', 'POST'])
+@login_required
 @superadmin_required
 def marketplace_categories():
     if request.method == 'POST':
@@ -1075,6 +1114,7 @@ def marketplace_categories():
                     nama=nama, icon=icon, slug=slug, sort_order=sort_order
                 )
                 db.session.add(cat)
+                _log_sa('marketplace_category_add', detail=f'nama={nama}')
                 db.session.commit()
                 flash(f'Kategori "{nama}" berhasil ditambahkan.', 'success')
 
@@ -1107,6 +1147,7 @@ def marketplace_categories():
 # ── SELLERS ──────────────────────────────────────────────────
 
 @superadmin_bp.route('/marketplace/sellers')
+@login_required
 @superadmin_required
 def marketplace_sellers():
     sellers = MarketplaceSeller.query.order_by(MarketplaceSeller.nama).all()
@@ -1121,6 +1162,7 @@ def marketplace_sellers():
 
 
 @superadmin_bp.route('/marketplace/sellers/add', methods=['GET', 'POST'])
+@login_required
 @superadmin_required
 def marketplace_seller_add():
     if request.method == 'POST':
@@ -1143,6 +1185,7 @@ def marketplace_seller_add():
             email=request.form.get('email', '').strip(),
         )
         db.session.add(seller)
+        _log_sa('marketplace_seller_add', detail=f'nama={nama}')
         db.session.commit()
         flash(f'Seller "{nama}" berhasil ditambahkan.', 'success')
         return redirect(url_for('superadmin.marketplace_sellers'))
@@ -1151,6 +1194,7 @@ def marketplace_seller_add():
 
 
 @superadmin_bp.route('/marketplace/sellers/<int:seller_id>/edit', methods=['GET', 'POST'])
+@login_required
 @superadmin_required
 def marketplace_seller_edit(seller_id):
     seller = MarketplaceSeller.query.get_or_404(seller_id)
@@ -1171,6 +1215,7 @@ def marketplace_seller_edit(seller_id):
         if logo_file and logo_file.filename and _allowed_image(logo_file.filename):
             seller.logo = _save_marketplace_image(logo_file, 'sellers')
 
+        _log_sa('marketplace_seller_edit', detail=f'seller_id={seller_id}')
         db.session.commit()
         flash('Seller berhasil diperbarui.', 'success')
         return redirect(url_for('superadmin.marketplace_sellers'))
@@ -1179,10 +1224,12 @@ def marketplace_seller_edit(seller_id):
 
 
 @superadmin_bp.route('/marketplace/sellers/<int:seller_id>/toggle', methods=['POST'])
+@login_required
 @superadmin_required
 def marketplace_seller_toggle(seller_id):
     seller = MarketplaceSeller.query.get_or_404(seller_id)
     seller.aktif = not seller.aktif
+    _log_sa('marketplace_seller_toggle', detail=f'seller_id={seller_id} aktif={seller.aktif}')
     db.session.commit()
     flash(f'Seller {"diaktifkan" if seller.aktif else "dinonaktifkan"}.', 'success')
     return redirect(url_for('superadmin.marketplace_sellers'))
@@ -1191,6 +1238,7 @@ def marketplace_seller_toggle(seller_id):
 # ── PRODUCTS ──────────────────────────────────────────────────
 
 @superadmin_bp.route('/marketplace/products')
+@login_required
 @superadmin_required
 def marketplace_products():
     page = request.args.get('page', 1, type=int)
@@ -1226,6 +1274,7 @@ def marketplace_products():
 
 
 @superadmin_bp.route('/marketplace/products/add', methods=['GET', 'POST'])
+@login_required
 @superadmin_required
 def marketplace_product_add():
     sellers = MarketplaceSeller.query.filter_by(aktif=True).order_by(MarketplaceSeller.nama).all()
@@ -1301,6 +1350,7 @@ def marketplace_product_add():
 
 
 @superadmin_bp.route('/marketplace/products/<int:product_id>/edit', methods=['GET', 'POST'])
+@login_required
 @superadmin_required
 def marketplace_product_edit(product_id):
     product = MarketplaceProduct.query.get_or_404(product_id)
@@ -1366,6 +1416,7 @@ def marketplace_product_edit(product_id):
 
 
 @superadmin_bp.route('/marketplace/products/<int:product_id>/delete', methods=['POST'])
+@login_required
 @superadmin_required
 def marketplace_product_delete(product_id):
     product = MarketplaceProduct.query.get_or_404(product_id)
@@ -1381,6 +1432,7 @@ def marketplace_product_delete(product_id):
 # ── ORDERS (SELLER CENTER) ────────────────────────────────────
 
 @superadmin_bp.route('/marketplace/orders')
+@login_required
 @superadmin_required
 def marketplace_orders():
     page = request.args.get('page', 1, type=int)
@@ -1433,6 +1485,7 @@ def marketplace_orders():
 
 
 @superadmin_bp.route('/marketplace/orders/<int:order_id>')
+@login_required
 @superadmin_required
 def marketplace_order_detail(order_id):
     order = MarketplaceOrder.query.get_or_404(order_id)
@@ -1445,6 +1498,7 @@ def marketplace_order_detail(order_id):
 
 
 @superadmin_bp.route('/marketplace/orders/<int:order_id>/status', methods=['POST'])
+@login_required
 @superadmin_required
 def marketplace_order_status(order_id):
     order = MarketplaceOrder.query.get_or_404(order_id)
@@ -1488,6 +1542,7 @@ def marketplace_order_status(order_id):
 
 
 @superadmin_bp.route('/marketplace/orders/<int:order_id>/invoice')
+@login_required
 @superadmin_required
 def marketplace_order_invoice(order_id):
     order = MarketplaceOrder.query.get_or_404(order_id)
@@ -1507,6 +1562,7 @@ _MP_CSV_COLUMNS = [
 
 
 @superadmin_bp.route('/marketplace/products/import/sample.csv')
+@login_required
 @superadmin_required
 def marketplace_product_import_sample():
     rows = [
@@ -1527,6 +1583,7 @@ def marketplace_product_import_sample():
 
 
 @superadmin_bp.route('/marketplace/products/import', methods=['GET', 'POST'])
+@login_required
 @superadmin_required
 def marketplace_product_import():
     sellers = MarketplaceSeller.query.filter_by(aktif=True).order_by(MarketplaceSeller.nama).all()
@@ -1699,6 +1756,7 @@ def marketplace_product_import():
 # ─────────────────────────────────────────────────────────────
 
 @superadmin_bp.route('/marketplace/reports')
+@login_required
 @superadmin_required
 def marketplace_reports():
     today = datetime.utcnow()
@@ -1827,3 +1885,985 @@ def marketplace_reports():
         daily_omzet=daily_omzet,
         days_in_month=days_in_month,
     )
+
+
+# ─────────────────────────────────────────────────────────────
+# SUPERADMIN DASHBOARD (Analytics)
+# ─────────────────────────────────────────────────────────────
+
+def _platform_monthly_revenue(year, month):
+    from calendar import monthrange
+    _, dim = monthrange(year, month)
+    start = datetime(year, month, 1)
+    end = datetime(year, month, dim, 23, 59, 59)
+    return db.session.query(
+        func.coalesce(func.sum(Transaction.total), 0)
+    ).filter(
+        Transaction.status == 'selesai',
+        Transaction.created_at.between(start, end),
+    ).scalar() or 0
+
+
+def _tenant_health_score(tenant):
+    now = datetime.utcnow()
+    since_7d = now - timedelta(days=7)
+    since_30d = now - timedelta(days=30)
+    tx_7d = Transaction.query.filter(
+        Transaction.tenant_id == tenant.id,
+        Transaction.status == 'selesai',
+        Transaction.created_at >= since_7d,
+    ).count()
+    tx_30d = Transaction.query.filter(
+        Transaction.tenant_id == tenant.id,
+        Transaction.status == 'selesai',
+        Transaction.created_at >= since_30d,
+    ).count()
+    products = Product.query.filter_by(tenant_id=tenant.id, aktif=True).count()
+    users_active = User.query.filter_by(tenant_id=tenant.id, aktif=True).count()
+
+    score = 0
+    if tx_7d >= 10:
+        score += 40
+    elif tx_7d >= 3:
+        score += 25
+    elif tx_7d >= 1:
+        score += 10
+
+    if tx_30d >= 50:
+        score += 25
+    elif tx_30d >= 15:
+        score += 15
+    elif tx_30d >= 1:
+        score += 5
+
+    if products >= 20:
+        score += 20
+    elif products >= 5:
+        score += 10
+
+    if users_active >= 2:
+        score += 15
+    elif users_active >= 1:
+        score += 5
+
+    return min(100, score), tx_7d, tx_30d
+
+
+@superadmin_bp.route('/dashboard')
+@login_required
+@superadmin_required
+def sa_dashboard():
+    now = datetime.utcnow()
+    today = now.date()
+    start_today = datetime.combine(today, datetime.min.time())
+    end_today = datetime.combine(today, datetime.max.time())
+
+    total_tenants = Tenant.query.count()
+    tenants_aktif = Tenant.query.filter_by(aktif=True).count()
+    tenants_nonaktif = total_tenants - tenants_aktif
+
+    month_start = datetime(now.year, now.month, 1)
+    tenants_baru_bulan = Tenant.query.filter(
+        Tenant.tanggal_daftar >= month_start
+    ).count()
+
+    revenue_today = db.session.query(
+        func.coalesce(func.sum(Transaction.total), 0)
+    ).filter(
+        Transaction.status == 'selesai',
+        Transaction.created_at.between(start_today, end_today),
+    ).scalar() or 0
+
+    revenue_month = _platform_monthly_revenue(now.year, now.month)
+
+    expiring_soon = Tenant.query.filter(
+        Tenant.aktif.is_(True),
+        Tenant.tanggal_expired.isnot(None),
+        Tenant.tanggal_expired > now,
+        Tenant.tanggal_expired <= now + timedelta(days=14),
+    ).order_by(Tenant.tanggal_expired.asc()).all()
+
+    expired_tenants = Tenant.query.filter(
+        Tenant.aktif.is_(True),
+        Tenant.tanggal_expired.isnot(None),
+        Tenant.tanggal_expired < now,
+    ).count()
+
+    top_5 = db.session.query(
+        Tenant.id, Tenant.nama, Tenant.kode,
+        func.coalesce(func.sum(Transaction.total), 0).label('omzet'),
+    ).join(Transaction, Transaction.tenant_id == Tenant.id).filter(
+        Transaction.status == 'selesai',
+        Transaction.created_at >= month_start,
+    ).group_by(Tenant.id, Tenant.nama, Tenant.kode).order_by(
+        func.sum(Transaction.total).desc()
+    ).limit(5).all()
+
+    chart_30d_labels = []
+    chart_30d_data = []
+    for i in range(29, -1, -1):
+        d = today - timedelta(days=i)
+        s = datetime.combine(d, datetime.min.time())
+        e = datetime.combine(d, datetime.max.time())
+        rev = db.session.query(
+            func.coalesce(func.sum(Transaction.total), 0)
+        ).filter(
+            Transaction.status == 'selesai',
+            Transaction.created_at.between(s, e),
+        ).scalar() or 0
+        chart_30d_labels.append(d.strftime('%d/%m'))
+        chart_30d_data.append(float(rev))
+
+    chart_growth_labels = []
+    chart_growth_data = []
+    for i in range(5, -1, -1):
+        m = now.month - i
+        y = now.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        from calendar import monthrange
+        _, dim = monthrange(y, m)
+        ms = datetime(y, m, 1)
+        me = datetime(y, m, dim, 23, 59, 59)
+        cnt = Tenant.query.filter(
+            Tenant.tanggal_daftar.between(ms, me)
+        ).count()
+        chart_growth_labels.append(ms.strftime('%b %Y'))
+        chart_growth_data.append(cnt)
+
+    mp_pending = MarketplaceOrder.query.filter_by(status='pending').count()
+
+    invoices_overdue = TenantInvoice.query.filter_by(status='overdue').count()
+    invoices_unpaid = TenantInvoice.query.filter_by(status='unpaid').count()
+
+    leads_new = LeadCapture.query.filter_by(status='new').count()
+
+    return render_template(
+        'superadmin/dashboard.html',
+        total_tenants=total_tenants,
+        tenants_aktif=tenants_aktif,
+        tenants_nonaktif=tenants_nonaktif,
+        tenants_baru_bulan=tenants_baru_bulan,
+        revenue_today=revenue_today,
+        revenue_month=revenue_month,
+        expiring_soon=expiring_soon,
+        expired_tenants=expired_tenants,
+        top_5=top_5,
+        chart_30d_labels=json.dumps(chart_30d_labels),
+        chart_30d_data=json.dumps(chart_30d_data),
+        chart_growth_labels=json.dumps(chart_growth_labels),
+        chart_growth_data=json.dumps(chart_growth_data),
+        mp_pending=mp_pending,
+        invoices_overdue=invoices_overdue,
+        invoices_unpaid=invoices_unpaid,
+        leads_new=leads_new,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# LEAD CAPTURE
+# ─────────────────────────────────────────────────────────────
+
+LEAD_STATUSES = [
+    ('new', 'Baru'),
+    ('contacted', 'Dihubungi'),
+    ('converted', 'Dikonversi'),
+    ('rejected', 'Ditolak'),
+]
+
+
+@superadmin_bp.route('/leads')
+@login_required
+@superadmin_required
+def leads_index():
+    page = max(1, int(request.args.get('page', 1) or 1))
+    status_filter = request.args.get('status', '').strip()
+    q = (request.args.get('q') or '').strip()
+
+    query = LeadCapture.query
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if q:
+        like = f'%{q}%'
+        query = query.filter(
+            or_(
+                LeadCapture.nama.ilike(like),
+                LeadCapture.no_wa.ilike(like),
+                LeadCapture.jenis_usaha.ilike(like),
+            )
+        )
+    query = query.order_by(LeadCapture.created_at.desc())
+    total = query.count()
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    if page > total_pages:
+        page = total_pages
+    leads = query.offset((page - 1) * PER_PAGE).limit(PER_PAGE).all()
+
+    stats = {
+        'new': LeadCapture.query.filter_by(status='new').count(),
+        'contacted': LeadCapture.query.filter_by(status='contacted').count(),
+        'converted': LeadCapture.query.filter_by(status='converted').count(),
+        'rejected': LeadCapture.query.filter_by(status='rejected').count(),
+    }
+
+    return render_template(
+        'superadmin/leads_index.html',
+        leads=leads,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+        q=q,
+        status_filter=status_filter,
+        lead_statuses=LEAD_STATUSES,
+        stats=stats,
+    )
+
+
+@superadmin_bp.route('/leads/<int:id>/status', methods=['POST'])
+@login_required
+@superadmin_required
+def lead_update_status(id):
+    lead = LeadCapture.query.get_or_404(id)
+    new_status = request.form.get('status', '').strip()
+    catatan = request.form.get('catatan_admin', '').strip()
+    valid = [s for s, _ in LEAD_STATUSES]
+    if new_status in valid:
+        lead.status = new_status
+    if catatan:
+        lead.catatan_admin = catatan
+    _log_sa('lead_status_change', detail=f'lead_id={id} status={new_status}')
+    db.session.commit()
+    flash('Status lead diperbarui.', 'success')
+    return redirect(url_for('superadmin.leads_index'))
+
+
+@superadmin_bp.route('/leads/<int:id>/convert', methods=['POST'])
+@login_required
+@superadmin_required
+def lead_convert(id):
+    lead = LeadCapture.query.get_or_404(id)
+    if lead.trial_tenant_id:
+        flash('Lead sudah pernah dikonversi.', 'warning')
+        return redirect(url_for('superadmin.leads_index'))
+    flash(
+        f'Silakan buat tenant baru. Data lead: {lead.nama} / {lead.jenis_usaha or "-"}',
+        'info',
+    )
+    return redirect(url_for('superadmin.add_tenant'))
+
+
+@superadmin_bp.route('/leads/<int:id>/delete', methods=['POST'])
+@login_required
+@superadmin_required
+def lead_delete(id):
+    lead = LeadCapture.query.get_or_404(id)
+    db.session.delete(lead)
+    _log_sa('lead_delete', detail=f'lead_id={id} nama={lead.nama}')
+    db.session.commit()
+    flash('Lead dihapus.', 'success')
+    return redirect(url_for('superadmin.leads_index'))
+
+
+# ─────────────────────────────────────────────────────────────
+# PLATFORM SETTINGS
+# ─────────────────────────────────────────────────────────────
+
+PLATFORM_SETTING_KEYS = [
+    ('platform_name', 'Nama Platform', 'Kasir Sembako'),
+    ('default_grace_days', 'Grace Days Setelah Expired', '0'),
+    ('expired_mode', 'Mode Expired (block_login / read_only)', 'block_login'),
+    ('default_tenant_timezone', 'Default Timezone Tenant Baru', 'Asia/Jakarta'),
+    ('maintenance_mode', 'Maintenance Mode (0/1)', '0'),
+    ('smtp_host', 'SMTP Host', ''),
+    ('smtp_port', 'SMTP Port', '587'),
+    ('smtp_user', 'SMTP Username', ''),
+    ('smtp_pass', 'SMTP Password', ''),
+    ('wa_gateway_url', 'WhatsApp Gateway URL', ''),
+    ('wa_gateway_token', 'WhatsApp Gateway Token', ''),
+    ('notif_expiring_days', 'Notif Tenant Expiring (hari sebelum)', '7'),
+]
+
+
+@superadmin_bp.route('/platform-settings', methods=['GET', 'POST'])
+@login_required
+@superadmin_required
+def platform_settings():
+    if request.method == 'POST':
+        for key, label, default in PLATFORM_SETTING_KEYS:
+            val = request.form.get(key, '').strip()
+            AppSetting.set(key, val)
+        _log_sa('platform_settings_update')
+        db.session.commit()
+        flash('Pengaturan platform disimpan.', 'success')
+        return redirect(url_for('superadmin.platform_settings'))
+
+    current_settings = {}
+    for key, label, default in PLATFORM_SETTING_KEYS:
+        current_settings[key] = AppSetting.get(key, default)
+
+    return render_template(
+        'superadmin/platform_settings.html',
+        setting_keys=PLATFORM_SETTING_KEYS,
+        current_settings=current_settings,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# TENANT HEALTH SCORES
+# ─────────────────────────────────────────────────────────────
+
+@superadmin_bp.route('/tenant-health')
+@login_required
+@superadmin_required
+def tenant_health():
+    tenants = Tenant.query.filter_by(aktif=True).order_by(Tenant.nama).all()
+    health_data = []
+    for t in tenants:
+        score, tx_7d, tx_30d = _tenant_health_score(t)
+        if score >= 60:
+            level = 'healthy'
+        elif score >= 30:
+            level = 'warning'
+        else:
+            level = 'danger'
+        health_data.append({
+            'tenant': t,
+            'score': score,
+            'level': level,
+            'tx_7d': tx_7d,
+            'tx_30d': tx_30d,
+        })
+    health_data.sort(key=lambda x: x['score'])
+
+    filter_level = request.args.get('level', '').strip()
+    if filter_level:
+        health_data = [h for h in health_data if h['level'] == filter_level]
+
+    return render_template(
+        'superadmin/tenant_health.html',
+        health_data=health_data,
+        filter_level=filter_level,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# BILLING / INVOICE
+# ─────────────────────────────────────────────────────────────
+
+def _generate_invoice_number():
+    now = datetime.utcnow()
+    prefix = f'INV-{now.strftime("%Y%m")}'
+    last = TenantInvoice.query.filter(
+        TenantInvoice.nomor.like(f'{prefix}%')
+    ).order_by(TenantInvoice.id.desc()).first()
+    if last:
+        try:
+            seq = int(last.nomor.split('-')[-1]) + 1
+        except (ValueError, IndexError):
+            seq = 1
+    else:
+        seq = 1
+    return f'{prefix}-{seq:04d}'
+
+
+@superadmin_bp.route('/billing')
+@login_required
+@superadmin_required
+def billing_index():
+    page = max(1, int(request.args.get('page', 1) or 1))
+    status_filter = request.args.get('status', '').strip()
+    tid = request.args.get('tenant', type=int)
+
+    query = TenantInvoice.query
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if tid:
+        query = query.filter_by(tenant_id=tid)
+    query = query.order_by(TenantInvoice.created_at.desc())
+
+    total = query.count()
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    if page > total_pages:
+        page = total_pages
+    invoices = query.offset((page - 1) * PER_PAGE).limit(PER_PAGE).all()
+
+    stats = {
+        'unpaid': TenantInvoice.query.filter_by(status='unpaid').count(),
+        'paid': TenantInvoice.query.filter_by(status='paid').count(),
+        'overdue': TenantInvoice.query.filter_by(status='overdue').count(),
+        'total_unpaid': db.session.query(
+            func.coalesce(func.sum(TenantInvoice.nominal), 0)
+        ).filter(TenantInvoice.status.in_(['unpaid', 'overdue'])).scalar() or 0,
+    }
+
+    tenants = Tenant.query.order_by(Tenant.nama).all()
+
+    return render_template(
+        'superadmin/billing_index.html',
+        invoices=invoices,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+        status_filter=status_filter,
+        tenant_filter=tid,
+        stats=stats,
+        tenants=tenants,
+    )
+
+
+@superadmin_bp.route('/billing/add', methods=['GET', 'POST'])
+@login_required
+@superadmin_required
+def billing_add():
+    if request.method == 'POST':
+        tid = request.form.get('tenant_id', type=int)
+        tenant = Tenant.query.get(tid) if tid else None
+        if not tenant:
+            flash('Pilih tenant.', 'danger')
+            return redirect(url_for('superadmin.billing_add'))
+
+        nominal = 0
+        try:
+            nominal = float(request.form.get('nominal', 0))
+        except (TypeError, ValueError):
+            pass
+
+        inv = TenantInvoice(
+            tenant_id=tid,
+            nomor=_generate_invoice_number(),
+            nominal=nominal,
+            periode_mulai=_parse_expiry_date(request.form.get('periode_mulai')),
+            periode_akhir=_parse_expiry_date(request.form.get('periode_akhir')),
+            catatan=request.form.get('catatan', '').strip() or None,
+            status='unpaid',
+            created_by=current_user.id,
+        )
+        db.session.add(inv)
+        _log_sa('invoice_create', tid, detail=f'nomor={inv.nomor} nominal={nominal}')
+        db.session.commit()
+        flash(f'Invoice {inv.nomor} dibuat.', 'success')
+        return redirect(url_for('superadmin.billing_index'))
+
+    tenants = Tenant.query.filter_by(aktif=True).order_by(Tenant.nama).all()
+    return render_template('superadmin/billing_form.html', invoice=None, tenants=tenants)
+
+
+@superadmin_bp.route('/billing/<int:id>/pay', methods=['POST'])
+@login_required
+@superadmin_required
+def billing_pay(id):
+    inv = TenantInvoice.query.get_or_404(id)
+    inv.status = 'paid'
+    inv.tanggal_bayar = datetime.utcnow()
+    inv.metode_bayar = request.form.get('metode_bayar', 'transfer').strip()
+    _log_sa('invoice_paid', inv.tenant_id, detail=f'nomor={inv.nomor}')
+    db.session.commit()
+    flash(f'Invoice {inv.nomor} ditandai lunas.', 'success')
+    return redirect(url_for('superadmin.billing_index'))
+
+
+@superadmin_bp.route('/billing/<int:id>/cancel', methods=['POST'])
+@login_required
+@superadmin_required
+def billing_cancel(id):
+    inv = TenantInvoice.query.get_or_404(id)
+    inv.status = 'cancelled'
+    _log_sa('invoice_cancel', inv.tenant_id, detail=f'nomor={inv.nomor}')
+    db.session.commit()
+    flash(f'Invoice {inv.nomor} dibatalkan.', 'success')
+    return redirect(url_for('superadmin.billing_index'))
+
+
+# ─────────────────────────────────────────────────────────────
+# NOTIFICATIONS (send via configured gateway)
+# ─────────────────────────────────────────────────────────────
+
+def _send_wa_message(phone, message):
+    url = AppSetting.get('wa_gateway_url', '')
+    token = AppSetting.get('wa_gateway_token', '')
+    if not url or not token:
+        return False, 'WhatsApp gateway belum dikonfigurasi'
+    import urllib.request
+    data = json.dumps({'phone': phone, 'message': message, 'token': token}).encode()
+    req = Request(url, data=data, headers={'Content-Type': 'application/json'})
+    try:
+        with urlopen(req, timeout=15) as resp:
+            return True, resp.read().decode()
+    except Exception as e:
+        return False, str(e)
+
+
+def _send_email_message(to_email, subject, body):
+    host = AppSetting.get('smtp_host', '')
+    port = int(AppSetting.get('smtp_port', '587') or 587)
+    user = AppSetting.get('smtp_user', '')
+    passwd = AppSetting.get('smtp_pass', '')
+    if not host or not user:
+        return False, 'SMTP belum dikonfigurasi'
+    import smtplib
+    from email.mime.text import MIMEText
+    msg = MIMEText(body, 'plain', 'utf-8')
+    msg['Subject'] = subject
+    msg['From'] = user
+    msg['To'] = to_email
+    try:
+        with smtplib.SMTP(host, port, timeout=15) as s:
+            s.starttls()
+            s.login(user, passwd)
+            s.send_message(msg)
+        return True, 'Sent'
+    except Exception as e:
+        return False, str(e)
+
+
+@superadmin_bp.route('/notifications/send-expiring', methods=['POST'])
+@login_required
+@superadmin_required
+def notif_send_expiring():
+    days = int(AppSetting.get('notif_expiring_days', '7') or 7)
+    now = datetime.utcnow()
+    expiring = Tenant.query.filter(
+        Tenant.aktif.is_(True),
+        Tenant.tanggal_expired.isnot(None),
+        Tenant.tanggal_expired > now,
+        Tenant.tanggal_expired <= now + timedelta(days=days),
+    ).all()
+
+    sent = 0
+    for t in expiring:
+        msg = (
+            f'Halo {t.nama}, langganan Kasir Sembako Anda akan berakhir pada '
+            f'{t.tanggal_expired.strftime("%d/%m/%Y")}. Segera perpanjang agar layanan tidak terhenti.'
+        )
+        if t.telepon:
+            ok, _ = _send_wa_message(t.telepon, msg)
+            if ok:
+                sent += 1
+        if t.email:
+            ok, _ = _send_email_message(t.email, 'Perpanjangan Langganan', msg)
+            if ok:
+                sent += 1
+
+    _log_sa('notif_expiring_sent', detail=f'tenant_count={len(expiring)} sent={sent}')
+    db.session.commit()
+    flash(f'Notifikasi dikirim ke {sent} kontak dari {len(expiring)} tenant.', 'success')
+    return redirect(url_for('superadmin.sa_dashboard'))
+
+
+# ─────────────────────────────────────────────────────────────
+# BULK ACTIONS
+# ─────────────────────────────────────────────────────────────
+
+@superadmin_bp.route('/bulk/toggle', methods=['POST'])
+@login_required
+@superadmin_required
+def bulk_toggle():
+    ids = request.form.getlist('tenant_ids')
+    action = request.form.get('action', 'deactivate')
+    count = 0
+    for tid in ids:
+        try:
+            t = Tenant.query.get(int(tid))
+            if t:
+                t.aktif = (action == 'activate')
+                _log_sa('bulk_toggle', t.id, detail=f'aktif={t.aktif}')
+                count += 1
+        except (TypeError, ValueError):
+            continue
+    db.session.commit()
+    flash(f'{count} tenant di-{"aktifkan" if action == "activate" else "nonaktifkan"}.', 'success')
+    return redirect(url_for('superadmin.index'))
+
+
+@superadmin_bp.route('/bulk/extend', methods=['POST'])
+@login_required
+@superadmin_required
+def bulk_extend():
+    ids = request.form.getlist('tenant_ids')
+    try:
+        days = int(request.form.get('days', 30))
+    except (TypeError, ValueError):
+        days = 30
+    count = 0
+    for tid in ids:
+        try:
+            t = Tenant.query.get(int(tid))
+            if t:
+                base = t.tanggal_expired or datetime.utcnow()
+                if base < datetime.utcnow():
+                    base = datetime.utcnow()
+                t.tanggal_expired = base + timedelta(days=days)
+                _log_sa('bulk_extend', t.id, detail=f'+{days}d')
+                count += 1
+        except (TypeError, ValueError):
+            continue
+    db.session.commit()
+    flash(f'{count} tenant diperpanjang +{days} hari.', 'success')
+    return redirect(url_for('superadmin.index'))
+
+
+@superadmin_bp.route('/bulk/export-selected', methods=['POST'])
+@login_required
+@superadmin_required
+def bulk_export_selected():
+    ids = request.form.getlist('tenant_ids')
+    tenants = Tenant.query.filter(Tenant.id.in_([int(x) for x in ids if x.isdigit()])).all()
+    omzet_today = _omzet_today_by_tenant()
+    buf = StringIO()
+    w = csv.writer(buf)
+    w.writerow(['nama', 'kode', 'paket', 'email', 'telepon', 'aktif', 'omzet_hari_ini'])
+    for t in tenants:
+        w.writerow([
+            t.nama, t.kode, t.paket, t.email or '', t.telepon or '',
+            'ya' if t.aktif else 'tidak',
+            round(omzet_today.get(t.id, 0), 2),
+        ])
+    _log_sa('bulk_export', detail=f'count={len(tenants)}')
+    db.session.commit()
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv; charset=utf-8',
+        headers={'Content-Disposition': 'attachment; filename=tenants_selected.csv'},
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# DATABASE BACKUP
+# ─────────────────────────────────────────────────────────────
+
+def _superadmin_backup_dir():
+    """Folder backups/ di root proyek (satu tingkat di atas paket app)."""
+    from flask import current_app
+
+    root = os.path.abspath(os.path.join(current_app.root_path, os.pardir))
+    return os.path.join(root, 'backups')
+
+
+def _mask_database_uri(uri):
+    """Sembunyikan password di URI untuk ditampilkan di halaman."""
+    if not uri or not isinstance(uri, str):
+        return ''
+    try:
+        p = urlparse(uri)
+        if not p.netloc or '@' not in p.netloc:
+            return uri
+        userinfo, hostpart = p.netloc.rsplit('@', 1)
+        if ':' not in userinfo:
+            return uri
+        user, _pwd = userinfo.split(':', 1)
+        masked_netloc = f'{user}:***@{hostpart}'
+        return urlunparse((p.scheme, masked_netloc, p.path, p.params, p.query, p.fragment))
+    except Exception:
+        return uri
+
+
+def _database_engine_kind(uri):
+    if not uri:
+        return 'other'
+    low = uri.lower()
+    if low.startswith('sqlite'):
+        return 'sqlite'
+    if 'postgresql' in low or low.startswith('postgres:'):
+        return 'postgresql'
+    return 'other'
+
+
+def _parse_postgres_connection(uri):
+    """Ambil host, port, user, password, dbname, sslmode dari SQLAlchemy URI."""
+    u = (uri or '').replace('postgresql+psycopg2', 'postgresql').replace('postgres://', 'postgresql://')
+    parsed = urlparse(u)
+    if parsed.scheme not in ('postgresql', 'postgres'):
+        return None
+    path = (parsed.path or '').strip('/')
+    dbname = path.split('/')[0] if path else ''
+    if not dbname:
+        return None
+    user = unquote(parsed.username) if parsed.username else ''
+    password = unquote(parsed.password) if parsed.password else ''
+    host = parsed.hostname
+    port = parsed.port
+    qs = parse_qs(parsed.query or '')
+    sslmode = (qs.get('sslmode') or [''])[0] or None
+    return {
+        'user': user,
+        'password': password,
+        'host': host,
+        'port': port,
+        'dbname': dbname,
+        'sslmode': sslmode,
+    }
+
+
+def _find_pg_dump():
+    """Lokasi pg_dump. Systemd sering set PATH hanya ke venv, jadi cek path standar juga."""
+    found = shutil_mod.which('pg_dump')
+    if found and os.path.isfile(found) and os.access(found, os.X_OK):
+        return found
+    for candidate in (
+        '/usr/bin/pg_dump',
+        '/usr/local/bin/pg_dump',
+        '/snap/bin/pg_dump',
+    ):
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+@superadmin_bp.route('/backup')
+@login_required
+@superadmin_required
+def backup_page():
+    from flask import current_app
+
+    raw_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    db_path = _mask_database_uri(raw_uri)
+    db_kind = _database_engine_kind(raw_uri)
+    pg_dump_ok = bool(_find_pg_dump()) if db_kind == 'postgresql' else False
+
+    backup_dir = _superadmin_backup_dir()
+    backups = []
+    if os.path.isdir(backup_dir):
+        for f in sorted(os.listdir(backup_dir), reverse=True):
+            if f.endswith('.db') or f.endswith('.sql') or f.endswith('.gz'):
+                fp = os.path.join(backup_dir, f)
+                if not os.path.isfile(fp):
+                    continue
+                sz = os.path.getsize(fp)
+                backups.append({
+                    'name': f,
+                    'size': f'{sz / 1024 / 1024:.2f} MB' if sz > 1048576 else f'{sz / 1024:.1f} KB',
+                    'date': datetime.fromtimestamp(os.path.getmtime(fp)).strftime('%d/%m/%Y %H:%M'),
+                })
+    return render_template(
+        'superadmin/backup.html',
+        db_path=db_path,
+        backups=backups,
+        db_kind=db_kind,
+        pg_dump_ok=pg_dump_ok,
+    )
+
+
+@superadmin_bp.route('/backup/create', methods=['POST'])
+@login_required
+@superadmin_required
+def backup_create():
+    from flask import current_app
+
+    db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    backup_dir = _superadmin_backup_dir()
+    os.makedirs(backup_dir, exist_ok=True)
+    ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+
+    if _database_engine_kind(db_uri) == 'sqlite':
+        if 'sqlite' not in db_uri:
+            flash('Konfigurasi database SQLite tidak dikenali.', 'danger')
+            return redirect(url_for('superadmin.backup_page'))
+        db_file = db_uri.replace('sqlite:///', '')
+        if not os.path.isfile(db_file):
+            flash('File database tidak ditemukan.', 'danger')
+            return redirect(url_for('superadmin.backup_page'))
+        backup_name = f'backup_{ts}.db'
+        shutil_mod.copy2(db_file, os.path.join(backup_dir, backup_name))
+        _log_sa('backup_create', detail=backup_name)
+        db.session.commit()
+        flash(f'Backup berhasil: {backup_name}', 'success')
+        return redirect(url_for('superadmin.backup_page'))
+
+    if _database_engine_kind(db_uri) == 'postgresql':
+        pg_dump = _find_pg_dump()
+        if not pg_dump:
+            flash(
+                'Perintah pg_dump tidak ditemukan di server. Pasang client PostgreSQL '
+                '(paket postgresql-client) agar backup dari panel bisa jalan.',
+                'danger',
+            )
+            return redirect(url_for('superadmin.backup_page'))
+        params = _parse_postgres_connection(db_uri)
+        if not params:
+            flash('URI PostgreSQL tidak valid; tidak bisa membuat backup.', 'danger')
+            return redirect(url_for('superadmin.backup_page'))
+
+        env = os.environ.copy()
+        if params['password']:
+            env['PGPASSWORD'] = params['password']
+        if params.get('sslmode'):
+            env['PGSSLMODE'] = params['sslmode']
+
+        backup_name = f'backup_{ts}.sql'
+        tmp_name = f'.{backup_name}.tmp'
+        out_tmp = os.path.join(backup_dir, tmp_name)
+        out_final = os.path.join(backup_dir, backup_name)
+
+        cmd = [pg_dump, '-F', 'p', '--no-owner', '--no-acl', '-f', out_tmp]
+        if params.get('host'):
+            cmd.extend(['-h', params['host']])
+        if params.get('port'):
+            cmd.extend(['-p', str(params['port'])])
+        if params.get('user'):
+            cmd.extend(['-U', params['user']])
+        cmd.append(params['dbname'])
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+        except subprocess.TimeoutExpired:
+            if os.path.isfile(out_tmp):
+                try:
+                    os.remove(out_tmp)
+                except OSError:
+                    pass
+            flash('Backup dibatalkan: waktu habis (database sangat besar).', 'danger')
+            return redirect(url_for('superadmin.backup_page'))
+        except OSError as e:
+            flash(f'Gagal menjalankan pg_dump: {e}', 'danger')
+            return redirect(url_for('superadmin.backup_page'))
+
+        if proc.returncode != 0:
+            if os.path.isfile(out_tmp):
+                try:
+                    os.remove(out_tmp)
+                except OSError:
+                    pass
+            err = (proc.stderr or proc.stdout or 'tanpa pesan').strip()
+            flash(f'pg_dump gagal: {err[:800]}', 'danger')
+            return redirect(url_for('superadmin.backup_page'))
+
+        try:
+            os.replace(out_tmp, out_final)
+        except OSError as e:
+            flash(f'Gagal menyimpan file backup: {e}', 'danger')
+            return redirect(url_for('superadmin.backup_page'))
+
+        _log_sa('backup_create', detail=backup_name)
+        db.session.commit()
+        flash(f'Backup PostgreSQL berhasil: {backup_name}', 'success')
+        return redirect(url_for('superadmin.backup_page'))
+
+    flash('Jenis database ini belum didukung untuk backup dari panel.', 'warning')
+    return redirect(url_for('superadmin.backup_page'))
+
+
+@superadmin_bp.route('/backup/download/<filename>')
+@login_required
+@superadmin_required
+def backup_download(filename):
+    from flask import send_from_directory
+
+    backup_dir = _superadmin_backup_dir()
+    safe_name = secure_filename(filename)
+    return send_from_directory(backup_dir, safe_name, as_attachment=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# MULTI-SUPERADMIN MANAGEMENT
+# ─────────────────────────────────────────────────────────────
+
+@superadmin_bp.route('/admins')
+@login_required
+@superadmin_required
+def superadmin_users():
+    admins = User.query.filter_by(role='superadmin').order_by(User.id).all()
+    return render_template('superadmin/superadmin_users.html', admins=admins)
+
+
+@superadmin_bp.route('/admins/add', methods=['POST'])
+@login_required
+@superadmin_required
+def superadmin_user_add():
+    username = (request.form.get('username') or '').strip()
+    nama = (request.form.get('nama') or '').strip()
+    password = (request.form.get('password') or '').strip()
+    if not username or not nama or len(password) < 6:
+        flash('Username, nama, dan password (min 6 karakter) wajib diisi.', 'danger')
+        return redirect(url_for('superadmin.superadmin_users'))
+    if User.query.filter_by(username=username).first():
+        flash('Username sudah dipakai.', 'danger')
+        return redirect(url_for('superadmin.superadmin_users'))
+    u = User(username=username, nama=nama, role='superadmin')
+    u.set_password(password)
+    db.session.add(u)
+    _log_sa('superadmin_user_create', detail=f'username={username}')
+    db.session.commit()
+    flash(f'Akun Super Admin "{username}" dibuat.', 'success')
+    return redirect(url_for('superadmin.superadmin_users'))
+
+
+@superadmin_bp.route('/admins/<int:id>/toggle', methods=['POST'])
+@login_required
+@superadmin_required
+def superadmin_user_toggle(id):
+    u = User.query.get_or_404(id)
+    if u.id == current_user.id:
+        flash('Tidak bisa menonaktifkan akun sendiri.', 'danger')
+        return redirect(url_for('superadmin.superadmin_users'))
+    u.aktif = not u.aktif
+    _log_sa('superadmin_user_toggle', detail=f'user_id={id} aktif={u.aktif}')
+    db.session.commit()
+    flash(f'Akun "{u.username}" {"diaktifkan" if u.aktif else "dinonaktifkan"}.', 'success')
+    return redirect(url_for('superadmin.superadmin_users'))
+
+
+# ─────────────────────────────────────────────────────────────
+# ANNOUNCEMENTS
+# ─────────────────────────────────────────────────────────────
+
+@superadmin_bp.route('/announcements')
+@login_required
+@superadmin_required
+def announcements_index():
+    announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
+    return render_template('superadmin/announcements.html', announcements=announcements)
+
+
+@superadmin_bp.route('/announcements/add', methods=['POST'])
+@login_required
+@superadmin_required
+def announcement_add():
+    judul = (request.form.get('judul') or '').strip()
+    isi = (request.form.get('isi') or '').strip()
+    if not judul or not isi:
+        flash('Judul dan isi wajib diisi.', 'danger')
+        return redirect(url_for('superadmin.announcements_index'))
+    a = Announcement(
+        judul=judul,
+        isi=isi,
+        tipe=request.form.get('tipe', 'info').strip() or 'info',
+        target=request.form.get('target', 'all').strip() or 'all',
+        tanggal_mulai=_parse_date_start_utc(request.form.get('tanggal_mulai')) or datetime.utcnow(),
+        tanggal_selesai=_parse_expiry_date(request.form.get('tanggal_selesai')),
+        created_by=current_user.id,
+    )
+    db.session.add(a)
+    _log_sa('announcement_create', detail=judul[:80])
+    db.session.commit()
+    flash('Pengumuman dibuat.', 'success')
+    return redirect(url_for('superadmin.announcements_index'))
+
+
+@superadmin_bp.route('/announcements/<int:id>/toggle', methods=['POST'])
+@login_required
+@superadmin_required
+def announcement_toggle(id):
+    a = Announcement.query.get_or_404(id)
+    a.aktif = not a.aktif
+    db.session.commit()
+    flash(f'Pengumuman {"diaktifkan" if a.aktif else "dinonaktifkan"}.', 'success')
+    return redirect(url_for('superadmin.announcements_index'))
+
+
+@superadmin_bp.route('/announcements/<int:id>/delete', methods=['POST'])
+@login_required
+@superadmin_required
+def announcement_delete(id):
+    a = Announcement.query.get_or_404(id)
+    db.session.delete(a)
+    _log_sa('announcement_delete', detail=f'id={id}')
+    db.session.commit()
+    flash('Pengumuman dihapus.', 'success')
+    return redirect(url_for('superadmin.announcements_index'))

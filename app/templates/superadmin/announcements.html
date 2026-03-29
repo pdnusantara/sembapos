@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Pengumuman — Super Admin{% endblock %}
+{% block page_title %}📢 Pengumuman{% endblock %}
+{% block page_sub %}Kirim pengumuman ke semua tenant{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Pengumuman', '', true)]) }}
+
+<div class="card mb-3" style="border-style:dashed;">
+  <div style="padding:14px 16px;font-size:13px;color:var(--text-muted);line-height:1.6;">
+    <strong style="color:var(--text-light);">Di mana tenant melihat pengumuman?</strong><br>
+    Setelah login sebagai <strong>admin/kasir tenant</strong> (bukan akun Super Admin), pengumuman aktif muncul di:
+    (1) <strong>strip warna di atas</strong> isi halaman — tepat di bawah sidebar, sebelum judul halaman;
+    (2) kartu <strong>«Pengumuman dari platform»</strong> di halaman <strong>Dashboard</strong>.<br>
+    Pakai target <strong>Semua tenant</strong> agar semua toko melihat; atau pilih paket agar hanya tenant dengan kode paket yang sama (<code>basic</code> / <code>pro</code> / <code>enterprise</code>).
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><div class="card-title">Buat Pengumuman Baru</div></div>
+  <form method="POST" action="{{ url_for('superadmin.announcement_add') }}" style="padding:16px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="form-group">
+      <label class="form-label">Judul</label>
+      <input type="text" name="judul" class="form-control" required placeholder="Judul pengumuman">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Isi</label>
+      <textarea name="isi" class="form-control" rows="3" required placeholder="Isi pengumuman..."></textarea>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="form-label">Tipe</label>
+        <select name="tipe" class="form-control">
+          <option value="info">Info</option>
+          <option value="warning">Warning</option>
+          <option value="success">Success</option>
+          <option value="danger">Danger</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="form-label">Target</label>
+        <select name="target" class="form-control">
+          <option value="all">Semua tenant</option>
+          <option value="basic">Paket Basic</option>
+          <option value="pro">Paket Pro</option>
+          <option value="enterprise">Paket Enterprise</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="form-label">Mulai</label>
+        <input type="date" name="tanggal_mulai" class="form-control">
+      </div>
+      <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="form-label">Selesai (opsional)</label>
+        <input type="date" name="tanggal_selesai" class="form-control">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary" style="margin-top:12px;">Buat Pengumuman</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header"><div class="card-title">Semua Pengumuman ({{ announcements|length }})</div></div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead><tr><th>Judul</th><th>Tipe</th><th>Target</th><th>Status</th><th>Periode</th><th>Aksi</th></tr></thead>
+      <tbody>
+        {% for a in announcements %}
+        <tr>
+          <td>
+            <div style="font-weight:600;">{{ a.judul }}</div>
+            <div style="font-size:11px;color:var(--text-muted);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.isi }}</div>
+          </td>
+          <td><span class="badge badge-{% if a.tipe == 'warning' %}warning{% elif a.tipe == 'danger' %}danger{% elif a.tipe == 'success' %}success{% else %}info{% endif %}">{{ a.tipe }}</span></td>
+          <td><span class="badge badge-info" style="font-size:10px;">{{ a.target }}</span></td>
+          <td><span class="badge {% if a.aktif %}badge-success{% else %}badge-danger{% endif %}">{{ 'Aktif' if a.aktif else 'Nonaktif' }}</span></td>
+          <td class="text-muted" style="font-size:11px;">
+            {{ a.tanggal_mulai.strftime('%d/%m/%y') }}
+            {% if a.tanggal_selesai %} — {{ a.tanggal_selesai.strftime('%d/%m/%y') }}{% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:4px;">
+              <form method="POST" action="{{ url_for('superadmin.announcement_toggle', id=a.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm">{{ '⛔' if a.aktif else '✅' }}</button>
+              </form>
+              <form method="POST" action="{{ url_for('superadmin.announcement_delete', id=a.id) }}" style="display:inline;" onsubmit="return confirm('Hapus pengumuman?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger);">🗑️</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:40px;">Belum ada pengumuman</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

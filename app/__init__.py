@@ -105,7 +105,9 @@ def create_app():
         _ensure_product_price_tiers_columns()
         _ensure_tenant_location_columns()
         _ensure_timezone_columns()
+        _ensure_new_superadmin_tables()
         _seed_tenant_packages()
+        _fix_legacy_announcement_mulai_times()
 
     @app.before_request
     def _check_user_session_version():
@@ -211,6 +213,46 @@ def create_app():
     def _template_time():
         from datetime import datetime
         return {'utc_now': datetime.utcnow}
+
+    @app.context_processor
+    def _active_announcements():
+        from flask_login import current_user
+        from .models import Announcement
+        if not current_user.is_authenticated:
+            return {'active_announcements': []}
+        if getattr(current_user, 'is_superadmin', False):
+            return {'active_announcements': []}
+        try:
+            from datetime import datetime
+            now = datetime.utcnow()
+            anns = Announcement.query.filter(
+                Announcement.aktif.is_(True),
+                Announcement.tanggal_mulai <= now,
+                db.or_(
+                    Announcement.tanggal_selesai.is_(None),
+                    Announcement.tanggal_selesai >= now,
+                ),
+            ).order_by(Announcement.created_at.desc()).limit(10).all()
+            tid = getattr(current_user, 'tenant_id', None)
+            if tid:
+                from .models import Tenant
+                t = getattr(current_user, 'tenant', None)
+                if t is None:
+                    t = Tenant.query.get(tid)
+                paket = ((getattr(t, 'paket', None) or '') if t else '').strip().lower()
+                anns = [
+                    a for a in anns
+                    if (a.target or 'all').strip().lower() == 'all'
+                    or (a.target or '').strip().lower() == paket
+                ]
+            else:
+                anns = [
+                    a for a in anns
+                    if (a.target or 'all').strip().lower() == 'all'
+                ]
+            return {'active_announcements': anns[:5]}
+        except Exception:
+            return {'active_announcements': []}
 
     @app.context_processor
     def _marketplace_pending_count():
@@ -400,6 +442,39 @@ def _ensure_timezone_columns():
                 stmt = 'ALTER TABLE users ADD COLUMN timezone VARCHAR(30)'
                 with db.engine.begin() as conn:
                     conn.execute(text(stmt))
+    except Exception:
+        pass
+
+
+def _fix_legacy_announcement_mulai_times():
+    """Pengumuman lama: tanggal_mulai pernah disimpan jam 23:59 (salah); ubah ke 00:00 hari yang sama."""
+    from datetime import datetime
+    from .models import Announcement
+
+    try:
+        rows = Announcement.query.all()
+        changed = False
+        for a in rows:
+            tm = a.tanggal_mulai
+            if tm and tm.hour == 23 and tm.minute == 59 and tm.second == 59:
+                a.tanggal_mulai = datetime(tm.year, tm.month, tm.day, 0, 0, 0)
+                changed = True
+        if changed:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _ensure_new_superadmin_tables():
+    """Create new tables for leads, settings, invoices, announcements if missing."""
+    from sqlalchemy import inspect
+    try:
+        insp = inspect(db.engine)
+        existing = set(insp.get_table_names())
+        needed = {'lead_captures', 'app_settings', 'tenant_invoices', 'announcements'}
+        if not needed - existing:
+            return
+        db.create_all()
     except Exception:
         pass
 

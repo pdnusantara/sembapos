@@ -759,6 +759,118 @@ class OperationalExpense(db.Model):
 # MARKETPLACE
 # ==========================================
 
+# ==========================================
+# SUPERADMIN: LEAD CAPTURE & APP SETTINGS
+# ==========================================
+
+class LeadCapture(db.Model):
+    __tablename__ = 'lead_captures'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nama = db.Column(db.String(120), nullable=False)
+    no_wa = db.Column(db.String(30), nullable=False, default='')
+    jenis_usaha = db.Column(db.String(120), nullable=False, default='')
+    catatan = db.Column(db.Text)
+    source = db.Column(db.String(40), nullable=False, default='landing')
+    status = db.Column(db.String(30), nullable=False, default='new')
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    trial_tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=True)
+    trial_username = db.Column(db.String(80), nullable=True)
+    trial_password = db.Column(db.String(120), nullable=True)
+    trial_expired_at = db.Column(db.DateTime, nullable=True)
+    trial_created_at = db.Column(db.DateTime, nullable=True)
+    provinsi = db.Column(db.String(100), nullable=True)
+    kabupaten = db.Column(db.String(100), nullable=True)
+    kecamatan = db.Column(db.String(100), nullable=True)
+    desa = db.Column(db.String(100), nullable=True)
+    catatan_admin = db.Column(db.Text, nullable=True)
+
+    trial_tenant = db.relationship('Tenant', backref='lead_source', lazy=True)
+
+    def __repr__(self):
+        return f'<LeadCapture {self.nama}>'
+
+
+class AppSetting(db.Model):
+    __tablename__ = 'app_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @staticmethod
+    def get(key, default=None):
+        row = AppSetting.query.filter_by(key=key).first()
+        return row.value if row else default
+
+    @staticmethod
+    def set(key, value):
+        row = AppSetting.query.filter_by(key=key).first()
+        if row:
+            row.value = str(value) if value is not None else None
+        else:
+            row = AppSetting(key=key, value=str(value) if value is not None else None)
+            db.session.add(row)
+        return row
+
+    def __repr__(self):
+        return f'<AppSetting {self.key}>'
+
+
+# ==========================================
+# SUPERADMIN: BILLING / INVOICE
+# ==========================================
+
+class TenantInvoice(db.Model):
+    __tablename__ = 'tenant_invoices'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=False)
+    nomor = db.Column(db.String(50), unique=True, nullable=False)
+    periode_mulai = db.Column(db.DateTime, nullable=True)
+    periode_akhir = db.Column(db.DateTime, nullable=True)
+    nominal = db.Column(db.Float, nullable=False, default=0)
+    status = db.Column(db.String(20), default='unpaid')  # unpaid, paid, overdue, cancelled
+    tanggal_bayar = db.Column(db.DateTime, nullable=True)
+    metode_bayar = db.Column(db.String(30), nullable=True)
+    catatan = db.Column(db.Text)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = db.relationship('Tenant', backref='invoices', lazy=True)
+    creator = db.relationship('User', foreign_keys=[created_by], backref='invoices_created', lazy=True)
+
+    def __repr__(self):
+        return f'<TenantInvoice {self.nomor}>'
+
+
+# ==========================================
+# SUPERADMIN: ANNOUNCEMENTS
+# ==========================================
+
+class Announcement(db.Model):
+    __tablename__ = 'announcements'
+
+    id = db.Column(db.Integer, primary_key=True)
+    judul = db.Column(db.String(200), nullable=False)
+    isi = db.Column(db.Text, nullable=False)
+    tipe = db.Column(db.String(20), default='info')  # info, warning, success, danger
+    target = db.Column(db.String(30), default='all')  # all, or paket kode
+    tanggal_mulai = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    tanggal_selesai = db.Column(db.DateTime, nullable=True)
+    aktif = db.Column(db.Boolean, default=True, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    creator = db.relationship('User', foreign_keys=[created_by], backref='announcements_created', lazy=True)
+
+    def __repr__(self):
+        return f'<Announcement {self.judul}>'
+
+
 class MarketplaceSeller(db.Model):
     """Seller yang dikelola Super Admin untuk marketplace B2B."""
     __tablename__ = 'marketplace_sellers'

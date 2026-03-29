@@ -5,7 +5,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, selectinload
 
-from ..models import Branch, Product, Transaction
+from ..models import Branch, Product, Transaction, User, Supplier
 from ..timezones import (
     local_today_date,
     resolve_effective_zoneinfo,
@@ -42,7 +42,7 @@ def _product_base_query():
 @login_required
 def index():
     if current_user.is_superadmin:
-        return redirect(url_for('superadmin.index'))
+        return redirect(url_for('superadmin.sa_dashboard'))
 
     app_tz, tz_id = resolve_effective_zoneinfo(current_user)
     tenant_id = get_tenant_id()
@@ -129,6 +129,30 @@ def index():
     if tenant_id:
         total_cabang = Branch.query.filter_by(tenant_id=tenant_id, aktif=True).count()
 
+    onboarding = None
+    if tenant_id and current_user.role == 'admin':
+        steps = []
+        has_products = total_produk > 0
+        has_multi_user = User.query.filter_by(tenant_id=tenant_id, aktif=True).count() > 1
+        has_transaction = Transaction.query.filter_by(tenant_id=tenant_id, status='selesai').first() is not None
+        has_supplier = Supplier.query.filter_by(tenant_id=tenant_id).first() is not None
+        has_multi_branch = Branch.query.filter_by(tenant_id=tenant_id, aktif=True).count() > 1
+
+        steps.append({'label': 'Tambahkan produk pertama', 'done': has_products, 'url': '/products/add'})
+        steps.append({'label': 'Tambahkan supplier', 'done': has_supplier, 'url': '/suppliers'})
+        steps.append({'label': 'Lakukan transaksi pertama', 'done': has_transaction, 'url': '/pos'})
+        steps.append({'label': 'Tambahkan user kasir', 'done': has_multi_user, 'url': '/admin/users'})
+        steps.append({'label': 'Buat cabang tambahan', 'done': has_multi_branch, 'url': '/admin/branches'})
+
+        done_count = sum(1 for s in steps if s['done'])
+        if done_count < len(steps):
+            onboarding = {
+                'steps': steps,
+                'done': done_count,
+                'total': len(steps),
+                'pct': int(100 * done_count / len(steps)),
+            }
+
     return render_template(
         'dashboard.html',
         total_penjualan_hari_ini=total_penjualan_hari_ini,
@@ -142,4 +166,5 @@ def index():
         chart_data=chart_data,
         transaksi_terbaru=transaksi_terbaru,
         dashboard_timezone_label=timezone_display_label(tz_id),
+        onboarding=onboarding,
     )

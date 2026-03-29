@@ -181,6 +181,23 @@
   </div>
 </div>
 
+<div class="card" style="margin-top:16px;">
+  <div class="card-header">
+    <div class="card-title">🚀 Onboarding ({{ onboarding_done }}/{{ onboarding_steps|length }})</div>
+    <div style="font-size:12px;color:var(--text-muted);">{{ onboarding_pct }}% selesai</div>
+  </div>
+  <div style="padding:12px 16px;">
+    <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.1);margin-bottom:12px;overflow:hidden;">
+      <div style="width:{{ onboarding_pct }}%;height:100%;background:{% if onboarding_pct == 100 %}var(--success){% else %}var(--primary){% endif %};border-radius:3px;"></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      {% for step in onboarding_steps %}
+      <span class="badge {% if step.done %}badge-success{% else %}badge-warning{% endif %}">{{ '✅' if step.done else '⬜' }} {{ step.label }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
 <div class="card" style="margin-top:16px;max-width:520px;">
   <div class="card-header"><div class="card-title">🔑 Reset password user tenant</div></div>
   <form method="POST" action="{{ url_for('superadmin.reset_tenant_user_password', id=tenant.id) }}" style="padding:16px;">

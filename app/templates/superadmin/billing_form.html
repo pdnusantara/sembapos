@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Buat Invoice — Billing{% endblock %}
+{% block page_title %}💳 Buat Invoice{% endblock %}
+{% block page_sub %}Buat tagihan baru untuk tenant{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.sa_dashboard'), false),
+  ('Billing', url_for('superadmin.billing_index'), false),
+  ('Buat Invoice', '', true),
+]) }}
+
+<div class="card" style="max-width:600px;">
+  <form method="POST" action="{{ url_for('superadmin.billing_add') }}" style="padding:16px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="form-group">
+      <label class="form-label">Tenant</label>
+      <select name="tenant_id" class="form-control" required>
+        <option value="">-- Pilih tenant --</option>
+        {% for t in tenants %}
+        <option value="{{ t.id }}">{{ t.nama }} ({{ t.kode }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nominal (Rp)</label>
+      <input type="number" name="nominal" class="form-control" required min="0" step="1000" placeholder="100000">
+    </div>
+    <div style="display:flex;gap:12px;">
+      <div class="form-group" style="flex:1;">
+        <label class="form-label">Periode Mulai</label>
+        <input type="date" name="periode_mulai" class="form-control">
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label class="form-label">Periode Akhir</label>
+        <input type="date" name="periode_akhir" class="form-control">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Catatan (opsional)</label>
+      <textarea name="catatan" class="form-control" rows="3" placeholder="Catatan tambahan..."></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Buat Invoice</button>
+    <a href="{{ url_for('superadmin.billing_index') }}" class="btn btn-outline" style="margin-left:8px;">Batal</a>
+  </form>
+</div>
+{% endblock %}

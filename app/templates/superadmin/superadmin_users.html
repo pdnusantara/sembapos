@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Admin Platform — Super Admin{% endblock %}
+{% block page_title %}🔑 Admin Platform{% endblock %}
+{% block page_sub %}Kelola akun Super Admin{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Admin Platform', '', true)]) }}
+
+<div class="card mb-3">
+  <div class="card-header"><div class="card-title">Tambah Super Admin</div></div>
+  <form method="POST" action="{{ url_for('superadmin.superadmin_user_add') }}" style="padding:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+      <label class="form-label">Username</label>
+      <input type="text" name="username" class="form-control" required placeholder="username_baru">
+    </div>
+    <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+      <label class="form-label">Nama Lengkap</label>
+      <input type="text" name="nama" class="form-control" required placeholder="Nama Admin">
+    </div>
+    <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+      <label class="form-label">Password (min 6)</label>
+      <input type="password" name="password" class="form-control" required minlength="6" placeholder="••••••">
+    </div>
+    <button type="submit" class="btn btn-primary">Tambah</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header"><div class="card-title">Daftar Super Admin ({{ admins|length }})</div></div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead><tr><th>Nama</th><th>Username</th><th>Status</th><th>Login Terakhir</th><th>Aksi</th></tr></thead>
+      <tbody>
+        {% for u in admins %}
+        <tr>
+          <td style="font-weight:600;">{{ u.nama }}</td>
+          <td><code>@{{ u.username }}</code></td>
+          <td>
+            <span class="badge {% if u.aktif %}badge-success{% else %}badge-danger{% endif %}">{{ 'Aktif' if u.aktif else 'Nonaktif' }}</span>
+            {% if u.id == current_user.id %}<span class="badge badge-info" style="font-size:10px;">Anda</span>{% endif %}
+          </td>
+          <td class="text-muted" style="font-size:12px;">{{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else 'Belum pernah' }}</td>
+          <td>
+            {% if u.id != current_user.id %}
+            <form method="POST" action="{{ url_for('superadmin.superadmin_user_toggle', id=u.id) }}" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('{{ 'Nonaktifkan' if u.aktif else 'Aktifkan' }} akun ini?')">
+                {{ '⛔' if u.aktif else '✅' }}
+              </button>
+            </form>
+            {% else %}
+            <span class="text-muted" style="font-size:12px;">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

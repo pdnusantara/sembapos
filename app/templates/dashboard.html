@@ -4,6 +4,24 @@
 {% block page_sub %}Ringkasan bisnis hari ini · {{ dashboard_timezone_label }}{% endblock %}
 
 {% block content %}
+{% if active_announcements %}
+<div class="card mb-3" style="border-left:4px solid var(--primary);" role="region" aria-label="Pengumuman platform">
+  <div class="card-header" style="align-items:flex-start;">
+    <div>
+      <div class="card-title">📢 Pengumuman dari platform</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Informasi yang sama juga tampil di bagian atas setiap halaman (di bawah bilah judul).</div>
+    </div>
+  </div>
+  <div style="padding:0 16px 16px;">
+    {% for ann in active_announcements %}
+    <div style="padding:12px 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
+      <div style="font-weight:600;margin-bottom:4px;">{{ ann.judul }}</div>
+      <div style="font-size:13px;color:var(--text-muted);line-height:1.55;white-space:pre-wrap;">{{ ann.isi }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 <div class="stats-grid">
   <div class="stat-card primary">
     <div class="stat-icon primary">💰</div>
@@ -57,6 +75,27 @@
 </div>
 
 <div class="layout-split-2-1 dashboard-main" style="margin-bottom:20px;">
+  {% if onboarding %}
+  <div class="card" style="grid-column:1/-1;border:2px dashed var(--primary);background:rgba(108,99,255,0.04);">
+    <div class="card-header">
+      <div class="card-title">🚀 Setup Toko Anda ({{ onboarding.done }}/{{ onboarding.total }})</div>
+      <div style="font-size:12px;color:var(--text-muted);">{{ onboarding.pct }}% selesai</div>
+    </div>
+    <div style="padding:0 16px;">
+      <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.1);margin-bottom:12px;overflow:hidden;">
+        <div style="width:{{ onboarding.pct }}%;height:100%;background:var(--primary);border-radius:3px;transition:width 0.3s;"></div>
+      </div>
+    </div>
+    <div style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:8px;">
+      {% for step in onboarding.steps %}
+      <a href="{{ step.url }}" class="btn {% if step.done %}btn-outline{% else %}btn-primary{% endif %} btn-sm" style="{% if step.done %}opacity:0.6;text-decoration:line-through;{% endif %}">
+        {{ '✅' if step.done else '⬜' }} {{ step.label }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card">
     <div class="card-header">
       <div>

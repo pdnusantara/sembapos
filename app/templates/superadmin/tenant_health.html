@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Tenant Health — Super Admin{% endblock %}
+{% block page_title %}🩺 Tenant Health Monitor{% endblock %}
+{% block page_sub %}Skor kesehatan dan risiko churn{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Health Monitor', '', true)]) }}
+
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+  <a href="{{ url_for('superadmin.tenant_health') }}" class="btn btn-outline btn-sm {% if not filter_level %}active{% endif %}">Semua</a>
+  <a href="{{ url_for('superadmin.tenant_health', level='danger') }}" class="btn btn-outline btn-sm {% if filter_level == 'danger' %}active{% endif %}" style="{% if filter_level == 'danger' %}border-color:var(--danger);color:var(--danger);{% endif %}">Berisiko</a>
+  <a href="{{ url_for('superadmin.tenant_health', level='warning') }}" class="btn btn-outline btn-sm {% if filter_level == 'warning' %}active{% endif %}" style="{% if filter_level == 'warning' %}border-color:var(--warning);color:var(--warning);{% endif %}">Perlu Perhatian</a>
+  <a href="{{ url_for('superadmin.tenant_health', level='healthy') }}" class="btn btn-outline btn-sm {% if filter_level == 'healthy' %}active{% endif %}" style="{% if filter_level == 'healthy' %}border-color:var(--success);color:var(--success);{% endif %}">Sehat</a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">{{ health_data|length }} Tenant Aktif</div>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr><th>Tenant</th><th>Skor</th><th>Status</th><th>Trx 7 Hari</th><th>Trx 30 Hari</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+        {% for h in health_data %}
+        <tr>
+          <td>
+            <a href="{{ url_for('superadmin.view_tenant', id=h.tenant.id) }}" style="font-weight:600;color:var(--text-light);">{{ h.tenant.nama }}</a>
+            <div style="font-size:11px;color:var(--text-muted);">{{ h.tenant.kode }}</div>
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:60px;height:8px;border-radius:4px;background:rgba(255,255,255,0.1);overflow:hidden;">
+                <div style="width:{{ h.score }}%;height:100%;border-radius:4px;background:{% if h.level == 'healthy' %}var(--success){% elif h.level == 'warning' %}var(--warning){% else %}var(--danger){% endif %};"></div>
+              </div>
+              <span style="font-size:13px;font-weight:600;">{{ h.score }}</span>
+            </div>
+          </td>
+          <td>
+            <span class="badge {% if h.level == 'healthy' %}badge-success{% elif h.level == 'warning' %}badge-warning{% else %}badge-danger{% endif %}">
+              {% if h.level == 'healthy' %}Sehat{% elif h.level == 'warning' %}Perhatian{% else %}Berisiko{% endif %}
+            </span>
+          </td>
+          <td style="text-align:center;">{{ h.tx_7d }}</td>
+          <td style="text-align:center;">{{ h.tx_30d }}</td>
+          <td>
+            <a href="{{ url_for('superadmin.view_tenant', id=h.tenant.id) }}" class="btn btn-outline btn-sm">Detail</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:40px;">Tidak ada data</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

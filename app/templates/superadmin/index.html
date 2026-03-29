@@ -79,6 +79,34 @@
   </form>
 </div>
 
+<div class="card" id="bulkBar" style="display:none;margin-bottom:12px;border:2px solid var(--primary);">
+  <div style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+    <span style="font-size:13px;font-weight:600;" id="bulkCount">0 dipilih</span>
+    <form method="POST" action="{{ url_for('superadmin.bulk_toggle') }}" style="display:inline;" id="bulkToggleForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="action" value="deactivate" id="bulkToggleAction"/>
+      <div id="bulkToggleIds"></div>
+      <button type="submit" class="btn btn-outline btn-sm" onclick="document.getElementById('bulkToggleAction').value='deactivate';return confirm('Nonaktifkan tenant terpilih?')">⛔ Nonaktifkan</button>
+      <button type="submit" class="btn btn-outline btn-sm" onclick="document.getElementById('bulkToggleAction').value='activate';return confirm('Aktifkan tenant terpilih?')">✅ Aktifkan</button>
+    </form>
+    <form method="POST" action="{{ url_for('superadmin.bulk_extend') }}" style="display:inline;" id="bulkExtendForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div id="bulkExtendIds"></div>
+      <select name="days" style="font-size:12px;padding:4px;">
+        <option value="30">+30 hari</option>
+        <option value="90">+90 hari</option>
+        <option value="365">+365 hari</option>
+      </select>
+      <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('Perpanjang tenant terpilih?')">📅 Perpanjang</button>
+    </form>
+    <form method="POST" action="{{ url_for('superadmin.bulk_export_selected') }}" style="display:inline;" id="bulkExportForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div id="bulkExportIds"></div>
+      <button type="submit" class="btn btn-outline btn-sm">⬇️ Export Terpilih</button>
+    </form>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-header">
     <div class="card-title">📋 Daftar Tenant</div>
@@ -88,6 +116,7 @@
     <table class="table">
       <thead>
         <tr>
+          <th style="width:36px;"><input type="checkbox" id="bulkSelectAll" onchange="toggleAllBulk(this)"></th>
           <th><a href="{{ url_for('superadmin.index', q=q, sort='nama', order='desc' if sort=='nama' and order=='asc' else 'asc', page=1) }}{{ inactive_suffix }}" style="color:inherit;">Tenant</a></th>
           <th><a href="{{ url_for('superadmin.index', q=q, sort='kode', order='desc' if sort=='kode' and order=='asc' else 'asc', page=1) }}{{ inactive_suffix }}" style="color:inherit;">Kode</a></th>
           <th><a href="{{ url_for('superadmin.index', q=q, sort='paket', order='desc' if sort=='paket' and order=='asc' else 'asc', page=1) }}{{ inactive_suffix }}" style="color:inherit;">Paket</a></th>
@@ -110,8 +139,12 @@
         {% set warn_u = not lim_u and nu >= t.max_user %}
         {% set near_u = not lim_u and not warn_u and nu >= t.max_user - 1 %}
         <tr>
+          <td><input type="checkbox" class="bulk-check" value="{{ t.id }}" onchange="updateBulkBar()"></td>
           <td>
             <a href="{{ url_for('superadmin.view_tenant', id=t.id) }}" style="font-weight:600;color:var(--text-light);">{{ t.nama }}</a>
+            {% if t.lead_source | selectattr('source', 'equalto', 'trial_landing') | list | length > 0 %}
+            <span class="badge badge-info" style="font-size:9px;margin-left:6px;vertical-align:middle;">TRIAL</span>
+            {% endif %}
             {% if t.email %}<div style="font-size:11px;color:var(--text-muted);">{{ t.email }}</div>{% endif %}
             {% if t.tanggal_expired %}
             <div style="font-size:10px;margin-top:2px;">
@@ -166,7 +199,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted);">📭 Tidak ada tenant</td></tr>
+        <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-muted);">Tidak ada tenant</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -183,4 +216,26 @@
   </div>
   {% endif %}
 </div>
+
+<script>
+function toggleAllBulk(master) {
+  document.querySelectorAll('.bulk-check').forEach(function(cb) { cb.checked = master.checked; });
+  updateBulkBar();
+}
+function updateBulkBar() {
+  var checked = document.querySelectorAll('.bulk-check:checked');
+  var bar = document.getElementById('bulkBar');
+  bar.style.display = checked.length > 0 ? 'block' : 'none';
+  document.getElementById('bulkCount').textContent = checked.length + ' dipilih';
+  ['bulkToggleIds','bulkExtendIds','bulkExportIds'].forEach(function(cid) {
+    var c = document.getElementById(cid);
+    c.innerHTML = '';
+    checked.forEach(function(cb) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'tenant_ids'; inp.value = cb.value;
+      c.appendChild(inp);
+    });
+  });
+}
+</script>
 {% endblock %}

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0f1a">
+  <meta name="robots" content="noindex,follow">
+  <title>Akun trial siap — SembaPOS</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+  <style>
+    .cred-box { background:var(--card-bg, #1a1a24); border:1px solid var(--border); border-radius:8px; padding:12px 14px; font-family:ui-monospace,monospace; font-size:14px; word-break:break-all; margin:8px 0; }
+    .cred-row { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+    .cred-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; }
+  </style>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-bg"></div>
+  <div class="login-card" style="max-width:480px;">
+    <div class="login-logo">
+      <div class="logo-circle">✅</div>
+      <h1>Akun trial siap dipakai</h1>
+      {% if current_user.is_authenticated %}
+      <p style="color:var(--success);font-size:13px;font-weight:600;margin-bottom:8px;">Anda sudah masuk ke akun ini — klik tombol di bawah untuk membuka dashboard (tanpa ketik password lagi).</p>
+      {% else %}
+      <p style="color:var(--warning);font-size:13px;font-weight:600;margin-bottom:8px;">Login otomatis tidak tersedia — gunakan username &amp; password di bawah di halaman masuk.</p>
+      {% endif %}
+      <p style="color:var(--warning);font-size:13px;font-weight:600;">Simpan username &amp; password untuk login lain kali. Halaman ini tidak ditampilkan lagi.</p>
+    </div>
+
+    <div class="form-group">
+      <div class="cred-label">Toko</div>
+      <div class="cred-box">{{ tenant_nama }}</div>
+    </div>
+    <div class="form-group">
+      <div class="cred-label">Kode tenant</div>
+      <div class="cred-box">{{ kode_tenant }}</div>
+    </div>
+    <div class="form-group">
+      <div class="cred-row">
+        <span class="cred-label">Username</span>
+        <button type="button" class="btn btn-outline btn-sm" onclick="copyText('u')">Salin</button>
+      </div>
+      <div class="cred-box" id="u">{{ username }}</div>
+    </div>
+    <div class="form-group">
+      <div class="cred-row">
+        <span class="cred-label">Password</span>
+        <button type="button" class="btn btn-outline btn-sm" onclick="copyText('p')">Salin</button>
+      </div>
+      <div class="cred-box" id="p">{{ password }}</div>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+      Masa trial berlaku sampai: <strong style="color:var(--text-light);">{{ expired_label }}</strong>
+    </p>
+
+    {% if current_user.is_authenticated %}
+    <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary btn-block btn-lg" style="margin-bottom:10px;">Buka dashboard</a>
+    {% else %}
+    <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-block btn-lg" style="margin-bottom:10px;">Masuk ke SembaPOS</a>
+    {% endif %}
+    <p style="text-align:center;font-size:13px;">
+      <a href="{{ url_for('landing.index') }}" style="color:var(--primary-light);">← Beranda</a>
+    </p>
+  </div>
+</div>
+<script>
+function copyText(id) {
+  var el = document.getElementById(id);
+  var t = el.textContent;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(function() { alert('Disalin ke clipboard'); });
+  } else {
+    var ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); alert('Disalin'); } catch(e) {}
+    document.body.removeChild(ta);
+  }
+}
+</script>
+</body>
+</html>
