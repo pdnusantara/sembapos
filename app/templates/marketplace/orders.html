@@ -44,7 +44,7 @@
       <div class="mk-order-card__head">
         <span class="mk-order-card__nomor">📦 {{ order.nomor }}</span>
         <span class="mk-status mk-status--{{ order.status }}">{{ order.status_label }}</span>
-        <span class="mk-order-card__date">{{ order.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+        <span class="mk-order-card__date">{{ order.created_at|local_dt('%d %b %Y, %H:%M') }}</span>
       </div>
       <div class="mk-order-card__body">
         <div>

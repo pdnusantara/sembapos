@@ -22,7 +22,7 @@
         <tr>
           <td><code>{{ v.kode }}</code></td>
           <td>{{ v.nama }}</td>
-          <td>{{ v.start_at.strftime('%d/%m/%Y %H:%M') }} - {{ v.end_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ v.start_at|local_dt('%d/%m/%Y %H:%M') }} - {{ v.end_at|local_dt('%d/%m/%Y %H:%M') }}</td>
           <td>
             {% if v.discount_type == 'percent' %}{{ v.discount_value|int }}%{% else %}Rp {{ "{:,.0f}".format(v.discount_value).replace(",",".") }}{% endif %}
             · min Rp {{ "{:,.0f}".format(v.min_spend).replace(",",".") }}

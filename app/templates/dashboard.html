@@ -1,16 +1,28 @@
 {% extends 'base.html' %}
 {% block title %}Dashboard — Kasir Sembako{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
-{% block page_sub %}Ringkasan bisnis hari ini{% endblock %}
+{% block page_sub %}Ringkasan bisnis hari ini · {{ dashboard_timezone_label }}{% endblock %}
 
 {% block content %}
-<!-- Stats Grid -->
 <div class="stats-grid">
   <div class="stat-card primary">
     <div class="stat-icon primary">💰</div>
     <div class="stat-info">
       <div class="stat-value rupiah">{{ "Rp {:,.0f}".format(total_penjualan_hari_ini).replace(",",".") }}</div>
       <div class="stat-label">Penjualan Hari Ini</div>
+      {% if total_penjualan_kemarin > 0 %}
+      <div class="stat-delta" style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+        Kemarin: Rp {{ "{:,.0f}".format(total_penjualan_kemarin).replace(",",".") }}
+        {% set delta = total_penjualan_hari_ini - total_penjualan_kemarin %}
+        {% if delta > 0 %}
+        <span style="color:var(--success);"> ▲ {{ "{:,.0f}".format(delta).replace(",",".") }}</span>
+        {% elif delta < 0 %}
+        <span style="color:var(--danger);"> ▼ {{ "{:,.0f}".format(-delta).replace(",",".") }}</span>
+        {% endif %}
+      </div>
+      {% elif total_penjualan_hari_ini > 0 %}
+      <div class="stat-delta" style="font-size:11px;color:var(--text-muted);margin-top:4px;">Kemarin: belum ada penjualan tercatat</div>
+      {% endif %}
     </div>
   </div>
   <div class="stat-card success">
@@ -18,13 +30,16 @@
     <div class="stat-info">
       <div class="stat-value">{{ jumlah_transaksi_hari_ini }}</div>
       <div class="stat-label">Transaksi Hari Ini</div>
+      {% if jumlah_transaksi_kemarin > 0 or jumlah_transaksi_hari_ini > 0 %}
+      <div class="stat-delta" style="font-size:11px;color:var(--text-muted);margin-top:4px;">Kemarin: {{ jumlah_transaksi_kemarin }} transaksi</div>
+      {% endif %}
     </div>
   </div>
   <div class="stat-card warning">
     <div class="stat-icon warning">📦</div>
     <div class="stat-info">
       <div class="stat-value">{{ total_produk }}</div>
-      <div class="stat-label">Total Produk</div>
+      <div class="stat-label">Total Produk Aktif</div>
     </div>
   </div>
   <div class="stat-card danger">
@@ -32,45 +47,48 @@
     <div class="stat-info">
       <div class="stat-value">{{ produk_menipis }}</div>
       <div class="stat-label">Stok Menipis</div>
+      {% if produk_menipis > 0 and perm('products') %}
+      <div class="stat-delta" style="font-size:11px;margin-top:4px;">
+        <a href="{{ url_for('products.index') }}" style="color:var(--danger);">Kelola produk</a>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>
 
 <div class="layout-split-2-1 dashboard-main" style="margin-bottom:20px;">
-  <!-- Chart -->
   <div class="card">
     <div class="card-header">
       <div>
         <div class="card-title">📈 Penjualan 7 Hari Terakhir</div>
-        <div class="card-subtitle">Grafik total penjualan harian</div>
+        <div class="card-subtitle">Total per hari kalender ({{ dashboard_timezone_label }})</div>
       </div>
     </div>
-    <canvas id="salesChart" height="200"></canvas>
+    <canvas id="salesChart" height="200" aria-label="Grafik penjualan 7 hari terakhir"></canvas>
   </div>
 
-  <!-- Quick Actions -->
   <div class="card">
     <div class="card-header">
       <div class="card-title">⚡ Aksi Cepat</div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;">
-      {% if not current_user.is_superadmin %}
-      <a href="{{ url_for('pos.index') }}" class="btn btn-primary btn-block">
-        🛒 Buka Kasir
-      </a>
-      <a href="{{ url_for('products.add') }}" class="btn btn-outline btn-block">
-        ➕ Tambah Produk
-      </a>
-      <a href="{{ url_for('reports.index') }}" class="btn btn-outline btn-block">
-        📋 Lihat Laporan Hari Ini
-      </a>
-      {% else %}
-      <a href="{{ url_for('superadmin.index') }}" class="btn btn-primary btn-block">
-        🏢 Kelola Tenant
-      </a>
-      <a href="{{ url_for('superadmin.add_tenant') }}" class="btn btn-outline btn-block">
-        ➕ Tambah Tenant Baru
-      </a>
+      {% if perm('pos') %}
+      <a href="{{ url_for('pos.index') }}" class="btn btn-primary btn-block">🛒 Buka Kasir</a>
+      {% endif %}
+      {% if perm('products') %}
+      <a href="{{ url_for('products.add') }}" class="btn btn-outline btn-block">➕ Tambah Produk</a>
+      {% endif %}
+      {% if perm('transactions') %}
+      <a href="{{ url_for('transactions.index') }}" class="btn btn-outline btn-block">📜 Riwayat Transaksi</a>
+      {% endif %}
+      {% if perm('reports') %}
+      <a href="{{ url_for('reports.index') }}" class="btn btn-outline btn-block">📋 Laporan Penjualan</a>
+      {% endif %}
+      {% if perm('cash_shifts') %}
+      <a href="{{ url_for('shifts.index') }}" class="btn btn-outline btn-block">🕐 Shift Kasir</a>
+      {% endif %}
+      {% if not (perm('pos') or perm('products') or perm('transactions') or perm('reports') or perm('cash_shifts')) %}
+      <p style="font-size:13px;color:var(--text-muted);margin:0;">Tidak ada aksi cepat untuk peran Anda. Gunakan menu sidebar.</p>
       {% endif %}
     </div>
 
@@ -86,15 +104,16 @@
   </div>
 </div>
 
-<!-- Recent Transactions -->
 <div class="card">
   <div class="card-header">
     <div>
       <div class="card-title">🧾 Transaksi Terbaru</div>
-      <div class="card-subtitle">10 transaksi terakhir</div>
+      <div class="card-subtitle">10 transaksi terakhir (semua tanggal)</div>
     </div>
-    {% if not current_user.is_superadmin %}
-    <a href="{{ url_for('reports.index') }}" class="btn btn-outline btn-sm">Lihat Semua →</a>
+    {% if perm('transactions') %}
+    <a href="{{ url_for('transactions.index') }}" class="btn btn-outline btn-sm">Lihat semua →</a>
+    {% elif perm('reports') %}
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline btn-sm">Laporan →</a>
     {% endif %}
   </div>
   <div class="table-wrapper">
@@ -113,18 +132,32 @@
       <tbody>
         {% if transaksi_terbaru %}
           {% for t in transaksi_terbaru %}
+          {% set m = (t.metode_bayar or 'tunai')|lower %}
+          {% if m == 'tunai' %}
+            {% set bdg, icn = 'primary', '💵' %}
+          {% elif m == 'transfer' %}
+            {% set bdg, icn = 'info', '🏦' %}
+          {% elif m == 'qris' %}
+            {% set bdg, icn = 'success', '📱' %}
+          {% elif m == 'kredit' %}
+            {% set bdg, icn = 'danger', '💳' %}
+          {% elif m == 'mixed' %}
+            {% set bdg, icn = 'warning', '🔀' %}
+          {% else %}
+            {% set bdg, icn = 'warning', '💳' %}
+          {% endif %}
           <tr>
             <td style="font-family:monospace;color:var(--primary-light);font-weight:600;">{{ t.nomor }}</td>
             <td>{{ t.user.nama if t.user else '-' }}</td>
             <td>{{ t.branch.nama if t.branch else '-' }}</td>
             <td>
-              <span class="badge badge-{{ 'primary' if t.metode_bayar == 'tunai' else ('info' if t.metode_bayar == 'transfer' else 'success') }}">
-                {{ '💵' if t.metode_bayar=='tunai' else ('🏦' if t.metode_bayar=='transfer' else '📱') }}
-                {{ t.metode_bayar.upper() }}
+              <span class="badge badge-{{ bdg }}" {% if t.payments %}title="{% for p in t.payments %}{{ p.method }} Rp {{ "{:,.0f}".format(p.amount or 0).replace(",",".") }}{% if not loop.last %} · {% endif %}{% endfor %}"{% endif %}>
+                {{ icn }}
+                {% if m == 'mixed' %}CAMPUR{% else %}{{ m.upper() }}{% endif %}
               </span>
             </td>
             <td class="fw-bold text-light">Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</td>
-            <td class="text-muted">{{ t.created_at.strftime('%H:%M') }}</td>
+            <td class="text-muted">{{ t.created_at|local_dt('%d/%m %H:%M') }}</td>
             <td>
               <span class="badge badge-{{ 'success' if t.status=='selesai' else 'danger' }}">
                 {{ '✅' if t.status=='selesai' else '❌' }} {{ t.status.title() }}
@@ -135,7 +168,7 @@
         {% else %}
           <tr>
             <td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">
-              📭 Belum ada transaksi hari ini
+              📭 Belum ada transaksi tercatat
             </td>
           </tr>
         {% endif %}
@@ -148,47 +181,70 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-const ctx = document.getElementById('salesChart').getContext('2d');
-const labels = {{ chart_labels | tojson }};
-const data = {{ chart_data | tojson }};
+(function() {
+  const root = document.documentElement;
+  const cs = getComputedStyle(root);
+  const primary = (cs.getPropertyValue('--primary') || '#6c63ff').trim();
+  const muted = (cs.getPropertyValue('--text-muted') || '#8b8ba0').trim();
+  const isLight = document.body.getAttribute('data-theme') === 'light';
+  const grid = isLight ? 'rgba(30,41,59,0.08)' : 'rgba(255,255,255,0.05)';
 
-new Chart(ctx, {
-  type: 'bar',
-  data: {
-    labels: labels,
-    datasets: [{
-      label: 'Penjualan (Rp)',
-      data: data,
-      backgroundColor: function(ctx) {
-        const gradient = ctx.chart.ctx.createLinearGradient(0,0,0,300);
-        gradient.addColorStop(0, 'rgba(108,99,255,0.8)');
-        gradient.addColorStop(1, 'rgba(108,99,255,0.1)');
-        return gradient;
-      },
-      borderColor: 'rgba(108,99,255,0.9)',
-      borderWidth: 1,
-      borderRadius: 8,
-      borderSkipped: false,
-    }]
-  },
-  options: {
-    responsive: true,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#1a1a2e',
-        borderColor: 'rgba(108,99,255,0.3)',
+  const ctx = document.getElementById('salesChart').getContext('2d');
+  const labels = {{ chart_labels | tojson }};
+  const data = {{ chart_data | tojson }};
+
+  const hexToRgb = (hex) => {
+    let h = hex.replace('#', '');
+    if (h.length === 3) h = h.split('').map(function(c) { return c + c; }).join('');
+    const n = parseInt(h, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  };
+  const rgb = hexToRgb(primary.indexOf('#') === 0 ? primary : '#6c63ff');
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Penjualan (Rp)',
+        data: data,
+        backgroundColor: function(c) {
+          const g = c.chart.ctx.createLinearGradient(0, 0, 0, 300);
+          g.addColorStop(0, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.85)');
+          g.addColorStop(1, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.12)');
+          return g;
+        },
+        borderColor: 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.95)',
         borderWidth: 1,
-        callbacks: {
-          label: (ctx) => 'Rp ' + ctx.raw.toLocaleString('id-ID')
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1a2e',
+          borderColor: 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.35)',
+          borderWidth: 1,
+          callbacks: {
+            label: function(c) { return 'Rp ' + Number(c.raw).toLocaleString('id-ID'); }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: grid }, ticks: { color: muted } },
+        y: {
+          grid: { color: grid },
+          ticks: {
+            color: muted,
+            callback: function(v) { return 'Rp ' + Number(v).toLocaleString('id-ID'); }
+          }
         }
       }
-    },
-    scales: {
-      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8ba0' } },
-      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b8ba0', callback: v => 'Rp '+v.toLocaleString('id-ID') } }
     }
-  }
-});
+  });
+})();
 </script>
 {% endblock %}

@@ -31,7 +31,7 @@
       <tbody>
         {% for r in rows %}
         <tr>
-          <td class="text-muted" style="font-size:12px;white-space:nowrap;">{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td class="text-muted" style="font-size:12px;white-space:nowrap;">{{ r.created_at|local_dt_tz(tenant.timezone if tenant else 'Asia/Jakarta', '%d/%m/%Y %H:%M') }}</td>
           <td><span class="badge badge-info">{{ r.event }}</span></td>
           <td style="font-size:12px;">
             {% if r.old_paket_kode or r.new_paket_kode %}

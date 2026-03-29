@@ -27,7 +27,7 @@
       <tbody>
         {% for log in logs %}
         <tr>
-          <td class="text-muted" style="white-space:nowrap;">{{ log.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td class="text-muted" style="white-space:nowrap;">{{ log.created_at|local_dt('%d/%m/%Y %H:%M') }}</td>
           <td>{{ log.actor.nama if log.actor else log.actor_user_id }}</td>
           <td><code style="font-size:11px;">{{ log.action }}</code></td>
           <td>

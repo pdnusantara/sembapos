@@ -275,8 +275,8 @@
     <div class="inv-header__right">
       <div class="inv-header__type">{{ 'Surat Jalan' if is_admin else 'Invoice Pembelian' }}</div>
       <div class="inv-header__nomor">{{ order.nomor }}</div>
-      <div class="inv-header__date">{{ order.created_at.strftime('%d %B %Y, %H:%M') }}</div>
-      <div class="inv-header__date">Dicetak: {{ now.strftime('%d %B %Y %H:%M') }}</div>
+      <div class="inv-header__date">{{ order.created_at|local_dt('%d %B %Y, %H:%M') }}</div>
+      <div class="inv-header__date">Dicetak: {{ now|local_dt('%d %B %Y %H:%M') }}</div>
     </div>
   </div>
 
@@ -329,7 +329,7 @@
         </div>
         <div class="inv-info-row">
           <span class="inv-info-label">Tanggal</span>
-          <span class="inv-info-value">{{ order.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          <span class="inv-info-value">{{ order.created_at|local_dt('%d/%m/%Y %H:%M') }}</span>
         </div>
         <div class="inv-info-row">
           <span class="inv-info-label">Seller</span>
@@ -421,7 +421,7 @@
   <!-- FOOTER -->
   <div class="inv-footer">
     Marketplace Kuningan &nbsp;·&nbsp; {{ order.nomor }} &nbsp;·&nbsp;
-    Dicetak pada {{ now.strftime('%d/%m/%Y %H:%M') }}
+    Dicetak pada {{ now|local_dt('%d/%m/%Y %H:%M') }}
   </div>
 </div>
 

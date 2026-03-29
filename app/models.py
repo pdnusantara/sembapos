@@ -51,12 +51,15 @@ class Tenant(db.Model):
     tanggal_expired = db.Column(db.DateTime, nullable=True)
     max_cabang = db.Column(db.Integer, default=3)
     max_user = db.Column(db.Integer, default=5)
+    # IANA timezone, e.g. Asia/Jakarta (WIB); dipakai dashboard & laporan per hari kalender
+    timezone = db.Column(db.String(30), nullable=False, default='Asia/Jakarta')
 
     subscription = db.relationship('TenantPackage', back_populates='tenants')
     branches = db.relationship('Branch', backref='tenant', lazy=True, cascade='all, delete-orphan')
     users = db.relationship('User', backref='tenant', lazy=True, cascade='all, delete-orphan')
     products = db.relationship('Product', backref='tenant', lazy=True, cascade='all, delete-orphan')
     categories = db.relationship('ProductCategory', backref='tenant', lazy=True, cascade='all, delete-orphan')
+    etalases = db.relationship('Etalase', backref='tenant', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Tenant {self.nama}>'
@@ -98,6 +101,8 @@ class User(db.Model, UserMixin):
     session_version = db.Column(db.Integer, default=0, nullable=False)
     # JSON list modul: lihat app/permissions.py — NULL = default penuh sesuai role
     permissions_json = db.Column(db.Text, nullable=True)
+    # Zona waktu pribadi superadmin (user tenant memakai tenant.timezone)
+    timezone = db.Column(db.String(30), nullable=True)
 
     transactions = db.relationship('Transaction', backref='user', lazy=True)
 
@@ -181,17 +186,32 @@ class ProductCategory(db.Model):
         return f'<Category {self.nama}>'
 
 
+class Etalase(db.Model):
+    """Rak / pajangan fisik di toko (lokasi produk untuk kasir)."""
+    __tablename__ = 'etalases'
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=False)
+    nama = db.Column(db.String(100), nullable=False)
+    keterangan = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Etalase {self.nama}>'
+
+
 class Product(db.Model):
     __tablename__ = 'products'
     id = db.Column(db.Integer, primary_key=True)
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('product_categories.id'), nullable=True)
+    etalase_id = db.Column(db.Integer, db.ForeignKey('etalases.id'), nullable=True)
     supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
     nama = db.Column(db.String(150), nullable=False)
     barcode = db.Column(db.String(50), nullable=True)
     satuan = db.Column(db.String(20), default='pcs')  # pcs, kg, liter, dus, karung
     harga_beli = db.Column(db.Float, default=0)
     harga_jual = db.Column(db.Float, nullable=False)  # ecer
+    harga_coret = db.Column(db.Float, nullable=True)  # harga normal untuk label (dicoret)
     min_qty_grosir_1 = db.Column(db.Float, nullable=True)
     harga_jual_grosir_1 = db.Column(db.Float, nullable=True)
     min_qty_grosir_2 = db.Column(db.Float, nullable=True)
@@ -203,6 +223,7 @@ class Product(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    etalase = db.relationship('Etalase', backref='products', lazy=True)
     transaction_items = db.relationship('TransactionItem', backref='product', lazy=True)
     stock_movements = db.relationship('StockMovement', backref='product', lazy=True)
 

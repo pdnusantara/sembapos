@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Transaksi {{ trx.nomor }}{% endblock %}
 {% block page_title %}🧾 {{ trx.nomor }}{% endblock %}
-{% block page_sub %}{{ trx.created_at.strftime('%d/%m/%Y %H:%M') }} · {{ trx.branch.nama if trx.branch else '—' }}{% endblock %}
+{% block page_sub %}{{ trx.created_at|local_dt('%d/%m/%Y %H:%M') }} · {{ trx.branch.nama if trx.branch else '—' }}{% endblock %}
 
 {% block content %}
 {% set pay_badge = {'tunai':'primary','transfer':'info','qris':'success','kredit':'danger','mixed':'warning'} %}

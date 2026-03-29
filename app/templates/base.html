@@ -74,11 +74,17 @@
       <div class="nav-group">
         <div class="nav-group-label">Inventory</div>
         {% if perm('products') %}
-        <a href="{{ url_for('products.index') }}" class="nav-item {% if request.blueprint == 'products' and 'categor' not in request.endpoint %}active{% endif %}">
+        <a href="{{ url_for('products.index') }}" class="nav-item {% if request.blueprint == 'products' and request.endpoint != 'products.etalase' and 'etalases' not in (request.endpoint or '') and 'categor' not in (request.endpoint or '') %}active{% endif %}">
           <span class="nav-icon">📦</span> Produk
         </a>
-        <a href="{{ url_for('products.categories') }}" class="nav-item {% if 'categor' in request.endpoint %}active{% endif %}">
+        <a href="{{ url_for('products.categories') }}" class="nav-item {% if 'categor' in (request.endpoint or '') %}active{% endif %}">
           <span class="nav-icon">🏷️</span> Kategori
+        </a>
+        <a href="{{ url_for('products.etalases') }}" class="nav-item {% if 'etalases' in (request.endpoint or '') %}active{% endif %}">
+          <span class="nav-icon">🗂️</span> Lokasi etalase
+        </a>
+        <a href="{{ url_for('products.etalase') }}" class="nav-item {% if request.endpoint == 'products.etalase' %}active{% endif %}">
+          <span class="nav-icon">🪧</span> Etalase harga
         </a>
         {% endif %}
         {% if perm('suppliers') %}
@@ -175,6 +181,9 @@
         <a href="{{ url_for('admin.branches') }}" class="nav-item {% if request.endpoint == 'admin.branches' %}active{% endif %}">
           <span class="nav-icon">🏬</span> Cabang
         </a>
+        <a href="{{ url_for('admin.settings') }}" class="nav-item {% if request.endpoint == 'admin.settings' %}active{% endif %}">
+          <span class="nav-icon">⚙️</span> Pengaturan
+        </a>
         {% else %}
         <a href="{{ url_for('superadmin.index') }}" class="nav-item {% if request.endpoint in ('superadmin.index', 'superadmin.view_tenant', 'superadmin.edit_tenant', 'superadmin.add_tenant', 'superadmin.export_csv', 'superadmin.tenant_plan_history') %}active{% endif %}">
           <span class="nav-icon">🏢</span> Daftar tenant
@@ -190,6 +199,9 @@
           {% if marketplace_pending_count > 0 %}
           <span class="nav-badge">{{ marketplace_pending_count }}</span>
           {% endif %}
+        </a>
+        <a href="{{ url_for('superadmin.settings') }}" class="nav-item {% if request.endpoint == 'superadmin.settings' %}active{% endif %}">
+          <span class="nav-icon">⚙️</span> Pengaturan
         </a>
         {% endif %}
       </div>
@@ -239,6 +251,13 @@
             <span class="user-tenant-stat-sep" aria-hidden="true">·</span>
             <span class="user-tenant-stat">👥 {{ t.users|length }}/{% if lim_u %}∞{% else %}{{ t.max_user }}{% endif %}</span>
           </div>
+          {% if app_timezone_label %}
+          <div class="user-tenant-line user-tenant-line--sub" title="Zona waktu kalender aplikasi">🌐 {{ app_timezone_label }}</div>
+          {% endif %}
+        </div>
+        {% elif current_user.is_superadmin and app_timezone_label %}
+        <div class="user-card__tenant" aria-label="Zona waktu">
+          <div class="user-tenant-line user-tenant-line--sub">🌐 {{ app_timezone_label }}</div>
         </div>
         {% endif %}
       </div>

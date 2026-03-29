@@ -90,3 +90,8 @@ def index():
         return redirect(url_for('dashboard.index'))
     landing_packages = _landing_package_rows()
     return render_template('landing.html', landing_packages=landing_packages)
+
+
+@landing_bp.route('/tutorial')
+def tutorial():
+    return render_template('tutorial.html')

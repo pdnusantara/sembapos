@@ -15,9 +15,9 @@
       <div class="cart-row"><span>Status</span>
         <span>{% if shift.status == 'open' %}<strong class="text-success">Terbuka</strong>{% else %}Tutup{% endif %}</span>
       </div>
-      <div class="cart-row"><span>Dibuka</span><span>{{ shift.opened_at.strftime('%d/%m/%Y %H:%M') if shift.opened_at else '—' }}</span></div>
+      <div class="cart-row"><span>Dibuka</span><span>{{ shift.opened_at|local_dt('%d/%m/%Y %H:%M') if shift.opened_at else '—' }}</span></div>
       {% if shift.closed_at %}
-      <div class="cart-row"><span>Ditutup</span><span>{{ shift.closed_at.strftime('%d/%m/%Y %H:%M') }}</span></div>
+      <div class="cart-row"><span>Ditutup</span><span>{{ shift.closed_at|local_dt('%d/%m/%Y %H:%M') }}</span></div>
       {% endif %}
       <div class="cart-row"><span>Saldo awal laci</span><span>Rp {{ "{:,.0f}".format(shift.opening_float or 0).replace(",",".") }}</span></div>
       {% if shift.note_open %}
@@ -96,7 +96,7 @@
         <tbody>
           {% for t in transactions %}
           <tr>
-            <td>{{ t.created_at.strftime('%d/%m %H:%M') if t.created_at else '—' }}</td>
+            <td>{{ t.created_at|local_dt('%d/%m %H:%M') if t.created_at else '—' }}</td>
             <td>{{ t.nomor }}</td>
             <td>{{ t.metode_bayar or '—' }}</td>
             <td>Rp {{ "{:,.0f}".format(t.total or 0).replace(",",".") }}</td>

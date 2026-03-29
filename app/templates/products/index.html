@@ -35,6 +35,13 @@
       <option value="{{ cat.id }}" {{ 'selected' if cat_id|string == cat.id|string }}>{{ cat.nama }}</option>
       {% endfor %}
     </select>
+    <select name="etalase" class="form-control filter-select" onchange="this.form.submit()">
+      <option value="">Semua etalase</option>
+      <option value="0" {{ 'selected' if etalase_id == '0' }}>Belum ditentukan</option>
+      {% for e in etalases %}
+      <option value="{{ e.id }}" {{ 'selected' if etalase_id|string == e.id|string }}>{{ e.nama }}</option>
+      {% endfor %}
+    </select>
     <select name="status" class="form-control filter-select" onchange="this.form.submit()">
       <option value="all" {{ 'selected' if status == 'all' }}>Status: Semua</option>
       <option value="aktif" {{ 'selected' if status == 'aktif' }}>Aktif saja</option>
@@ -71,6 +78,7 @@
           <th style="width:52px;"></th>
           <th>Produk</th>
           <th>Kategori</th>
+          <th>Etalase</th>
           <th>Satuan</th>
           <th>Harga Beli</th>
           <th>Harga Jual</th>
@@ -97,6 +105,13 @@
             {% if p.barcode %}<div style="font-size:11px;color:var(--text-muted);font-family:monospace;">{{ p.barcode }}</div>{% endif %}
           </td>
           <td data-label="Kategori">{{ p.category.nama if p.category else '—' }}</td>
+          <td data-label="Etalase">
+            {% if p.etalase %}
+            <span class="badge badge-secondary" style="font-weight:600;">🗂️ {{ p.etalase.nama }}</span>
+            {% else %}
+            <span class="text-muted" style="font-size:12px;">—</span>
+            {% endif %}
+          </td>
           <td data-label="Satuan"><span class="badge badge-info">{{ p.satuan }}</span></td>
           <td data-label="Harga Beli" class="text-muted">Rp {{ "{:,.0f}".format(p.harga_beli).replace(",",".") }}</td>
           <td data-label="Harga Jual">
@@ -146,7 +161,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="{% if current_user.is_admin %}10{% else %}9{% endif %}" class="admin-table-empty" style="text-align:center;padding:40px;color:var(--text-muted);">
+          <td colspan="{% if current_user.is_admin %}11{% else %}10{% endif %}" class="admin-table-empty" style="text-align:center;padding:40px;color:var(--text-muted);">
             📭 Tidak ada produk untuk filter ini.
             {% if current_user.is_admin %}<a href="{{ url_for('products.add') }}">Tambah produk</a>{% endif %}
           </td>
@@ -166,17 +181,17 @@
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;">
   {% if products.has_prev %}
-  <a href="{{ url_for('products.index', page=products.prev_num, q=search, category=cat_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">‹</a>
+  <a href="{{ url_for('products.index', page=products.prev_num, q=search, category=cat_id, etalase=etalase_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">‹</a>
   {% endif %}
   {% for p in products.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
     {% if p %}
-    <a href="{{ url_for('products.index', page=p, q=search, category=cat_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn {{ 'active' if p == products.page }}">{{ p }}</a>
+    <a href="{{ url_for('products.index', page=p, q=search, category=cat_id, etalase=etalase_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn {{ 'active' if p == products.page }}">{{ p }}</a>
     {% else %}
     <span class="page-btn" style="cursor:default;">…</span>
     {% endif %}
   {% endfor %}
   {% if products.has_next %}
-  <a href="{{ url_for('products.index', page=products.next_num, q=search, category=cat_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">›</a>
+  <a href="{{ url_for('products.index', page=products.next_num, q=search, category=cat_id, etalase=etalase_id, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">›</a>
   {% endif %}
   </div>
 </div>

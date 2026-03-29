@@ -19,6 +19,12 @@ from ..sales_return_service import (
     REFUND_METHODS,
 )
 from ..shifts_util import get_open_shift
+from ..timezones import (
+    local_today_date,
+    parse_ymd_to_date,
+    resolve_effective_timezone_id,
+    utc_naive_bounds_for_local_date,
+)
 
 returns_bp = Blueprint('returns', __name__, url_prefix='/returns')
 
@@ -38,18 +44,6 @@ def _can_access_source_transaction(trx):
     return True
 
 
-def _parse_date(s, end_of_day=False):
-    if not s or not str(s).strip():
-        return None
-    try:
-        d = datetime.strptime(str(s).strip()[:10], '%Y-%m-%d')
-        if end_of_day:
-            return d.replace(hour=23, minute=59, second=59, microsecond=999999)
-        return d.replace(hour=0, minute=0, second=0, microsecond=0)
-    except ValueError:
-        return None
-
-
 @returns_bp.route('/')
 @login_required
 def index():
@@ -58,16 +52,20 @@ def index():
         return redir
     tenant_id = current_user.tenant_id
 
-    date_from = _parse_date(request.args.get('date_from'), end_of_day=False)
-    date_to = _parse_date(request.args.get('date_to'), end_of_day=True)
-    if not date_from:
-        date_from = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=29)
-    if not date_to:
-        date_to = datetime.utcnow().replace(hour=23, minute=59, second=59, microsecond=999999)
+    tz_id = resolve_effective_timezone_id(current_user)
+    today = local_today_date(tz_id)
+    raw_from = parse_ymd_to_date(request.args.get('date_from'))
+    raw_to = parse_ymd_to_date(request.args.get('date_to'))
+    d_to = raw_to if raw_to is not None else today
+    d_from = raw_from if raw_from is not None else d_to - timedelta(days=29)
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    start_utc, _ = utc_naive_bounds_for_local_date(d_from, tz_id)
+    _, end_utc = utc_naive_bounds_for_local_date(d_to, tz_id)
 
     q = SalesReturn.query.filter(
         SalesReturn.tenant_id == tenant_id,
-        SalesReturn.created_at.between(date_from, date_to),
+        SalesReturn.created_at.between(start_utc, end_utc),
     ).options(
         selectinload(SalesReturn.source_transaction),
         selectinload(SalesReturn.user),
@@ -99,8 +97,8 @@ def index():
         'returns/index.html',
         rows=rows,
         branches=branches,
-        date_from=date_from.strftime('%Y-%m-%d'),
-        date_to=date_to.strftime('%Y-%m-%d'),
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
         branch_id_param=bid,
         q=nomor_q,
     )

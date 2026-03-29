@@ -421,7 +421,7 @@
               <td>Rp {{ "{:,.0f}".format(d.hpp).replace(",", ".") }}</td>
               <td class="{{ 'text-success' if d.margin >= 0 else 'text-danger' }}">Rp {{ "{:,.0f}".format(d.margin).replace(",", ".") }}</td>
               {% endif %}
-              <td>{{ d.created_at.strftime('%d/%m/%Y %H:%M') if d.created_at else '-' }}</td>
+              <td>{{ d.created_at|local_dt('%d/%m/%Y %H:%M') if d.created_at else '-' }}</td>
             </tr>
             {% endfor %}
           </tbody>

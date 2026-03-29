@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Pengaturan Super Admin{% endblock %}
+{% block page_title %}⚙️ Pengaturan{% endblock %}
+{% block page_sub %}Zona waktu tampilan akun Anda{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.index'), false),
+  ('Pengaturan', '', true),
+]) }}
+<div class="card" style="max-width:560px;">
+  <div class="card-header">
+    <div class="card-title">Zona waktu</div>
+    <div class="card-subtitle">Digunakan untuk label waktu di antarmuka dan preferensi kalender saat Anda menjelajah sebagai Super Admin.</div>
+  </div>
+  <form method="POST" style="padding:16px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="form-group">
+      <label class="form-label">Zona waktu</label>
+      <select name="timezone" class="form-control" required>
+        {% for val, label in timezone_choices %}
+        <option value="{{ val }}" {% if val == current_tz %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Simpan</button>
+    <a href="{{ url_for('superadmin.index') }}" class="btn btn-outline" style="margin-left:8px;">Batal</a>
+  </form>
+</div>
+{% endblock %}

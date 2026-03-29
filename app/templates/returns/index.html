@@ -59,7 +59,7 @@
         <tbody>
           {% for r in rows %}
           <tr>
-            <td>{{ r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else '—' }}</td>
+            <td>{{ r.created_at|local_dt('%d/%m/%Y %H:%M') if r.created_at else '—' }}</td>
             <td style="font-weight:600;">{{ r.nomor }}</td>
             <td>
               {% if r.source_transaction %}

@@ -29,6 +29,14 @@
     </div>
     {% endif %}
 
+    <div class="pos-cat-bar pos-etalase-bar" id="etalaseBar" aria-label="Filter lokasi etalase">
+      <button type="button" class="pos-cat-chip pos-etalase-chip active" data-etalase="all">Semua lokasi</button>
+      <button type="button" class="pos-cat-chip pos-etalase-chip" data-etalase="0">Belum ditentukan</button>
+      {% for e in etalases %}
+      <button type="button" class="pos-cat-chip pos-etalase-chip" data-etalase="{{ e.id }}">{{ e.nama }}</button>
+      {% endfor %}
+    </div>
+
     <div class="pos-search-panel" id="ajaxSearchPanel"></div>
 
     <div class="pos-products-grid" id="productGrid">
@@ -45,6 +53,7 @@
            data-name="{{ p.nama|lower }}"
            data-barcode="{{ (p.barcode or '')|lower }}"
            data-cat="{{ p.category_id or 0 }}"
+           data-etalase-id="{{ p.etalase_id or 0 }}"
            data-stok="{{ p.stok }}"
            data-satuan="{{ p.satuan|e }}"
            data-stok-min="{{ p.stok_minimum }}">
@@ -69,6 +78,9 @@
         <div class="product-stock {{ 'low' if p.stok <= p.stok_minimum else '' }}">
           Stok: {{ p.stok|int if p.stok == p.stok|int else p.stok }} {{ p.satuan }}
         </div>
+        {% if p.etalase %}
+        <div class="etalase-badge" title="Lokasi di toko">{{ p.etalase.nama }}</div>
+        {% endif %}
       </div>
       {% endfor %}
     </div>
@@ -296,6 +308,7 @@ let shiftSnapshot = null;
 
 let cart = [];
 let selectedCategory = 'all';
+let selectedEtalase = 'all';
 let ajaxSearchResults = [];
 let searchDebounce = null;
 let promoDiscountApplied = 0;
@@ -999,13 +1012,16 @@ function focusPaymentInput(method) {
 function filterProductGrid(q) {
   q = q.toLowerCase().trim();
   let cat = selectedCategory;
+  let et = selectedEtalase;
   document.querySelectorAll('#productGrid .product-card').forEach(card => {
     const name = card.dataset.name || '';
     const barcode = card.dataset.barcode || '';
     const c = String(card.dataset.cat || '0');
+    const eid = String(card.dataset.etalaseId || '0');
     const textOk = !q || name.includes(q) || barcode.includes(q);
     const catOk = cat === 'all' || c === String(cat);
-    card.style.display = (textOk && catOk) ? '' : 'none';
+    const etOk = et === 'all' || eid === String(et);
+    card.style.display = (textOk && catOk && etOk) ? '' : 'none';
   });
 }
 
@@ -1024,7 +1040,8 @@ function renderAjaxPanel(list) {
       img +
       '<div style="flex:1;text-align:left;">' +
         '<div style="font-weight:600;">' + escapeHtml(p.nama) + '</div>' +
-        '<div style="font-size:11px;color:var(--text-muted);">' + formatRupiah(p.harga) + ' · stok ' + p.stok + ' ' + escapeHtml(String(p.satuan)) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);">' + formatRupiah(p.harga) + ' · stok ' + p.stok + ' ' + escapeHtml(String(p.satuan)) +
+          (p.etalase_nama ? ' · 📍 ' + escapeHtml(String(p.etalase_nama)) : '') + '</div>' +
       '</div>' +
     '</button>';
   }).join('');
@@ -1359,11 +1376,23 @@ document.getElementById('voucherInput').addEventListener('input', function() {
   voucherDebounce = setTimeout(() => validateVoucherRealtime(), 280);
 });
 
-document.querySelectorAll('#categoryBar .pos-cat-chip').forEach(chip => {
+const categoryBar = document.getElementById('categoryBar');
+if (categoryBar) {
+  categoryBar.querySelectorAll('.pos-cat-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      categoryBar.querySelectorAll('.pos-cat-chip').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+      selectedCategory = this.getAttribute('data-cat') || 'all';
+      filterProductGrid(document.getElementById('searchInput').value);
+    });
+  });
+}
+
+document.querySelectorAll('#etalaseBar .pos-etalase-chip').forEach(chip => {
   chip.addEventListener('click', function() {
-    document.querySelectorAll('#categoryBar .pos-cat-chip').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('#etalaseBar .pos-etalase-chip').forEach(c => c.classList.remove('active'));
     this.classList.add('active');
-    selectedCategory = this.getAttribute('data-cat') || 'all';
+    selectedEtalase = this.getAttribute('data-etalase') || 'all';
     filterProductGrid(document.getElementById('searchInput').value);
   });
 });

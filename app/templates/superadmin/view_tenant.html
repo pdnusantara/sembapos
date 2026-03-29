@@ -87,7 +87,7 @@
       <tbody>
         {% for r in plan_history_recent %}
         <tr>
-          <td class="text-muted" style="font-size:11px;white-space:nowrap;">{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td class="text-muted" style="font-size:11px;white-space:nowrap;">{{ r.created_at|local_dt_tz(tenant.timezone if tenant else 'Asia/Jakarta', '%d/%m/%Y %H:%M') }}</td>
           <td><span class="badge badge-info" style="font-size:10px;">{{ r.event }}</span></td>
           <td style="font-size:11px;">{{ r.old_paket_kode or '—' }} → <strong>{{ r.new_paket_kode or '—' }}</strong></td>
           <td style="font-size:11px;">{{ r.old_max_cabang if r.old_max_cabang is not none else '—' }}→{{ r.new_max_cabang if r.new_max_cabang is not none else '—' }} / {{ r.old_max_user if r.old_max_user is not none else '—' }}→{{ r.new_max_user if r.new_max_user is not none else '—' }}</td>

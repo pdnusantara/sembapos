@@ -13,6 +13,7 @@ from ..permissions import (
     normalize_permissions_json,
     effective_permission_codes,
 )
+from ..timezones import INDONESIA_TIMEZONE_CHOICES, normalize_timezone_id
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -79,6 +80,32 @@ def validate_password_pair(pw, pw2):
     if len(pw) < MIN_PASSWORD_LEN:
         return None, f'Password minimal {MIN_PASSWORD_LEN} karakter.'
     return pw, None
+
+
+@admin_bp.route('/settings', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def settings():
+    """Zona waktu kalender untuk seluruh pengguna tenant (dashboard, dll.)."""
+    if current_user.is_superadmin:
+        flash('Super Admin mengatur zona waktu lewat menu Pengaturan di grup Super Admin.', 'info')
+        return redirect(url_for('superadmin.index'))
+    tenant_id = current_user.tenant_id
+    if not tenant_id:
+        flash('Tidak ada tenant terkait akun ini.', 'danger')
+        return redirect(url_for('dashboard.index'))
+    tenant = Tenant.query.get_or_404(tenant_id)
+    if request.method == 'POST':
+        tenant.timezone = normalize_timezone_id(request.form.get('timezone'))
+        db.session.commit()
+        flash('Zona waktu toko disimpan. Berlaku untuk semua pengguna di tenant ini.', 'success')
+        return redirect(url_for('admin.settings'))
+    return render_template(
+        'admin/settings.html',
+        tenant=tenant,
+        timezone_choices=INDONESIA_TIMEZONE_CHOICES,
+        current_tz=normalize_timezone_id(getattr(tenant, 'timezone', None)),
+    )
 
 
 @admin_bp.route('/users')

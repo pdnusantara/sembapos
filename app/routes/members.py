@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from sqlalchemy import func
@@ -6,6 +6,7 @@ from .. import db
 from ..models import (
     Member,
     MemberTier,
+    Tenant,
     Voucher,
     VoucherCategoryScope,
     VoucherRedemption,
@@ -15,6 +16,7 @@ from ..models import (
     TransactionItem,
 )
 from ..loyalty_service import ensure_default_tiers, evaluate_member_tier, member_top_products
+from ..timezones import get_zoneinfo_required, normalize_timezone_id
 
 members_bp = Blueprint('members', __name__, url_prefix='/members')
 
@@ -276,8 +278,13 @@ def voucher_form(id=None):
         voucher.discount_value = max(0, float(request.form.get('discount_value') or 0))
         voucher.max_discount = float(request.form.get('max_discount') or 0) or None
         voucher.min_spend = max(0, float(request.form.get('min_spend') or 0))
-        voucher.start_at = datetime.strptime(request.form.get('start_at'), '%Y-%m-%dT%H:%M')
-        voucher.end_at = datetime.strptime(request.form.get('end_at'), '%Y-%m-%dT%H:%M')
+        tenant_row = Tenant.query.get(tenant_id)
+        tz_id = normalize_timezone_id(getattr(tenant_row, 'timezone', None)) if tenant_row else None
+        zi = get_zoneinfo_required(tz_id)
+        start_naive = datetime.strptime(request.form.get('start_at'), '%Y-%m-%dT%H:%M')
+        end_naive = datetime.strptime(request.form.get('end_at'), '%Y-%m-%dT%H:%M')
+        voucher.start_at = start_naive.replace(tzinfo=zi).astimezone(dt_timezone.utc).replace(tzinfo=None)
+        voucher.end_at = end_naive.replace(tzinfo=zi).astimezone(dt_timezone.utc).replace(tzinfo=None)
         voucher.max_usage_global = int(request.form.get('max_usage_global') or 0) or None
         voucher.max_usage_per_member = int(request.form.get('max_usage_per_member') or 0) or None
         voucher.active = 'active' in request.form

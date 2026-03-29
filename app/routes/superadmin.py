@@ -27,6 +27,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from werkzeug.utils import secure_filename
 
 from .. import db
+from ..timezones import INDONESIA_TIMEZONE_CHOICES, normalize_timezone_id
 from ..models import (
     Tenant,
     User,
@@ -126,6 +127,23 @@ def superadmin_required(f):
             return redirect(url_for('dashboard.index'))
         return f(*args, **kwargs)
     return decorated
+
+
+@superadmin_bp.route('/settings', methods=['GET', 'POST'])
+@login_required
+@superadmin_required
+def settings():
+    """Zona waktu tampilan untuk akun Super Admin (preferensi pribadi)."""
+    if request.method == 'POST':
+        current_user.timezone = normalize_timezone_id(request.form.get('timezone'))
+        db.session.commit()
+        flash('Zona waktu akun Super Admin disimpan.', 'success')
+        return redirect(url_for('superadmin.settings'))
+    return render_template(
+        'superadmin/settings.html',
+        timezone_choices=INDONESIA_TIMEZONE_CHOICES,
+        current_tz=normalize_timezone_id(getattr(current_user, 'timezone', None)),
+    )
 
 
 def _parse_expiry_date(s):
@@ -633,6 +651,7 @@ def add_tenant():
             max_cabang=max_cabang,
             max_user=max_user,
             tanggal_expired=_parse_expiry_date(request.form.get('tanggal_expired')),
+            timezone=normalize_timezone_id(request.form.get('timezone')),
         )
         db.session.add(tenant)
         db.session.flush()
@@ -687,6 +706,7 @@ def add_tenant():
         flash('Belum ada paket aktif. Buat minimal satu paket di menu Paket tenant.', 'warning')
     return render_template(
         'superadmin/add_tenant.html',
+        timezone_choices=INDONESIA_TIMEZONE_CHOICES,
         paket_kuota=_paket_kuota_map(),
         packages=packages,
     )
@@ -774,6 +794,7 @@ def edit_tenant(id):
         tenant.aktif = bool(request.form.get('aktif'))
         exp = _parse_expiry_date(request.form.get('tanggal_expired'))
         tenant.tanggal_expired = exp
+        tenant.timezone = normalize_timezone_id(request.form.get('timezone'))
 
         if (
             old_pid != tenant.paket_id
@@ -813,6 +834,7 @@ def edit_tenant(id):
         paket_kuota=_paket_kuota_map(),
         packages=packages,
         unlimited_threshold=UNLIMITED_THRESHOLD,
+        timezone_choices=INDONESIA_TIMEZONE_CHOICES,
     )
 
 

@@ -56,6 +56,15 @@
           <label class="form-label">Max user</label>
           <input type="number" name="max_user" id="maxUser" class="form-control" min="1" value="{{ tenant.max_user }}">
         </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Zona waktu (dashboard &amp; kalender)</label>
+          <select name="timezone" class="form-control" required>
+            {% for val, label in timezone_choices %}
+            <option value="{{ val }}" {% if (tenant.timezone or 'Asia/Jakarta') == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Berlaku untuk semua pengguna tenant ini.</div>
+        </div>
         <div class="form-group">
           <label class="form-label">Email</label>
           <input type="email" name="email" class="form-control" value="{{ tenant.email or '' }}">

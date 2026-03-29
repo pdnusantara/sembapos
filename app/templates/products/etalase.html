@@ -1,0 +1,407 @@
+{% extends 'base.html' %}
+{% block title %}Etalase harga{% endblock %}
+{% block page_title %}🏷️ Etalase harga{% endblock %}
+{% block page_sub %}{{ etalase_total }} produk sesuai filter · label seperti minimarket{% endblock %}
+
+{% macro etalase_card(p) %}
+<article class="etalase-card" data-product-id="{{ p.id }}">
+  <label class="etalase-card__checkwrap etalase-no-print">
+    <input type="checkbox" class="etalase-card__check" checked aria-label="Sertakan label {{ p.nama|e }} saat cetak">
+  </label>
+  <div class="etalase-card__inner">
+    <div class="etalase-card__toprow">
+      {% if p.harga_coret and p.harga_coret > 0 %}
+      <div class="etalase-card__coret-wrap">
+        <span class="etalase-card__coret-label">Harga normal</span>
+        <span class="etalase-card__coret">Rp {{ "{:,.0f}".format(p.harga_coret).replace(",",".") }}</span>
+      </div>
+      {% else %}
+      <span class="etalase-card__toprow-spacer"></span>
+      {% endif %}
+      <span class="etalase-card__printdate">Cetak {{ tanggal_cetak }}</span>
+    </div>
+
+    <div class="etalase-card__priceblock">
+      <span class="etalase-card__rp" aria-hidden="true">Rp</span>
+      <div class="etalase-card__amount-wrap">
+        <span class="etalase-card__amount">{{ "{:,.0f}".format(p.harga_jual).replace(",",".") }}</span>
+      </div>
+    </div>
+    <div class="etalase-card__unitline">per {{ p.satuan or 'pcs' }}</div>
+
+    <h2 class="etalase-card__name">{{ p.nama|upper }}</h2>
+
+    {% if p.barcode %}
+    <div class="etalase-card__barcode-wrap">
+      <svg class="etalase-card__barcode-svg" data-etalase-barcode="{{ p.barcode|e }}" role="img" aria-label="Barcode {{ p.barcode|e }}"></svg>
+    </div>
+    {% endif %}
+
+    <footer class="etalase-card__footer">
+      <span class="etalase-card__footer-label">Rak</span>
+      <span class="etalase-card__footer-value">{{ p.etalase.nama if p.etalase else '—' }}</span>
+    </footer>
+
+    {% if p.min_qty_grosir_1 and p.harga_jual_grosir_1 %}
+    <div class="etalase-card__grosir">G1 ≥ {{ p.min_qty_grosir_1 }}: Rp {{ "{:,.0f}".format(p.harga_jual_grosir_1).replace(",",".") }}</div>
+    {% endif %}
+    {% if p.min_qty_grosir_2 and p.harga_jual_grosir_2 %}
+    <div class="etalase-card__grosir">G2 ≥ {{ p.min_qty_grosir_2 }}: Rp {{ "{:,.0f}".format(p.harga_jual_grosir_2).replace(",",".") }}</div>
+    {% endif %}
+
+    {% if not p.aktif %}
+    <div class="etalase-card__flag">Nonaktif</div>
+    {% endif %}
+  </div>
+</article>
+{% endmacro %}
+
+{% block content %}
+<div class="etalase-page" id="etalasePage" data-print-cols="3">
+  <div class="etalase-no-print">
+    <div class="product-toolbar mb-3 etalase-toolbar">
+      <form method="GET" action="{{ url_for('products.etalase') }}" class="product-filter-form">
+        {% if print_all %}
+        <input type="hidden" name="print_all" value="1">
+        {% endif %}
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Nama atau barcode…" autocomplete="off">
+        </div>
+        <select name="category" class="form-control filter-select" onchange="this.form.submit()">
+          <option value="">Semua kategori</option>
+          {% for cat in categories %}
+          <option value="{{ cat.id }}" {{ 'selected' if cat_id|string == cat.id|string }}>{{ cat.nama }}</option>
+          {% endfor %}
+        </select>
+        <select name="etalase" class="form-control filter-select" onchange="this.form.submit()">
+          <option value="">Semua etalase</option>
+          <option value="0" {{ 'selected' if etalase_id == '0' }}>Belum ditentukan</option>
+          {% for e in etalases %}
+          <option value="{{ e.id }}" {{ 'selected' if etalase_id|string == e.id|string }}>{{ e.nama }}</option>
+          {% endfor %}
+        </select>
+        <select name="status" class="form-control filter-select" onchange="this.form.submit()">
+          <option value="aktif" {{ 'selected' if status == 'aktif' }}>Aktif saja</option>
+          <option value="all" {{ 'selected' if status == 'all' }}>Semua status</option>
+          <option value="nonaktif" {{ 'selected' if status == 'nonaktif' }}>Nonaktif saja</option>
+        </select>
+        <select name="stock" class="form-control filter-select" onchange="this.form.submit()">
+          <option value="all" {{ 'selected' if stock_filter == 'all' }}>Stok: semua</option>
+          <option value="menipis" {{ 'selected' if stock_filter == 'menipis' }}>Menipis</option>
+          <option value="habis" {{ 'selected' if stock_filter == 'habis' }}>Habis</option>
+        </select>
+        <select name="sort" class="form-control filter-select" onchange="this.form.submit()">
+          <option value="nama" {{ 'selected' if sort == 'nama' }}>Urut: nama A–Z</option>
+          <option value="etalase" {{ 'selected' if sort == 'etalase' }}>Urut: etalase A–Z</option>
+          <option value="harga_jual_asc" {{ 'selected' if sort == 'harga_jual_asc' }}>Harga ↑</option>
+          <option value="harga_jual_desc" {{ 'selected' if sort == 'harga_jual_desc' }}>Harga ↓</option>
+          <option value="stok_asc" {{ 'selected' if sort == 'stok_asc' }}>Stok terendah</option>
+          <option value="stok_desc" {{ 'selected' if sort == 'stok_desc' }}>Stok tertinggi</option>
+        </select>
+        <button type="submit" class="btn btn-outline">Terapkan</button>
+      </form>
+      <div class="product-toolbar-actions etalase-toolbar-actions">
+        <a href="{{ url_for('products.index') }}" class="btn btn-outline">← Daftar produk</a>
+        <label class="etalase-toolbar-label">
+          Kolom cetak
+          <select id="printColsSelect" class="form-control etalase-toolbar-select" title="Jumlah kolom saat dicetak">
+            <option value="3">3 kolom (besar)</option>
+            <option value="4">4 kolom (sedang)</option>
+            <option value="6">6 kolom (kecil)</option>
+          </select>
+        </label>
+        <button type="button" class="btn btn-outline btn-sm" id="etalaseSelectAll">Pilih semua</button>
+        <button type="button" class="btn btn-outline btn-sm" id="etalaseDeselectAll">Hapus pilihan</button>
+        <span class="etalase-selected-count text-muted" id="etalaseSelectedCount" style="font-size:13px;align-self:center;">0 dipilih</span>
+        {% if print_all %}
+        <a href="{{ url_for('products.etalase', q=search, category=cat_id or None, etalase=etalase_id or None, status=status, stock=stock_filter, sort=sort) }}" class="btn btn-outline">Per halaman (24)</a>
+        {% else %}
+        <a href="{{ url_for('products.etalase', q=search, category=cat_id or None, etalase=etalase_id or None, status=status, stock=stock_filter, sort=sort, print_all=1) }}" class="btn btn-outline">Semua produk</a>
+        {% endif %}
+        <button type="button" class="btn btn-primary" id="etalaseBtnPreview">👁️ Preview cetak</button>
+        <button type="button" class="btn btn-outline" id="etalaseBtnPrintDirect">🖨️ Cetak langsung</button>
+      </div>
+    </div>
+    <p class="etalase-print-hint text-muted" style="font-size:13px;margin:-8px 0 16px;">
+      {% if print_all %}
+      Menampilkan semua produk sesuai filter (tanpa paginasi). Centang label yang ingin dicetak, lalu Preview atau Cetak langsung.
+      {% else %}
+      Maks. 24 label per halaman. Gunakan <strong>Semua produk</strong> untuk memuat sekaligus. Centang label yang ingin dicetak.
+      {% endif %}
+    </p>
+  </div>
+
+  {% if tenant_nama %}
+  <header class="etalase-brand" id="etalaseBrand">
+    <span class="etalase-brand__title">{{ tenant_nama }}</span>
+    <span class="etalase-brand__sub">Label harga rak · tanggal cetak {{ tanggal_cetak }}</span>
+  </header>
+  {% endif %}
+
+  <div class="etalase-grid" id="etalaseGrid">
+    {% if etalase_total == 0 %}
+    <div class="etalase-empty">Tidak ada produk untuk filter ini.</div>
+    {% elif grouped %}
+      {% for group_title, plist in etalase_groups %}
+      <div class="etalase-group-header">{{ group_title }}</div>
+      {% for p in plist %}
+        {{ etalase_card(p) }}
+      {% endfor %}
+      {% endfor %}
+    {% else %}
+      {% for p in etalase_product_list %}
+        {{ etalase_card(p) }}
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  {% if products and products.pages > 1 %}
+  <div class="pagination etalase-no-print" style="margin-top:24px;">
+    {% if products.has_prev %}
+    <a href="{{ url_for('products.etalase', page=products.prev_num, q=search, category=cat_id or None, etalase=etalase_id or None, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">‹</a>
+    {% endif %}
+    {% for p in products.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+      <a href="{{ url_for('products.etalase', page=p, q=search, category=cat_id or None, etalase=etalase_id or None, status=status, stock=stock_filter, sort=sort) }}" class="page-btn {{ 'active' if p == products.page }}">{{ p }}</a>
+      {% else %}
+      <span class="page-btn" style="cursor:default;">…</span>
+      {% endif %}
+    {% endfor %}
+    {% if products.has_next %}
+    <a href="{{ url_for('products.etalase', page=products.next_num, q=search, category=cat_id or None, etalase=etalase_id or None, status=status, stock=stock_filter, sort=sort) }}" class="page-btn">›</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div id="printPreviewModal" class="etalase-preview-modal" aria-hidden="true" role="dialog" aria-labelledby="etalasePreviewTitle">
+  <div class="etalase-preview-modal__backdrop etalase-no-print" id="printPreviewBackdrop"></div>
+  <div class="etalase-preview-modal__panel">
+    <div class="etalase-preview-modal__header etalase-no-print">
+      <h3 id="etalasePreviewTitle">Preview cetak</h3>
+      <span class="etalase-preview-modal__count" id="previewCountLabel">0 label</span>
+      <div class="etalase-preview-modal__header-actions">
+        <button type="button" class="btn btn-primary" id="etalasePreviewPrintBtn">🖨️ Cetak sekarang</button>
+        <button type="button" class="btn btn-outline" id="etalasePreviewCloseBtn">Tutup</button>
+      </div>
+    </div>
+    <div class="etalase-preview-modal__body">
+      <div class="etalase-preview-modal__print-area etalase-page etalase-preview-modal__sheet" id="previewPrintArea" data-print-cols="3">
+        <div id="previewBrandMount"></div>
+        <div class="etalase-grid etalase-preview-modal__grid" id="previewGridMount"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+(function() {
+  function renderEtalaseBarcodes(root) {
+    if (!root || typeof JsBarcode === 'undefined') return;
+    root.querySelectorAll('svg[data-etalase-barcode]').forEach(function(svg) {
+      var v = (svg.getAttribute('data-etalase-barcode') || '').trim();
+      if (!v) return;
+      var fmt = 'CODE128';
+      if (/^\d{8}$/.test(v)) fmt = 'EAN8';
+      else if (/^\d{12}$/.test(v) || /^\d{13}$/.test(v)) fmt = 'EAN13';
+      try {
+        JsBarcode(svg, v, {
+          format: fmt,
+          displayValue: true,
+          fontSize: 10,
+          height: 32,
+          margin: 0,
+          width: fmt === 'CODE128' ? 1.2 : 1.5,
+        });
+      } catch (err) {
+        try {
+          JsBarcode(svg, v, { format: 'CODE128', displayValue: true, fontSize: 10, height: 32, margin: 0, width: 1.2 });
+        } catch (e2) {
+          svg.parentNode.classList.add('etalase-card__barcode-wrap--fail');
+        }
+      }
+    });
+  }
+
+  const pageEl = document.getElementById('etalasePage');
+  const gridEl = document.getElementById('etalaseGrid');
+  const colsSelect = document.getElementById('printColsSelect');
+  const countEl = document.getElementById('etalaseSelectedCount');
+  const modal = document.getElementById('printPreviewModal');
+  const previewArea = document.getElementById('previewPrintArea');
+  const previewBrandMount = document.getElementById('previewBrandMount');
+  const previewGridMount = document.getElementById('previewGridMount');
+  const previewCountLabel = document.getElementById('previewCountLabel');
+  const brandEl = document.getElementById('etalaseBrand');
+
+  function getChecks() {
+    return Array.from(gridEl.querySelectorAll('.etalase-card__check'));
+  }
+
+  function updateCount() {
+    const checks = getChecks();
+    const n = checks.filter(function(c) { return c.checked; }).length;
+    countEl.textContent = n + ' dari ' + checks.length + ' dipilih';
+  }
+
+  function syncPrintCols() {
+    const v = colsSelect.value || '3';
+    pageEl.setAttribute('data-print-cols', v);
+    if (previewArea) previewArea.setAttribute('data-print-cols', v);
+  }
+
+  colsSelect.addEventListener('change', syncPrintCols);
+  syncPrintCols();
+
+  gridEl.addEventListener('change', function(ev) {
+    if (ev.target && ev.target.classList.contains('etalase-card__check')) updateCount();
+  });
+
+  document.getElementById('etalaseSelectAll').addEventListener('click', function() {
+    getChecks().forEach(function(c) { c.checked = true; });
+    updateCount();
+  });
+  document.getElementById('etalaseDeselectAll').addEventListener('click', function() {
+    getChecks().forEach(function(c) { c.checked = false; });
+    updateCount();
+  });
+
+  updateCount();
+
+  function hideUncheckedForPrint() {
+    const hidden = [];
+    gridEl.querySelectorAll('.etalase-card').forEach(function(card) {
+      const chk = card.querySelector('.etalase-card__check');
+      if (chk && !chk.checked) {
+        card.dataset._etalaseWasHidden = '1';
+        card.style.display = 'none';
+        hidden.push(card);
+      }
+    });
+    const headers = gridEl.querySelectorAll('.etalase-group-header');
+    headers.forEach(function(h) {
+      let sib = h.nextElementSibling;
+      let anyVisible = false;
+      while (sib && !sib.classList.contains('etalase-group-header')) {
+        if (sib.classList.contains('etalase-card') && sib.style.display !== 'none') {
+          anyVisible = true;
+          break;
+        }
+        sib = sib.nextElementSibling;
+      }
+      if (!anyVisible) {
+        h.dataset._etalaseHeaderHidden = '1';
+        h.style.display = 'none';
+      }
+    });
+    return hidden;
+  }
+
+  function restoreAfterPrint() {
+    gridEl.querySelectorAll('.etalase-card').forEach(function(card) {
+      if (card.dataset._etalaseWasHidden) {
+        card.style.display = '';
+        delete card.dataset._etalaseWasHidden;
+      }
+    });
+    gridEl.querySelectorAll('.etalase-group-header').forEach(function(h) {
+      if (h.dataset._etalaseHeaderHidden) {
+        h.style.display = '';
+        delete h.dataset._etalaseHeaderHidden;
+      }
+    });
+  }
+
+  function runPrint() {
+    hideUncheckedForPrint();
+    function after() {
+      restoreAfterPrint();
+      document.body.classList.remove('etalase-print-from-modal');
+      window.removeEventListener('afterprint', after);
+    }
+    window.addEventListener('afterprint', after);
+    window.print();
+  }
+
+  document.getElementById('etalaseBtnPrintDirect').addEventListener('click', function() {
+    document.body.classList.remove('etalase-print-from-modal');
+    runPrint();
+  });
+
+  function openPreview() {
+    previewBrandMount.innerHTML = '';
+    previewGridMount.innerHTML = '';
+    if (brandEl) {
+      previewBrandMount.appendChild(brandEl.cloneNode(true));
+    }
+    const children = Array.prototype.slice.call(gridEl.children);
+    let n = 0;
+    for (let i = 0; i < children.length; i++) {
+      const node = children[i];
+      if (node.classList.contains('etalase-empty')) {
+        previewGridMount.appendChild(node.cloneNode(true));
+        continue;
+      }
+      if (node.classList.contains('etalase-group-header')) {
+        let j = i + 1;
+        let hasChecked = false;
+        while (j < children.length) {
+          const n2 = children[j];
+          if (n2.classList.contains('etalase-group-header')) break;
+          if (n2.classList.contains('etalase-card')) {
+            const c = n2.querySelector('.etalase-card__check');
+            if (c && c.checked) { hasChecked = true; break; }
+          }
+          j++;
+        }
+        if (hasChecked) previewGridMount.appendChild(node.cloneNode(true));
+        continue;
+      }
+      if (node.classList.contains('etalase-card')) {
+        const chk = node.querySelector('.etalase-card__check');
+        if (chk && !chk.checked) continue;
+        n += 1;
+        const clone = node.cloneNode(true);
+        const c2 = clone.querySelector('.etalase-card__check');
+        if (c2) {
+          const wrap = c2.closest('.etalase-card__checkwrap');
+          if (wrap) wrap.remove();
+          else c2.remove();
+        }
+        previewGridMount.appendChild(clone);
+      }
+    }
+    previewCountLabel.textContent = n + ' label';
+    syncPrintCols();
+    previewArea.setAttribute('data-print-cols', colsSelect.value || '3');
+    modal.classList.add('etalase-preview-modal--open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    renderEtalaseBarcodes(previewGridMount);
+  }
+
+  function closePreview() {
+    modal.classList.remove('etalase-preview-modal--open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('etalaseBtnPreview').addEventListener('click', openPreview);
+  document.getElementById('etalasePreviewCloseBtn').addEventListener('click', closePreview);
+  document.getElementById('printPreviewBackdrop').addEventListener('click', closePreview);
+
+  document.getElementById('etalasePreviewPrintBtn').addEventListener('click', function() {
+    document.body.classList.add('etalase-print-from-modal');
+    window.addEventListener('afterprint', function once() {
+      document.body.classList.remove('etalase-print-from-modal');
+      window.removeEventListener('afterprint', once);
+    });
+    window.print();
+  });
+
+  renderEtalaseBarcodes(gridEl);
+})();
+</script>
+{% endblock %}

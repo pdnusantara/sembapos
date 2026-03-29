@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from .. import db
 from ..models import (
     Product,
+    Etalase,
     Transaction,
     TransactionItem,
     TransactionPayment,
@@ -19,21 +20,15 @@ from ..shifts_util import get_open_shift
 from ..loyalty_service import ensure_default_tiers, evaluate_member_tier, member_tier_discount_pct
 from ..promo_service import validate_voucher, promo_payload_json
 from ..fifo_costing import consume_fifo_cost
+from ..doc_numbers import generate_nomor_transaksi
+from ..timezones import (
+    format_utc_naive_as_local,
+    local_today_date,
+    resolve_effective_timezone_id,
+    utc_naive_bounds_for_local_date,
+)
 
 pos_bp = Blueprint('pos', __name__, url_prefix='/pos')
-
-
-def generate_nomor_transaksi(tenant_id, branch_id):
-    today = datetime.utcnow()
-    prefix = f"TRX-{today.strftime('%Y%m%d')}-{branch_id:04d}"
-    last = Transaction.query.filter(
-        Transaction.nomor.like(f"{prefix}%")
-    ).order_by(Transaction.id.desc()).first()
-    if last:
-        last_num = int(last.nomor.split('-')[-1]) + 1
-    else:
-        last_num = 1
-    return f"{prefix}-{last_num:04d}"
 
 
 def _branch_for_user(tenant_id):
@@ -97,6 +92,19 @@ def index():
         .all()
     )
 
+    etalases = (
+        db.session.query(Etalase)
+        .join(Product, Product.etalase_id == Etalase.id)
+        .filter(
+            Product.tenant_id == tenant_id,
+            Product.aktif == True,
+            Product.stok > 0,
+        )
+        .distinct()
+        .order_by(Etalase.nama)
+        .all()
+    )
+
     members = Member.query.filter_by(tenant_id=tenant_id, aktif=True).order_by(Member.nama).all()
     ensure_default_tiers(tenant_id)
 
@@ -107,6 +115,7 @@ def index():
         products=products,
         branch=branch,
         categories=categories,
+        etalases=etalases,
         members=members,
         can_override_price=can_override_price,
     )
@@ -142,6 +151,8 @@ def search_products():
         'barcode': p.barcode or '',
         'gambar': p.gambar or '',
         'category_id': p.category_id or 0,
+        'etalase_id': p.etalase_id or 0,
+        'etalase_nama': p.etalase.nama if p.etalase else '',
         'stok_minimum': p.stok_minimum,
     } for p in products])
 
@@ -171,12 +182,14 @@ def recent_transactions():
     if not branch_id:
         return jsonify([])
 
-    start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    tz_id = resolve_effective_timezone_id(current_user)
+    local_d = local_today_date(tz_id)
+    day_start, day_end = utc_naive_bounds_for_local_date(local_d, tz_id)
     rows = (
         Transaction.query.filter(
             Transaction.tenant_id == tenant_id,
             Transaction.branch_id == branch_id,
-            Transaction.created_at >= start,
+            Transaction.created_at.between(day_start, day_end),
         )
         .order_by(Transaction.created_at.desc())
         .limit(12)
@@ -191,7 +204,7 @@ def recent_transactions():
         'id': t.id,
         'nomor': t.nomor,
         'total': t.total,
-        'created_at': t.created_at.strftime('%H:%M'),
+        'created_at': format_utc_naive_as_local(t.created_at, tz_id, '%H:%M'),
         'status': t.status,
         'can_return': t.status == 'selesai',
         'return_block_reason': '' if t.status == 'selesai' else status_reason.get(

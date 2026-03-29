@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% block title %}Lokasi etalase{% endblock %}
+{% block page_title %}🗂️ Lokasi etalase{% endblock %}
+{% block page_sub %}{{ etalases|length }} rak / pajangan · pilih lokasi di form produk agar kasir mudah menemukan barang{% endblock %}
+
+{% block content %}
+<div class="etalases-page">
+  <div class="product-toolbar mb-3 etalases-toolbar">
+    <div class="etalases-toolbar-intro text-muted" style="font-size:14px;max-width:520px;line-height:1.45;">
+      Etalase = lokasi fisik di toko (misalnya “Rak kiri depan”). Setelah dibuat, tautkan ke produk lewat menu <strong>Produk → Edit</strong>.
+    </div>
+    <div class="product-toolbar-actions" style="flex-wrap:wrap;">
+      <a href="{{ url_for('products.index') }}" class="btn btn-outline">← Daftar produk</a>
+      {% if current_user.is_admin %}
+      <button type="button" class="btn btn-primary" id="etalaseBtnAdd" aria-haspopup="dialog">➕ Tambah etalase</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card etalases-card">
+    <div class="table-wrapper">
+      <table class="table etalases-table">
+        <thead>
+          <tr>
+            <th>Nama etalase</th>
+            <th>Keterangan</th>
+            <th style="width:120px;">Produk</th>
+            {% if current_user.is_admin %}<th class="th-actions" style="width:140px;">Aksi</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in etalases %}
+          <tr>
+            <td data-label="Nama">
+              <span class="etalases-table__name">🗂️ {{ e.nama }}</span>
+            </td>
+            <td data-label="Keterangan" class="text-muted etalases-table__desc">{{ e.keterangan or '—' }}</td>
+            <td data-label="Produk"><span class="badge badge-primary">{{ e.products|length }}</span></td>
+            {% if current_user.is_admin %}
+            <td data-label="Aksi">
+              <div class="etalases-row-actions">
+                <button type="button"
+                        class="btn btn-outline btn-sm etalase-btn-edit"
+                        aria-label="Edit etalase"
+                        data-id="{{ e.id }}"
+                        data-nama="{{ e.nama|e }}"
+                        data-keterangan="{{ (e.keterangan or '')|e }}">✏️ Edit</button>
+                <form method="POST" action="{{ url_for('products.delete_etalase', id=e.id) }}" class="etalases-inline-form" onsubmit="return confirm('Hapus etalase ini? Produk akan kehilangan penanda lokasi.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <button type="submit" class="btn btn-outline btn-sm etalases-btn-delete" aria-label="Hapus">🗑️</button>
+                </form>
+              </div>
+            </td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="{% if current_user.is_admin %}4{% else %}3{% endif %}" class="etalases-empty">
+              <div class="etalases-empty__inner">
+                <span class="etalases-empty__icon" aria-hidden="true">📭</span>
+                <p class="etalases-empty__title">Belum ada etalase</p>
+                <p class="etalases-empty__hint text-muted">Buat lokasi rak lewat tombol <strong>Tambah etalase</strong> di atas.</p>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if current_user.is_admin %}
+{# Modal tambah #}
+<div class="modal-overlay" id="etalaseAddModal" role="dialog" aria-modal="true" aria-labelledby="etalaseAddTitle" aria-hidden="true">
+  <div class="modal etalases-modal" role="document" onclick="event.stopPropagation()">
+    <div class="etalases-modal__head">
+      <h2 class="modal-title etalases-modal__title" id="etalaseAddTitle">Tambah etalase</h2>
+      <button type="button" class="etalases-modal__close" id="etalaseAddClose" aria-label="Tutup">✕</button>
+    </div>
+    <form method="POST" action="{{ url_for('products.add_etalase') }}" id="etalaseAddForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="form-group">
+        <label class="form-label" for="etalaseAddNama">Nama etalase *</label>
+        <input type="text" name="nama" id="etalaseAddNama" class="form-control" required autocomplete="off" placeholder="Contoh: Rak depan kiri, Etalase A">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="etalaseAddKet">Keterangan</label>
+        <input type="text" name="keterangan" id="etalaseAddKet" class="form-control" autocomplete="off" placeholder="Opsional: dekat kasir, samping pintu…">
+      </div>
+      <div class="etalases-modal__actions">
+        <button type="button" class="btn btn-outline" id="etalaseAddCancel">Batal</button>
+        <button type="submit" class="btn btn-primary">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Modal edit #}
+<div class="modal-overlay" id="etalaseEditModal" role="dialog" aria-modal="true" aria-labelledby="etalaseEditTitle" aria-hidden="true">
+  <div class="modal etalases-modal" role="document" onclick="event.stopPropagation()">
+    <div class="etalases-modal__head">
+      <h2 class="modal-title etalases-modal__title" id="etalaseEditTitle">Edit etalase</h2>
+      <button type="button" class="etalases-modal__close" id="etalaseEditClose" aria-label="Tutup">✕</button>
+    </div>
+    <form method="POST" action="" id="etalaseEditForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="form-group">
+        <label class="form-label" for="etalaseEditNama">Nama etalase *</label>
+        <input type="text" name="nama" id="etalaseEditNama" class="form-control" required autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="etalaseEditKet">Keterangan</label>
+        <input type="text" name="keterangan" id="etalaseEditKet" class="form-control" autocomplete="off" placeholder="Opsional">
+      </div>
+      <div class="etalases-modal__actions">
+        <button type="button" class="btn btn-outline" id="etalaseEditCancel">Batal</button>
+        <button type="submit" class="btn btn-primary">Simpan perubahan</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if current_user.is_admin %}
+<script>
+(function() {
+  const EDIT_URL_TEMPLATE = {{ url_for('products.edit_etalase', id=0)|tojson }};
+
+  function etalaseEditActionUrl(id) {
+    return EDIT_URL_TEMPLATE.replace(/\/edit\/0(?:\/)?$/, '/edit/' + id);
+  }
+
+  function openOverlay(el) {
+    if (!el) return;
+    el.classList.add('active');
+    el.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeOverlay(el) {
+    if (!el) return;
+    el.classList.remove('active');
+    el.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  const addModal = document.getElementById('etalaseAddModal');
+  const editModal = document.getElementById('etalaseEditModal');
+  const addForm = document.getElementById('etalaseAddForm');
+  const editForm = document.getElementById('etalaseEditForm');
+
+  document.getElementById('etalaseBtnAdd')?.addEventListener('click', function() {
+    if (addForm) addForm.reset();
+    openOverlay(addModal);
+    setTimeout(function() { document.getElementById('etalaseAddNama')?.focus(); }, 100);
+  });
+
+  function closeAdd() { closeOverlay(addModal); }
+  document.getElementById('etalaseAddClose')?.addEventListener('click', closeAdd);
+  document.getElementById('etalaseAddCancel')?.addEventListener('click', closeAdd);
+  addModal?.addEventListener('click', function(e) { if (e.target === addModal) closeAdd(); });
+
+  function closeEdit() { closeOverlay(editModal); }
+  document.getElementById('etalaseEditClose')?.addEventListener('click', closeEdit);
+  document.getElementById('etalaseEditCancel')?.addEventListener('click', closeEdit);
+  editModal?.addEventListener('click', function(e) { if (e.target === editModal) closeEdit(); });
+
+  document.querySelectorAll('.etalase-btn-edit').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const id = btn.getAttribute('data-id');
+      const nama = btn.getAttribute('data-nama') || '';
+      const ket = btn.getAttribute('data-keterangan') || '';
+      if (!editForm || !id) return;
+      editForm.action = etalaseEditActionUrl(id);
+      document.getElementById('etalaseEditNama').value = nama;
+      document.getElementById('etalaseEditKet').value = ket;
+      openOverlay(editModal);
+      setTimeout(function() { document.getElementById('etalaseEditNama')?.focus(); }, 100);
+    });
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    if (addModal?.classList.contains('active')) closeAdd();
+    if (editModal?.classList.contains('active')) closeEdit();
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

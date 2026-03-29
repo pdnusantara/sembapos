@@ -83,13 +83,13 @@
 
     <div style="margin-bottom:16px;">
       <div style="font-size:11px;color:var(--text-muted);">Tanggal Pesan</div>
-      <div>📅 {{ po.tanggal_pesan.strftime('%d %b %Y - %H:%M') }}</div>
+      <div>📅 {{ po.tanggal_pesan|local_dt('%d %b %Y - %H:%M') }}</div>
     </div>
     
     {% if po.tanggal_terima %}
     <div style="margin-bottom:16px;">
       <div style="font-size:11px;color:var(--text-muted);">Tanggal Diterima</div>
-      <div style="color:var(--success);">✅ {{ po.tanggal_terima.strftime('%d %b %Y - %H:%M') }}</div>
+      <div style="color:var(--success);">✅ {{ po.tanggal_terima|local_dt('%d %b %Y - %H:%M') }}</div>
     </div>
     {% endif %}
 

@@ -37,6 +37,15 @@
           <label class="form-label">Berlangganan sampai (opsional)</label>
           <input type="date" name="tanggal_expired" class="form-control">
         </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Zona waktu (dashboard &amp; kalender)</label>
+          <select name="timezone" class="form-control" required>
+            {% for val, label in timezone_choices %}
+            <option value="{{ val }}" {% if val == 'Asia/Jakarta' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Default WIB. Admin tenant bisa mengubahnya nanti di Pengaturan.</div>
+        </div>
         <div class="form-group">
           <label class="form-label">Email</label>
           <input type="email" name="email" class="form-control" placeholder="toko@email.com">

@@ -44,14 +44,14 @@
         <tbody>
           {% for d in debts %}
           <tr>
-            <td>{{ d.created_at.strftime('%d/%m/%Y') }}</td>
+            <td>{{ d.created_at|local_dt('%d/%m/%Y') }}</td>
             <td style="font-family:monospace;font-size:12px;">{{ d.transaction.nomor if d.transaction else '—' }}</td>
             <td>
               {% if d.jatuh_tempo %}
                 {% if d.status == 'belum_lunas' and d.jatuh_tempo < now %}
-                <span class="badge badge-danger">{{ d.jatuh_tempo.strftime('%d/%m/%Y') }}</span>
+                <span class="badge badge-danger">{{ d.jatuh_tempo|local_dt('%d/%m/%Y') }}</span>
                 {% else %}
-                <span class="text-muted">{{ d.jatuh_tempo.strftime('%d/%m/%Y') }}</span>
+                <span class="text-muted">{{ d.jatuh_tempo|local_dt('%d/%m/%Y') }}</span>
                 {% endif %}
               {% else %}—{% endif %}
             </td>
@@ -75,7 +75,7 @@
       <div style="padding:10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.02);">
         <div style="display:flex;justify-content:space-between;gap:10px;">
           <div style="font-weight:700;">Rp {{ "{:,.0f}".format(p.jumlah).replace(",",".") }}</div>
-          <div class="text-muted" style="font-size:11px;">{{ p.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+          <div class="text-muted" style="font-size:11px;">{{ p.created_at|local_dt('%d/%m/%Y %H:%M') }}</div>
         </div>
         <div class="text-muted" style="font-size:11px;margin-top:2px;">{{ p.metode_bayar|upper }} · {% if p.recorder %}{{ p.recorder.nama }}{% else %}—{% endif %}</div>
         {% if p.catatan %}<div style="font-size:12px;margin-top:4px;">{{ p.catatan }}</div>{% endif %}

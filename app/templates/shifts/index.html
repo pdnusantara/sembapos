@@ -63,7 +63,7 @@
         <tbody>
           {% for s in shifts %}
           <tr>
-            <td>{{ s.opened_at.strftime('%d/%m/%Y %H:%M') if s.opened_at else '—' }}</td>
+            <td>{{ s.opened_at|local_dt('%d/%m/%Y %H:%M') if s.opened_at else '—' }}</td>
             <td>
               {% if s.status == 'open' %}
               <span class="text-success fw-bold">Terbuka</span>
@@ -76,7 +76,7 @@
             <td>Rp {{ "{:,.0f}".format(s.opening_float or 0).replace(",",".") }}</td>
             <td>
               {% if s.status == 'closed' and s.closed_at %}
-              {{ s.closed_at.strftime('%d/%m %H:%M') }}
+              {{ s.closed_at|local_dt('%d/%m %H:%M') }}
               {% if s.variance is not none %}
               <br><span class="{{ 'text-success' if s.variance == 0 else ('text-warning' if s.variance > 0 else 'text-danger') }}">Selisih Rp {{ "{:,.0f}".format(s.variance).replace(",",".") }}</span>
               {% endif %}

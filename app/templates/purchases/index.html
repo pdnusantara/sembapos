@@ -24,7 +24,7 @@
         <tr>
           <td><div style="font-family:monospace;font-weight:600;color:var(--primary-light);">{{ po.nomor }}</div></td>
           <td>{{ po.supplier.nama }}</td>
-          <td>{{ po.tanggal_pesan.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ po.tanggal_pesan|local_dt('%d/%m/%Y %H:%M') }}</td>
           <td style="font-weight:600;">Rp {{ "{:,.0f}".format(po.total).replace(",",".") }}</td>
           <td>
             <span class="badge {{ 'badge-warning' if po.status == 'dipesan' else ('badge-success' if po.status == 'diterima' else 'badge-danger') }}">

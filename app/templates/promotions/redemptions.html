@@ -13,7 +13,7 @@
       <tbody>
       {% for r in rows %}
         <tr>
-          <td>{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ r.created_at|local_dt('%d/%m/%Y %H:%M') }}</td>
           <td>{{ r.voucher.kode if r.voucher else '-' }}</td>
           <td>{{ r.member.nama if r.member else '-' }}</td>
           <td><a href="{{ url_for('receipt.view_receipt', id=r.transaction_id) }}" target="_blank">{{ r.transaction.nomor if r.transaction else r.transaction_id }}</a></td>

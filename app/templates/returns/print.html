@@ -18,7 +18,7 @@
   <h1>NOTA RETUR</h1>
   <div class="muted">{{ sr.branch.nama if sr.branch else '' }}</div>
   <div><strong>{{ sr.nomor }}</strong></div>
-  <div class="muted">{{ sr.created_at.strftime('%d/%m/%Y %H:%M') if sr.created_at else '' }}</div>
+  <div class="muted">{{ sr.created_at|local_dt('%d/%m/%Y %H:%M') if sr.created_at else '' }}</div>
   <div class="muted">Nota asli: {{ sr.source_transaction.nomor if sr.source_transaction else '—' }}</div>
   <div>Metode: {{ sr.metode_pengembalian }} · {{ sr.jenis }}</div>
 

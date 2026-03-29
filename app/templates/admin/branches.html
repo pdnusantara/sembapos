@@ -124,7 +124,7 @@
       <tbody>
         {% for row in audit_logs %}
         <tr>
-          <td style="font-size:12px;white-space:nowrap;">{{ row.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td style="font-size:12px;white-space:nowrap;">{{ row.created_at|local_dt('%d/%m/%Y %H:%M') }}</td>
           <td>
             {% if row.action == 'branch_created' %}<span class="badge badge-success">Buat</span>
             {% elif row.action == 'branch_updated' %}<span class="badge badge-info">Ubah</span>

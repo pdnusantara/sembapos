@@ -75,7 +75,7 @@
       <tbody>
         {% for e in expenses %}
         <tr>
-          <td>{{ e.tanggal.strftime('%d/%m/%Y') }}</td>
+          <td>{{ e.tanggal|local_dt('%d/%m/%Y') }}</td>
           <td style="font-weight:600;">{{ e.category.nama }}</td>
           <td class="text-muted">{{ e.branch.nama if e.branch else '—' }}</td>
           <td class="fw-bold">Rp {{ "{:,.0f}".format(e.jumlah).replace(",",".") }}</td>

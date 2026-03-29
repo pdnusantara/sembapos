@@ -14,6 +14,7 @@ from .models import (
     Debt,
     Member,
 )
+from .doc_numbers import generate_nomor_retur, generate_nomor_transaksi
 from .fifo_costing import consume_fifo_cost, restore_fifo_from_transaction_item
 
 
@@ -25,39 +26,6 @@ def qty_already_returned(source_transaction_item_id):
         .scalar()
     )
     return float(q or 0)
-
-
-def generate_nomor_retur(tenant_id, branch_id):
-    today = datetime.utcnow()
-    prefix = f"RET-{today.strftime('%Y%m%d')}-{branch_id:04d}"
-    last = (
-        SalesReturn.query.filter(
-            SalesReturn.tenant_id == tenant_id,
-            SalesReturn.nomor.like(f"{prefix}%"),
-        )
-        .order_by(SalesReturn.id.desc())
-        .first()
-    )
-    if last:
-        last_num = int(last.nomor.split('-')[-1]) + 1
-    else:
-        last_num = 1
-    return f"{prefix}-{last_num:04d}"
-
-
-def generate_nomor_transaksi(tenant_id, branch_id):
-    today = datetime.utcnow()
-    prefix = f"TRX-{today.strftime('%Y%m%d')}-{branch_id:04d}"
-    last = (
-        Transaction.query.filter(Transaction.nomor.like(f"{prefix}%"))
-        .order_by(Transaction.id.desc())
-        .first()
-    )
-    if last:
-        last_num = int(last.nomor.split('-')[-1]) + 1
-    else:
-        last_num = 1
-    return f"{prefix}-{last_num:04d}"
 
 
 def _price_for_qty(product, qty):

@@ -104,6 +104,7 @@ def create_app():
         _ensure_branch_tenant_kode_unique_index()
         _ensure_product_price_tiers_columns()
         _ensure_tenant_location_columns()
+        _ensure_timezone_columns()
         _seed_tenant_packages()
 
     @app.before_request
@@ -251,6 +252,38 @@ def create_app():
             'PERMISSION_MODULES': PERMISSION_MODULES,
         }
 
+    @app.context_processor
+    def _inject_timezone_label():
+        from flask_login import current_user
+        from .models import Tenant
+        from .timezones import DEFAULT_TIMEZONE, normalize_timezone_id, timezone_short_label
+
+        if not current_user.is_authenticated:
+            return {'app_timezone_label': None}
+        if getattr(current_user, 'is_superadmin', False):
+            tid = normalize_timezone_id(getattr(current_user, 'timezone', None))
+        elif getattr(current_user, 'tenant_id', None):
+            t = getattr(current_user, 'tenant', None)
+            if t is None:
+                t = Tenant.query.get(current_user.tenant_id)
+            tid = normalize_timezone_id(getattr(t, 'timezone', None)) if t else DEFAULT_TIMEZONE
+        else:
+            tid = DEFAULT_TIMEZONE
+        return {'app_timezone_label': timezone_short_label(tid)}
+
+    @app.template_filter('local_dt')
+    def _local_dt_filter(dt, fmt='%d/%m/%Y %H:%M'):
+        from flask_login import current_user
+        from .timezones import format_utc_naive_as_local, resolve_effective_timezone_id
+
+        return format_utc_naive_as_local(dt, resolve_effective_timezone_id(current_user), fmt)
+
+    @app.template_filter('local_dt_tz')
+    def _local_dt_tz_filter(dt, tz_id, fmt='%d/%m/%Y %H:%M'):
+        from .timezones import format_utc_naive_as_local, normalize_timezone_id
+
+        return format_utc_naive_as_local(dt, normalize_timezone_id(tz_id), fmt)
+
     return app
 
 
@@ -346,6 +379,27 @@ def _ensure_product_price_tiers_columns():
         with db.engine.begin() as conn:
             for stmt in statements:
                 conn.execute(text(stmt))
+    except Exception:
+        pass
+
+
+def _ensure_timezone_columns():
+    """Compat schema: kolom timezone di tenants & users."""
+    from sqlalchemy import inspect, text
+    try:
+        insp = inspect(db.engine)
+        if 'tenants' in insp.get_table_names():
+            tcols = {c['name'] for c in insp.get_columns('tenants')}
+            if 'timezone' not in tcols:
+                stmt = "ALTER TABLE tenants ADD COLUMN timezone VARCHAR(30) NOT NULL DEFAULT 'Asia/Jakarta'"
+                with db.engine.begin() as conn:
+                    conn.execute(text(stmt))
+        if 'users' in insp.get_table_names():
+            ucols = {c['name'] for c in insp.get_columns('users')}
+            if 'timezone' not in ucols:
+                stmt = 'ALTER TABLE users ADD COLUMN timezone VARCHAR(30)'
+                with db.engine.begin() as conn:
+                    conn.execute(text(stmt))
     except Exception:
         pass
 

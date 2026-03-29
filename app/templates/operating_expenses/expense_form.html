@@ -22,7 +22,7 @@
     <div class="form-group">
       <label class="form-label">Tanggal *</label>
       <input type="date" name="tanggal" class="form-control" required
-        value="{{ expense.tanggal.strftime('%Y-%m-%d') if expense else today_str }}">
+        value="{{ expense.tanggal|local_dt('%Y-%m-%d') if expense else today_str }}">
     </div>
     <div class="form-group">
       <label class="form-label">Jumlah (Rp) *</label>

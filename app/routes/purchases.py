@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from datetime import datetime
 from .. import db
 from ..models import PurchaseOrder, PurchaseOrderItem, Supplier, Product, StockMovement
+from ..doc_numbers import generate_po_number
 from ..fifo_costing import create_cost_layer
 
 purchases_bp = Blueprint('purchases', __name__, url_prefix='/purchases')
@@ -13,20 +14,6 @@ def require_admin():
         flash('Akses ditolak!', 'danger')
         return False
     return True
-
-
-def generate_po_number(tenant_id, branch_id):
-    today = datetime.utcnow()
-    prefix = f"PO-{today.strftime('%Y%m%d')}-{branch_id:04d}"
-    last = PurchaseOrder.query.filter(
-        PurchaseOrder.nomor.like(f"{prefix}%")
-    ).order_by(PurchaseOrder.id.desc()).first()
-    
-    if last:
-        last_num = int(last.nomor.split('-')[-1]) + 1
-    else:
-        last_num = 1
-    return f"{prefix}-{last_num:04d}"
 
 
 @purchases_bp.route('/')

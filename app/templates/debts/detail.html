@@ -36,7 +36,7 @@
           <span class="debt-detail-meta-pill">Tanpa nomor transaksi</span>
           {% endif %}
           <span class="debt-detail-meta-dot" aria-hidden="true">·</span>
-          <span>Hutang tercatat {{ debt.created_at.strftime('%d %b %Y') }}</span>
+          <span>Hutang tercatat {{ debt.created_at|local_dt('%d %b %Y') }}</span>
         </p>
       </div>
       <div class="debt-detail-hero__status-wrap">
@@ -51,17 +51,17 @@
     {% if is_overdue %}
     <div class="debt-detail-alert debt-detail-alert--danger" role="status">
       <strong>Lewat jatuh tempo</strong>
-      <span>Seharusnya dilunasi paling lambat {{ debt.jatuh_tempo.strftime('%d/%m/%Y') }}.</span>
+      <span>Seharusnya dilunasi paling lambat {{ debt.jatuh_tempo|local_dt('%d/%m/%Y') }}.</span>
     </div>
     {% elif debt.jatuh_tempo and debt.status == 'belum_lunas' %}
     <div class="debt-detail-alert debt-detail-alert--info" role="status">
       <strong>Jatuh tempo</strong>
-      <span>{{ debt.jatuh_tempo.strftime('%d/%m/%Y') }}</span>
+      <span>{{ debt.jatuh_tempo|local_dt('%d/%m/%Y') }}</span>
     </div>
     {% elif debt.jatuh_tempo %}
     <div class="debt-detail-alert debt-detail-alert--muted" role="status">
       <strong>Jatuh tempo (referensi)</strong>
-      <span>{{ debt.jatuh_tempo.strftime('%d/%m/%Y') }} — tagihan sudah lunas</span>
+      <span>{{ debt.jatuh_tempo|local_dt('%d/%m/%Y') }} — tagihan sudah lunas</span>
     </div>
     {% endif %}
 
@@ -197,7 +197,7 @@
         </div>
         <div class="debt-detail-dl__row">
           <dt>Tanggal hutang</dt>
-          <dd>{{ debt.created_at.strftime('%d/%m/%Y') }}</dd>
+          <dd>{{ debt.created_at|local_dt('%d/%m/%Y') }}</dd>
         </div>
       </dl>
 
@@ -223,7 +223,7 @@
             <span class="debt-timeline-item__amount">Rp {{ "{:,.0f}".format(p.jumlah).replace(",",".") }}</span>
             <span class="debt-timeline-item__badge">{% if p.metode_bayar == 'tunai' %}Tunai{% elif p.metode_bayar == 'transfer' %}Transfer{% elif p.metode_bayar == 'qris' %}QRIS{% else %}{{ p.metode_bayar|replace('_',' ')|title }}{% endif %}</span>
           </div>
-          <time class="debt-timeline-item__time" datetime="{{ p.created_at.isoformat() }}">{{ p.created_at.strftime('%d %b %Y, %H:%M') }}</time>
+          <time class="debt-timeline-item__time" datetime="{{ p.created_at.isoformat() }}">{{ p.created_at|local_dt('%d %b %Y, %H:%M') }}</time>
           {% if p.recorder %}
           <p class="debt-timeline-item__recorder">Dicatat oleh {{ p.recorder.nama }}</p>
           {% endif %}

@@ -10,6 +10,7 @@ from ..models import (
     OperationalExpenseCategory,
     Branch,
 )
+from ..timezones import local_today_date, resolve_effective_timezone_id
 
 operating_expenses_bp = Blueprint(
     'operating_expenses', __name__, url_prefix='/operating-expenses'
@@ -224,7 +225,7 @@ def add():
         categories=cats,
         branches=branches,
         action='Tambah',
-        today_str=datetime.utcnow().strftime('%Y-%m-%d'),
+        today_str=local_today_date(resolve_effective_timezone_id(current_user)).isoformat(),
     )
 
 
@@ -307,7 +308,7 @@ def edit(id):
         categories=cats,
         branches=branches,
         action='Edit',
-        today_str=datetime.utcnow().strftime('%Y-%m-%d'),
+        today_str=local_today_date(resolve_effective_timezone_id(current_user)).isoformat(),
     )
 
 

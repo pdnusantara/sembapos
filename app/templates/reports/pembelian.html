@@ -177,8 +177,8 @@
             <td>{{ p.supplier.nama if p.supplier else '—' }}</td>
             <td>{{ branches_map.get(p.branch_id).nama if branches_map.get(p.branch_id) else '—' }}</td>
             <td>{{ po_status_badge(p.status) }}</td>
-            <td class="tx2-time">{{ p.tanggal_pesan.strftime('%d/%m/%Y %H:%M') if p.tanggal_pesan else '—' }}</td>
-            <td class="tx2-time">{{ p.tanggal_terima.strftime('%d/%m/%Y %H:%M') if p.tanggal_terima else '—' }}</td>
+            <td class="tx2-time">{{ p.tanggal_pesan|local_dt('%d/%m/%Y %H:%M') if p.tanggal_pesan else '—' }}</td>
+            <td class="tx2-time">{{ p.tanggal_terima|local_dt('%d/%m/%Y %H:%M') if p.tanggal_terima else '—' }}</td>
             <td>{{ users_map.get(p.user_id).nama if users_map.get(p.user_id) else '—' }}</td>
             <td class="tx2-total">Rp {{ "{:,.0f}".format(p.total or 0).replace(",",".") }}</td>
             <td>

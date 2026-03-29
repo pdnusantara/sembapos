@@ -20,7 +20,7 @@
       <tbody>
       {% for row in logs.items %}
         <tr>
-          <td>{{ row.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ row.created_at|local_dt('%d/%m/%Y %H:%M') }}</td>
           <td>{{ row.actor.nama if row.actor else '-' }}</td>
           <td><code>{{ row.action }}</code></td>
           <td>

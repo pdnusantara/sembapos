@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Profil Member: {{ member.nama }}{% endblock %}
 {% block page_title %}👤 Profil Pelanggan{% endblock %}
-{% block page_sub %}Member sejak {{ member.created_at.strftime('%d %b %Y') }}{% endblock %}
+{% block page_sub %}Member sejak {{ member.created_at|local_dt('%d %b %Y') }}{% endblock %}
 
 {% block content %}
 <div class="stats-inline-3">
@@ -47,7 +47,7 @@
           {% for t in transactions %}
           <tr>
             <td><div style="font-family:monospace;font-weight:600;color:var(--primary-light);">{{ t.nomor }}</div></td>
-            <td>{{ t.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td>{{ t.created_at|local_dt('%d/%m/%Y %H:%M') }}</td>
             <td style="font-weight:600;">Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</td>
             <td>
               <span class="badge {{ 'badge-info' if t.metode_bayar=='kredit' else 'badge-success' }}">
@@ -84,8 +84,8 @@
     <div style="margin-bottom:10px;">
       <div style="font-size:11px;color:var(--text-muted);">Kunjungan pertama / terakhir</div>
       <div>
-        {{ first_tx.created_at.strftime('%d/%m/%Y %H:%M') if first_tx else '—' }}
-        / {{ last_tx.created_at.strftime('%d/%m/%Y %H:%M') if last_tx else '—' }}
+        {{ first_tx.created_at|local_dt('%d/%m/%Y %H:%M') if first_tx else '—' }}
+        / {{ last_tx.created_at|local_dt('%d/%m/%Y %H:%M') if last_tx else '—' }}
       </div>
     </div>
 

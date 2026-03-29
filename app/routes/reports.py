@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 
 from flask import Blueprint, render_template, request, Response, url_for
 from flask_login import login_required, current_user
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from sqlalchemy import func, desc, asc, or_
 from sqlalchemy.orm import joinedload
 
@@ -29,26 +29,38 @@ from ..models import (
     InventoryCostLayer,
     ProductAuditLog,
 )
+from ..timezones import (
+    format_utc_naive_as_local,
+    get_zoneinfo_required,
+    local_today_date,
+    local_yyyymmdd_for_tenant_id,
+    parse_ymd_to_date,
+    resolve_effective_timezone_id,
+    utc_naive_bounds_for_local_date,
+    utc_naive_bounds_for_report_period,
+)
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
 
-def _parse_date(s, end_of_day=False):
-    if not s or not str(s).strip():
-        return None
-    try:
-        d = datetime.strptime(str(s).strip()[:10], '%Y-%m-%d')
-        if end_of_day:
-            return d.replace(hour=23, minute=59, second=59, microsecond=999999)
-        return d.replace(hour=0, minute=0, second=0, microsecond=0)
-    except ValueError:
-        return None
+def _sql_calendar_date_from_utc_naive(column, tz_id: str):
+    """Tanggal kalender lokal untuk kolom UTC-naive (PostgreSQL); fallback UTC di SQLite."""
+    if db.engine.dialect.name == 'postgresql':
+        return func.date(func.timezone(tz_id, func.timezone('UTC', column)))
+    return func.date(column)
 
 
-def _default_range_days(days=30):
-    end = datetime.utcnow().replace(hour=23, minute=59, second=59, microsecond=999999)
-    start = (end - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    return start, end
+def _utc_bounds_local_dates(d_from: date, d_to: date, tz_id: str):
+    start_utc, _ = utc_naive_bounds_for_local_date(d_from, tz_id)
+    _, end_utc = utc_naive_bounds_for_local_date(d_to, tz_id)
+    return start_utc, end_utc
+
+
+def _default_range_utc_bounds(tz_id: str, days: int = 30):
+    """Rentang UTC-naive untuk N hari kalender terakhir di tz_id (inklusif)."""
+    today = local_today_date(tz_id)
+    d_start = today - timedelta(days=days - 1)
+    return _utc_bounds_local_dates(d_start, today, tz_id)
 
 
 def _coerce_int(raw):
@@ -59,15 +71,16 @@ def _coerce_int(raw):
 
 
 def _gross_profit_filters(tenant_id):
-    date_from = _parse_date(request.args.get('date_from'), end_of_day=False)
-    date_to = _parse_date(request.args.get('date_to'), end_of_day=True)
-    if not date_from or not date_to:
-        date_from, date_to = _default_range_days(7)
-    if date_from > date_to:
-        date_from, date_to = (
-            date_to.replace(hour=0, minute=0, second=0, microsecond=0),
-            date_from.replace(hour=23, minute=59, second=59, microsecond=999999),
-        )
+    tz_id = resolve_effective_timezone_id(current_user)
+    d_from = parse_ymd_to_date(request.args.get('date_from'))
+    d_to = parse_ymd_to_date(request.args.get('date_to'))
+    today = local_today_date(tz_id)
+    if d_from is None or d_to is None:
+        d_to = today
+        d_from = d_to - timedelta(days=6)
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    utc_start, utc_end = _utc_bounds_local_dates(d_from, d_to, tz_id)
 
     branch_id_param = (request.args.get('branch_id') or '').strip()
     selected_branch_id = ''
@@ -78,7 +91,7 @@ def _gross_profit_filters(tenant_id):
         if bid and Branch.query.filter_by(id=bid, tenant_id=tenant_id, aktif=True).first():
             selected_branch_id = str(bid)
 
-    return date_from, date_to, selected_branch_id
+    return utc_start, utc_end, d_from, d_to, selected_branch_id
 
 
 def _gross_profit_common_queries(tenant_id, date_from, date_to, selected_branch_id):
@@ -107,10 +120,10 @@ def _gross_profit_common_queries(tenant_id, date_from, date_to, selected_branch_
     return trx_q, ret_q, op_q
 
 
-def _gross_profit_daily_rows(date_from, date_to, sales_map, return_map, hpp_map, opex_map):
+def _gross_profit_daily_rows(d_start: date, d_end: date, sales_map, return_map, hpp_map, opex_map):
     rows = []
-    cursor = date_from.date()
-    end_day = date_to.date()
+    cursor = d_start
+    end_day = d_end
     while cursor <= end_day:
         key = cursor.isoformat()
         sales = float(sales_map.get(key, 0) or 0)
@@ -306,15 +319,20 @@ def _sales_breakdown_prev_period(date_from, date_to):
     return prev_start, prev_end
 
 
-def _sales_breakdown_bucket_key(dt_value, granularity):
+def _sales_breakdown_bucket_key(dt_value, granularity, tz_id: str | None = None):
     if not dt_value:
         return None
+    if tz_id:
+        aware = dt_value.replace(tzinfo=dt_timezone.utc)
+        dt_local = aware.astimezone(get_zoneinfo_required(tz_id))
+    else:
+        dt_local = dt_value
     if granularity == 'monthly':
-        return dt_value.strftime('%Y-%m')
+        return dt_local.strftime('%Y-%m')
     if granularity == 'weekly':
-        y, w, _ = dt_value.isocalendar()
+        y, w, _ = dt_local.isocalendar()
         return f'{y}-W{w:02d}'
-    return dt_value.strftime('%Y-%m-%d')
+    return dt_local.strftime('%Y-%m-%d')
 
 
 def _sales_breakdown_returns_map(trx_ids_q):
@@ -363,10 +381,10 @@ def _sales_breakdown_apply_net_and_abc(produk_rows, return_map):
     return rows
 
 
-def _sales_breakdown_time_series(trx_rows, hpp_unit_lookup, granularity):
+def _sales_breakdown_time_series(trx_rows, hpp_unit_lookup, granularity, tz_id: str | None = None):
     buckets = {}
     for row in trx_rows:
-        bkey = _sales_breakdown_bucket_key(row.created_at, granularity)
+        bkey = _sales_breakdown_bucket_key(row.created_at, granularity, tz_id)
         if not bkey:
             continue
         entry = buckets.setdefault(
@@ -426,24 +444,8 @@ def _sales_breakdown_hpp_confidence(trx_ids_q):
     }
 
 
-def _report_period_from_request(mode, tanggal, bulan):
-    try:
-        if mode == 'harian':
-            tgl = datetime.strptime(tanggal, '%Y-%m-%d')
-            start = datetime.combine(tgl, datetime.min.time())
-            end = datetime.combine(tgl, datetime.max.time())
-        else:
-            tgl = datetime.strptime(bulan, '%Y-%m')
-            start = tgl.replace(day=1)
-            if tgl.month == 12:
-                end = tgl.replace(year=tgl.year + 1, month=1, day=1) - timedelta(seconds=1)
-            else:
-                end = tgl.replace(month=tgl.month + 1, day=1) - timedelta(seconds=1)
-    except ValueError:
-        tgl = datetime.utcnow()
-        start = datetime.combine(tgl.date(), datetime.min.time())
-        end = datetime.combine(tgl.date(), datetime.max.time())
-    return start, end
+def _report_period_from_request(mode, tanggal, bulan, tz_id: str):
+    return utc_naive_bounds_for_report_period(mode, tanggal, bulan, tz_id)
 
 
 def _apply_reports_index_filters(q, *, tenant_id, start, end, branch_id=None, cashier_id=None, metode_bayar=None, member_scope='all'):
@@ -576,10 +578,12 @@ def _compute_report_bundle(transactions):
 @login_required
 def index():
     tenant_id = current_user.tenant_id
+    tz_id = resolve_effective_timezone_id(current_user)
+    today = local_today_date(tz_id)
     mode = request.args.get('mode', 'harian')
-    tanggal = request.args.get('tanggal', datetime.utcnow().strftime('%Y-%m-%d'))
-    bulan = request.args.get('bulan', datetime.utcnow().strftime('%Y-%m'))
-    start, end = _report_period_from_request(mode, tanggal, bulan)
+    tanggal = request.args.get('tanggal') or today.isoformat()
+    bulan = request.args.get('bulan') or today.strftime('%Y-%m')
+    start, end = _report_period_from_request(mode, tanggal, bulan, tz_id)
     compare_prev = (request.args.get('compare_prev') or '1').strip() != '0'
 
     selected_branch_id = ''
@@ -684,8 +688,10 @@ def index():
     )
     fallback_events = int(fallback_events_q.count())
 
-    trend_end = end
-    trend_start = (trend_end - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+    zi = get_zoneinfo_required(tz_id)
+    trend_end_local = end.replace(tzinfo=dt_timezone.utc).astimezone(zi).date()
+    trend_start_local = trend_end_local - timedelta(days=6)
+    trend_start, trend_end = _utc_bounds_local_dates(trend_start_local, trend_end_local, tz_id)
     trend_q = _apply_reports_index_filters(
         Transaction.query,
         tenant_id=tenant_id,
@@ -701,12 +707,12 @@ def index():
         joinedload(Transaction.payments),
     ).all()
     trend_map = {}
-    cursor = trend_start.date()
-    while cursor <= trend_end.date():
+    cursor = trend_start_local
+    while cursor <= trend_end_local:
         trend_map[cursor.isoformat()] = {'omzet': 0.0, 'hpp': 0.0, 'profit': 0.0}
         cursor += timedelta(days=1)
     for t in trend_transactions:
-        key = t.created_at.date().isoformat()
+        key = t.created_at.replace(tzinfo=dt_timezone.utc).astimezone(zi).date().isoformat()
         if key not in trend_map:
             continue
         trx_hpp = 0.0
@@ -776,10 +782,12 @@ def index():
 @login_required
 def export_item_detail():
     tenant_id = current_user.tenant_id
+    tz_id = resolve_effective_timezone_id(current_user)
+    today = local_today_date(tz_id)
     mode = request.args.get('mode', 'harian')
-    tanggal = request.args.get('tanggal', datetime.utcnow().strftime('%Y-%m-%d'))
-    bulan = request.args.get('bulan', datetime.utcnow().strftime('%Y-%m'))
-    start, end = _report_period_from_request(mode, tanggal, bulan)
+    tanggal = request.args.get('tanggal') or today.isoformat()
+    bulan = request.args.get('bulan') or today.strftime('%Y-%m')
+    start, end = _report_period_from_request(mode, tanggal, bulan, tz_id)
 
     selected_metode = (request.args.get('metode_bayar') or '').strip().lower()
     member_scope = (request.args.get('member_scope') or 'all').strip().lower()
@@ -831,7 +839,7 @@ def export_item_detail():
             laba_baris = float(it.subtotal or 0) - subtotal_hpp
             w.writerow([
                 t.nomor,
-                t.created_at.strftime('%Y-%m-%d %H:%M:%S') if t.created_at else '',
+                format_utc_naive_as_local(t.created_at, tz_id, '%Y-%m-%d %H:%M:%S') if t.created_at else '',
                 t.user.nama if t.user else '',
                 t.branch.nama if t.branch else '',
                 (t.metode_bayar or ''),
@@ -846,7 +854,7 @@ def export_item_detail():
                 laba_baris,
             ])
     data = '\ufeff' + buf.getvalue()
-    fn = f'laporan-item-detail-{datetime.utcnow().strftime("%Y%m%d-%H%M")}.csv'
+    fn = f'laporan-item-detail-{local_yyyymmdd_for_tenant_id(tenant_id)}-{datetime.utcnow().strftime("%H%M")}.csv'
     return Response(
         data,
         mimetype='text/csv; charset=utf-8',
@@ -863,15 +871,16 @@ def sales_breakdown():
         return redirect(url_for('dashboard.index'))
 
     tenant_id = current_user.tenant_id
-
-    date_from = _parse_date(request.args.get('date_from'), end_of_day=False)
-    date_to = _parse_date(request.args.get('date_to'), end_of_day=True)
-    if not date_from or not date_to:
-        date_from, date_to = _default_range_days(30)
-    if date_from > date_to:
-        date_from, date_to = date_to.replace(hour=0, minute=0, second=0, microsecond=0), date_from.replace(
-            hour=23, minute=59, second=59, microsecond=999999
-        )
+    tz_id = resolve_effective_timezone_id(current_user)
+    d_from = parse_ymd_to_date(request.args.get('date_from'))
+    d_to = parse_ymd_to_date(request.args.get('date_to'))
+    today = local_today_date(tz_id)
+    if d_from is None or d_to is None:
+        d_to = today
+        d_from = d_to - timedelta(days=29)
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    date_from, date_to = _utc_bounds_local_dates(d_from, d_to, tz_id)
 
     tab = (request.args.get('tab') or 'produk').strip().lower()
     if tab not in ('produk', 'kategori'):
@@ -1173,7 +1182,7 @@ def sales_breakdown():
                 },
             )()
         )
-    trend = _sales_breakdown_time_series(trx_time_rows, hpp_unit_expr, granularity)
+    trend = _sales_breakdown_time_series(trx_time_rows, hpp_unit_expr, granularity, tz_id)
 
     branch_compare_rows = (
         db.session.query(
@@ -1306,8 +1315,8 @@ def sales_breakdown():
     if current_user.role != 'kasir':
         branches = Branch.query.filter_by(tenant_id=tenant_id, aktif=True).order_by(Branch.nama).all()
 
-    date_from_str = date_from.strftime('%Y-%m-%d')
-    date_to_str = date_to.strftime('%Y-%m-%d')
+    date_from_str = d_from.isoformat()
+    date_to_str = d_to.isoformat()
     qs_pairs = [
         ('date_from', date_from_str),
         ('date_to', date_to_str),
@@ -1389,14 +1398,16 @@ def sales_breakdown_export_summary():
         return redirect(url_for('dashboard.index'))
 
     tenant_id = current_user.tenant_id
-    date_from = _parse_date(request.args.get('date_from'), end_of_day=False)
-    date_to = _parse_date(request.args.get('date_to'), end_of_day=True)
-    if not date_from or not date_to:
-        date_from, date_to = _default_range_days(30)
-    if date_from > date_to:
-        date_from, date_to = date_to.replace(hour=0, minute=0, second=0, microsecond=0), date_from.replace(
-            hour=23, minute=59, second=59, microsecond=999999
-        )
+    tz_id = resolve_effective_timezone_id(current_user)
+    d_from = parse_ymd_to_date(request.args.get('date_from'))
+    d_to = parse_ymd_to_date(request.args.get('date_to'))
+    today = local_today_date(tz_id)
+    if d_from is None or d_to is None:
+        d_to = today
+        d_from = d_to - timedelta(days=29)
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    date_from, date_to = _utc_bounds_local_dates(d_from, d_to, tz_id)
 
     hpp_mode = (request.args.get('hpp_mode') or 'snapshot').strip().lower()
     if hpp_mode not in ('master', 'snapshot'):
@@ -1436,7 +1447,7 @@ def sales_breakdown_export_summary():
 
     buf = StringIO()
     w = csv.writer(buf)
-    w.writerow(['periode_dari', date_from.strftime('%Y-%m-%d'), 'periode_sampai', date_to.strftime('%Y-%m-%d')])
+    w.writerow(['periode_dari', d_from.isoformat(), 'periode_sampai', d_to.isoformat()])
     w.writerow(['produk', 'qty', 'omzet', 'retur', 'net_sales', 'hpp', 'net_margin', 'net_margin_pct'])
     for r in product_rows:
         omzet = float(r.omzet or 0)
@@ -1447,7 +1458,7 @@ def sales_breakdown_export_summary():
         pct = ((net_margin / net_sales) * 100.0) if net_sales > 0 else 0.0
         w.writerow([r.nama_produk, float(r.qty or 0), omzet, retur, net_sales, hpp, net_margin, round(pct, 4)])
 
-    fn = f'laporan-produk-summary-{datetime.utcnow().strftime("%Y%m%d-%H%M")}.csv'
+    fn = f'laporan-produk-summary-{local_yyyymmdd_for_tenant_id(tenant_id)}-{datetime.utcnow().strftime("%H%M")}.csv'
     data = '\ufeff' + buf.getvalue()
     return Response(
         data,
@@ -1465,13 +1476,14 @@ def gross_profit_daily():
         return redirect(url_for('dashboard.index'))
 
     tenant_id = current_user.tenant_id
-    date_from, date_to, selected_branch_id = _gross_profit_filters(tenant_id)
-    trx_q, ret_q, op_q = _gross_profit_common_queries(tenant_id, date_from, date_to, selected_branch_id)
+    utc_start, utc_end, d_from, d_to, selected_branch_id = _gross_profit_filters(tenant_id)
+    tz_id = resolve_effective_timezone_id(current_user)
+    trx_q, ret_q, op_q = _gross_profit_common_queries(tenant_id, utc_start, utc_end, selected_branch_id)
 
     hpp_unit_expr, hpp_mode_used, hpp_mode_note = _sales_breakdown_hpp_unit_expr('snapshot')
-    day_key_trx = func.date(Transaction.created_at)
-    day_key_ret = func.date(SalesReturn.created_at)
-    day_key_op = func.date(OperationalExpense.tanggal)
+    day_key_trx = _sql_calendar_date_from_utc_naive(Transaction.created_at, tz_id)
+    day_key_ret = _sql_calendar_date_from_utc_naive(SalesReturn.created_at, tz_id)
+    day_key_op = _sql_calendar_date_from_utc_naive(OperationalExpense.tanggal, tz_id)
     hpp_total_expr = func.sum(TransactionItem.qty * hpp_unit_expr)
 
     sales_daily_rows = (
@@ -1505,7 +1517,7 @@ def gross_profit_daily():
     return_map = {str(r.d): float(r.v or 0) for r in returns_daily_rows}
     hpp_map = {str(r.d): float(r.v or 0) for r in hpp_daily_rows}
     opex_map = {str(r.d): float(r.v or 0) for r in opex_daily_rows}
-    daily_rows = _gross_profit_daily_rows(date_from, date_to, sales_map, return_map, hpp_map, opex_map)
+    daily_rows = _gross_profit_daily_rows(d_from, d_to, sales_map, return_map, hpp_map, opex_map)
 
     totals = {
         'sales': sum(r['sales'] for r in daily_rows),
@@ -1631,38 +1643,38 @@ def gross_profit_daily():
             }
         )
 
-    chip_today_start, chip_today_end = _default_range_days(1)
-    chip_7_start, chip_7_end = _default_range_days(7)
-    chip_30_start, chip_30_end = _default_range_days(30)
+    today_d = local_today_date(tz_id)
     chip_kw = {}
     if selected_branch_id:
         chip_kw['branch_id'] = selected_branch_id
     chip_today = url_for(
         'reports.gross_profit_daily',
         **chip_kw,
-        date_from=chip_today_start.strftime('%Y-%m-%d'),
-        date_to=chip_today_end.strftime('%Y-%m-%d'),
+        date_from=today_d.isoformat(),
+        date_to=today_d.isoformat(),
     )
+    chip_7_from = today_d - timedelta(days=6)
     chip_7 = url_for(
         'reports.gross_profit_daily',
         **chip_kw,
-        date_from=chip_7_start.strftime('%Y-%m-%d'),
-        date_to=chip_7_end.strftime('%Y-%m-%d'),
+        date_from=chip_7_from.isoformat(),
+        date_to=today_d.isoformat(),
     )
+    chip_30_from = today_d - timedelta(days=29)
     chip_30 = url_for(
         'reports.gross_profit_daily',
         **chip_kw,
-        date_from=chip_30_start.strftime('%Y-%m-%d'),
-        date_to=chip_30_end.strftime('%Y-%m-%d'),
+        date_from=chip_30_from.isoformat(),
+        date_to=today_d.isoformat(),
     )
-    is_preset_today = date_from.date() == chip_today_start.date() and date_to.date() == chip_today_end.date()
-    is_preset_7 = date_from.date() == chip_7_start.date() and date_to.date() == chip_7_end.date()
-    is_preset_30 = date_from.date() == chip_30_start.date() and date_to.date() == chip_30_end.date()
+    is_preset_today = d_from == today_d and d_to == today_d
+    is_preset_7 = d_from == chip_7_from and d_to == today_d
+    is_preset_30 = d_from == chip_30_from and d_to == today_d
 
     return render_template(
         'reports/gross_profit_daily.html',
-        date_from=date_from.strftime('%Y-%m-%d'),
-        date_to=date_to.strftime('%Y-%m-%d'),
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
         selected_branch_id=selected_branch_id,
         branches=branches if current_user.role != 'kasir' else [],
         totals=totals,
@@ -1695,12 +1707,13 @@ def gross_profit_daily_export_csv():
         return redirect(url_for('dashboard.index'))
 
     tenant_id = current_user.tenant_id
-    date_from, date_to, selected_branch_id = _gross_profit_filters(tenant_id)
-    trx_q, ret_q, op_q = _gross_profit_common_queries(tenant_id, date_from, date_to, selected_branch_id)
+    utc_start, utc_end, d_from, d_to, selected_branch_id = _gross_profit_filters(tenant_id)
+    tz_id = resolve_effective_timezone_id(current_user)
+    trx_q, ret_q, op_q = _gross_profit_common_queries(tenant_id, utc_start, utc_end, selected_branch_id)
     hpp_unit_expr, _, _ = _sales_breakdown_hpp_unit_expr('snapshot')
-    day_key_trx = func.date(Transaction.created_at)
-    day_key_ret = func.date(SalesReturn.created_at)
-    day_key_op = func.date(OperationalExpense.tanggal)
+    day_key_trx = _sql_calendar_date_from_utc_naive(Transaction.created_at, tz_id)
+    day_key_ret = _sql_calendar_date_from_utc_naive(SalesReturn.created_at, tz_id)
+    day_key_op = _sql_calendar_date_from_utc_naive(OperationalExpense.tanggal, tz_id)
     hpp_total_expr = func.sum(TransactionItem.qty * hpp_unit_expr)
 
     sales_map = {
@@ -1741,7 +1754,7 @@ def gross_profit_daily_export_csv():
             .all()
         )
     }
-    daily_rows = _gross_profit_daily_rows(date_from, date_to, sales_map, return_map, hpp_map, opex_map)
+    daily_rows = _gross_profit_daily_rows(d_from, d_to, sales_map, return_map, hpp_map, opex_map)
 
     buf = StringIO()
     w = csv.writer(buf)
@@ -1775,7 +1788,7 @@ def gross_profit_daily_export_csv():
             ]
         )
 
-    fn = f'laporan-laba-kotor-harian-{datetime.utcnow().strftime("%Y%m%d-%H%M")}.csv'
+    fn = f'laporan-laba-kotor-harian-{local_yyyymmdd_for_tenant_id(tenant_id)}-{datetime.utcnow().strftime("%H%M")}.csv'
     data = '\ufeff' + buf.getvalue()
     return Response(
         data,
@@ -1793,10 +1806,16 @@ def pembelian():
         return redirect(url_for('dashboard.index'))
 
     tenant_id = current_user.tenant_id
-    date_from = _parse_date(request.args.get('date_from'), end_of_day=False)
-    date_to = _parse_date(request.args.get('date_to'), end_of_day=True)
-    if not date_from or not date_to:
-        date_from, date_to = _default_range_days(30)
+    tz_id = resolve_effective_timezone_id(current_user)
+    d_from = parse_ymd_to_date(request.args.get('date_from'))
+    d_to = parse_ymd_to_date(request.args.get('date_to'))
+    today = local_today_date(tz_id)
+    if d_from is None or d_to is None:
+        d_to = today
+        d_from = d_to - timedelta(days=29)
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    date_from, date_to = _utc_bounds_local_dates(d_from, d_to, tz_id)
 
     tanggal_ref = request.args.get('tanggal_ref', 'pesan')
     if tanggal_ref not in ('pesan', 'terima'):
@@ -1900,8 +1919,8 @@ def pembelian():
         line_items_limited=line_items_limited,
         suppliers=suppliers,
         branches=branches,
-        date_from=date_from.strftime('%Y-%m-%d'),
-        date_to=date_to.strftime('%Y-%m-%d'),
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
         tanggal_ref=tanggal_ref,
         status=status,
         supplier_id=supplier_id,
@@ -1920,10 +1939,16 @@ def pembelian_export_csv():
         return redirect(url_for('dashboard.index'))
 
     tenant_id = current_user.tenant_id
-    date_from = _parse_date(request.args.get('date_from'), end_of_day=False)
-    date_to = _parse_date(request.args.get('date_to'), end_of_day=True)
-    if not date_from or not date_to:
-        date_from, date_to = _default_range_days(30)
+    tz_id = resolve_effective_timezone_id(current_user)
+    d_from = parse_ymd_to_date(request.args.get('date_from'))
+    d_to = parse_ymd_to_date(request.args.get('date_to'))
+    today = local_today_date(tz_id)
+    if d_from is None or d_to is None:
+        d_to = today
+        d_from = d_to - timedelta(days=29)
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    date_from, date_to = _utc_bounds_local_dates(d_from, d_to, tz_id)
 
     tanggal_ref = request.args.get('tanggal_ref', 'pesan')
     if tanggal_ref not in ('pesan', 'terima'):
@@ -1968,8 +1993,8 @@ def pembelian_export_csv():
         uname = usr.nama if usr else ''
         w.writerow([
             po.nomor,
-            po.tanggal_pesan.strftime('%Y-%m-%d %H:%M:%S') if po.tanggal_pesan else '',
-            po.tanggal_terima.strftime('%Y-%m-%d %H:%M:%S') if po.tanggal_terima else '',
+            format_utc_naive_as_local(po.tanggal_pesan, tz_id, '%Y-%m-%d %H:%M:%S') if po.tanggal_pesan else '',
+            format_utc_naive_as_local(po.tanggal_terima, tz_id, '%Y-%m-%d %H:%M:%S') if po.tanggal_terima else '',
             po.status,
             sup,
             cab,
@@ -1983,7 +2008,7 @@ def pembelian_export_csv():
             (po.catatan or '').replace('\n', ' ')[:500],
         ])
 
-    fn = f'laporan-pembelian-{datetime.utcnow().strftime("%Y%m%d-%H%M")}.csv'
+    fn = f'laporan-pembelian-{local_yyyymmdd_for_tenant_id(tenant_id)}-{datetime.utcnow().strftime("%H%M")}.csv'
     data = '\ufeff' + buf.getvalue()
     return Response(
         data,
@@ -2320,7 +2345,7 @@ def stok_export_produk():
             nilai_jual,
         ])
 
-    fn = f'laporan-stok-produk-{datetime.utcnow().strftime("%Y%m%d-%H%M")}.csv'
+    fn = f'laporan-stok-produk-{local_yyyymmdd_for_tenant_id(tenant_id)}-{datetime.utcnow().strftime("%H%M")}.csv'
     data = '\ufeff' + buf.getvalue()
     return Response(
         data,

@@ -115,7 +115,7 @@
             <div class="mk-timeline-note">{{ h.catatan }}</div>
             {% endif %}
             <div class="mk-timeline-time">
-              {{ h.created_at.strftime('%d %b %Y, %H:%M') }}
+              {{ h.created_at|local_dt_tz(order.tenant.timezone if order.tenant else 'Asia/Jakarta', '%d %b %Y, %H:%M') }}
               {% if h.changed_by %}· oleh {{ h.changed_by.nama }}{% endif %}
             </div>
           </div>
@@ -165,7 +165,7 @@
         </div>
         <div style="display:flex;justify-content:space-between;">
           <span style="color:var(--text-muted);">Tanggal</span>
-          <span>{{ order.created_at.strftime('%d %b %Y %H:%M') }}</span>
+          <span>{{ order.created_at|local_dt_tz(order.tenant.timezone if order.tenant else 'Asia/Jakarta', '%d %b %Y %H:%M') }}</span>
         </div>
         <div style="display:flex;justify-content:space-between;">
           <span style="color:var(--text-muted);">Seller</span>

@@ -16,6 +16,12 @@ from sqlalchemy.orm import selectinload
 
 from .. import db
 from ..models import Transaction, Branch, User, Member, SalesReturn
+from ..timezones import (
+    local_today_date,
+    parse_ymd_to_date,
+    resolve_effective_timezone_id,
+    utc_naive_bounds_for_local_date,
+)
 
 transactions_bp = Blueprint('transactions', __name__, url_prefix='/transactions')
 PER_PAGE = 25
@@ -26,18 +32,6 @@ def _require_tenant():
         flash('Riwayat transaksi hanya untuk akun tenant.', 'warning')
         return redirect(url_for('dashboard.index'))
     return None
-
-
-def _parse_date(s, end_of_day=False):
-    if not s or not str(s).strip():
-        return None
-    try:
-        d = datetime.strptime(str(s).strip()[:10], '%Y-%m-%d')
-        if end_of_day:
-            return d.replace(hour=23, minute=59, second=59, microsecond=999999)
-        return d.replace(hour=0, minute=0, second=0, microsecond=0)
-    except ValueError:
-        return None
 
 
 def _filtered_query():
@@ -57,13 +51,17 @@ def _filtered_query():
     if current_user.role == 'kasir' and current_user.branch_id:
         q = q.filter(Transaction.branch_id == current_user.branch_id)
 
-    date_from = _parse_date(request.args.get('date_from'), end_of_day=False)
-    date_to = _parse_date(request.args.get('date_to'), end_of_day=True)
-    if not date_from:
-        date_from = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=29)
-    if not date_to:
-        date_to = datetime.utcnow().replace(hour=23, minute=59, second=59, microsecond=999999)
-    q = q.filter(Transaction.created_at.between(date_from, date_to))
+    tz_id = resolve_effective_timezone_id(current_user)
+    today = local_today_date(tz_id)
+    raw_from = parse_ymd_to_date(request.args.get('date_from'))
+    raw_to = parse_ymd_to_date(request.args.get('date_to'))
+    d_to = raw_to if raw_to is not None else today
+    d_from = raw_from if raw_from is not None else d_to - timedelta(days=29)
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    start_utc, _ = utc_naive_bounds_for_local_date(d_from, tz_id)
+    _, end_utc = utc_naive_bounds_for_local_date(d_to, tz_id)
+    q = q.filter(Transaction.created_at.between(start_utc, end_utc))
 
     bid = request.args.get('branch_id', '').strip()
     if bid and current_user.role != 'kasir':
@@ -148,7 +146,7 @@ def _filtered_query():
             ~exists().where(SalesReturn.source_transaction_id == Transaction.id)
         )
 
-    return q, date_from, date_to
+    return q, d_from, d_to
 
 
 def _order_clause():
@@ -171,7 +169,7 @@ def index():
     if redir:
         return redir
 
-    q, date_from, date_to = _filtered_query()
+    q, d_from, d_to = _filtered_query()
     total_count = q.count()
     q_sum, _, _ = _filtered_query()
     sum_total = float(q_sum.with_entities(func.coalesce(func.sum(Transaction.total), 0)).scalar() or 0)
@@ -203,7 +201,8 @@ def index():
 
     qs_base = urlencode([(k, v) for k, v in request.args.items(multi=True) if k != 'page'])
 
-    d = datetime.utcnow().date()
+    tz_id = resolve_effective_timezone_id(current_user)
+    d = local_today_date(tz_id)
     presets = SimpleNamespace(
         today_from=d.isoformat(),
         today_to=d.isoformat(),
@@ -262,8 +261,8 @@ def index():
         page=page,
         total_pages=total_pages,
         branches=branches,
-        date_from=date_from.strftime('%Y-%m-%d'),
-        date_to=date_to.strftime('%Y-%m-%d'),
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
         filter_branch=request.args.get('branch_id', ''),
         filter_status=request.args.get('status', ''),
         filter_retur=request.args.get('retur', ''),
@@ -273,13 +272,9 @@ def index():
         chip_today=chip_today,
         chip_7=chip_7,
         chip_30=chip_30,
-        is_preset_today=(date_from.date() == d and date_to.date() == d),
-        is_preset_7=(
-            date_from.date() == (d - timedelta(days=6)) and date_to.date() == d
-        ),
-        is_preset_30=(
-            date_from.date() == (d - timedelta(days=29)) and date_to.date() == d
-        ),
+        is_preset_today=(d_from == d and d_to == d),
+        is_preset_7=(d_from == (d - timedelta(days=6)) and d_to == d),
+        is_preset_30=(d_from == (d - timedelta(days=29)) and d_to == d),
     )
 
 

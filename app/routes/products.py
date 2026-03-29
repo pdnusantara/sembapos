@@ -1,14 +1,17 @@
 import csv
 import io
 import os
+import secrets
 import uuid
-from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, current_app
+from datetime import datetime
+from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, current_app, jsonify
 from flask_login import login_required, current_user
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, nullslast
 
 from .. import db
-from ..models import Product, ProductCategory, StockMovement, Supplier, ProductAuditLog, InventoryCostLayer
-from ..fifo_costing import create_cost_layer, consume_fifo_stock_out
+from ..models import Product, ProductCategory, Etalase, StockMovement, Supplier, ProductAuditLog, InventoryCostLayer
+from ..fifo_costing import create_cost_layer
+from ..timezones import local_today_date, resolve_effective_timezone_id
 
 products_bp = Blueprint('products', __name__, url_prefix='/products')
 
@@ -18,6 +21,36 @@ def require_admin():
         flash('Akses ditolak!', 'danger')
         return False
     return True
+
+
+def _etalases_for_tenant(tenant_id):
+    return Etalase.query.filter_by(tenant_id=tenant_id).order_by(Etalase.nama).all()
+
+
+def _etalase_id_from_post(tenant_id):
+    raw = (request.form.get('etalase_id') or '').strip()
+    if not raw:
+        return None
+    try:
+        eid = int(raw)
+    except ValueError:
+        return None
+    if eid <= 0:
+        return None
+    if not Etalase.query.filter_by(id=eid, tenant_id=tenant_id).first():
+        return None
+    return eid
+
+
+def _harga_coret_from_form():
+    raw = (request.form.get('harga_coret') or '').strip()
+    if not raw:
+        return None
+    try:
+        v = float(str(raw).replace(',', '.'))
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0 else None
 
 
 def _norm_barcode(val):
@@ -35,6 +68,16 @@ def barcode_taken(tenant_id, barcode, exclude_id=None):
     if exclude_id:
         q = q.filter(Product.id != exclude_id)
     return q.first() is not None
+
+
+def _generate_unique_barcode(tenant_id, exclude_id=None):
+    """Kode angka 12 digit (awalan 2) untuk scan CODE128/EAN-style internal, unik per tenant."""
+    for _ in range(120):
+        body = secrets.randbelow(10**11)
+        code = '2' + f'{body:011d}'
+        if not barcode_taken(tenant_id, code, exclude_id=exclude_id):
+            return code
+    return None
 
 
 def _to_float_or_none(raw):
@@ -176,10 +219,11 @@ def _log_product_audit(
     ))
 
 
-def _filtered_query(tenant_id):
+def _filtered_query(tenant_id, default_status='all'):
     search = request.args.get('q', '').strip()
     cat_id = request.args.get('category', '')
-    status = request.args.get('status', 'all')
+    etalase_id = request.args.get('etalase', '')
+    status = request.args.get('status', default_status)
     stock_filter = request.args.get('stock', 'all')
     sort = request.args.get('sort', 'nama')
 
@@ -189,6 +233,10 @@ def _filtered_query(tenant_id):
         q = q.filter(or_(Product.nama.ilike(like), Product.barcode.ilike(like)))
     if cat_id:
         q = q.filter_by(category_id=int(cat_id))
+    if etalase_id == '0':
+        q = q.filter(Product.etalase_id.is_(None))
+    elif etalase_id:
+        q = q.filter_by(etalase_id=int(etalase_id))
     if status == 'aktif':
         q = q.filter_by(aktif=True)
     elif status == 'nonaktif':
@@ -206,6 +254,11 @@ def _filtered_query(tenant_id):
         q = q.order_by(Product.stok.asc(), Product.nama)
     elif sort == 'stok_desc':
         q = q.order_by(Product.stok.desc(), Product.nama)
+    elif sort == 'etalase':
+        q = q.outerjoin(Etalase, Product.etalase_id == Etalase.id).order_by(
+            nullslast(Etalase.nama.asc()),
+            Product.nama,
+        )
     else:
         q = q.order_by(Product.nama)
     return q
@@ -218,6 +271,7 @@ def index():
     page = request.args.get('page', 1, type=int)
     search = request.args.get('q', '')
     cat_id = request.args.get('category', '')
+    etalase_id = request.args.get('etalase', '')
     status = request.args.get('status', 'all')
     stock_filter = request.args.get('stock', 'all')
     sort = request.args.get('sort', 'nama')
@@ -226,19 +280,87 @@ def index():
     q = _filtered_query(tenant_id)
     products = q.paginate(page=page, per_page=20, error_out=False)
     categories = ProductCategory.query.filter_by(tenant_id=tenant_id).order_by(ProductCategory.nama).all()
+    etalases = _etalases_for_tenant(tenant_id)
     stats = _tenant_stats(tenant_id)
 
     return render_template(
         'products/index.html',
         products=products,
         categories=categories,
+        etalases=etalases,
         search=search,
         cat_id=cat_id,
+        etalase_id=etalase_id,
         status=status,
         stock_filter=stock_filter,
         sort=sort,
         focus=focus,
         stats=stats,
+    )
+
+
+@products_bp.route('/etalase')
+@login_required
+def etalase():
+    from itertools import groupby
+
+    tenant_id = current_user.tenant_id
+    page = request.args.get('page', 1, type=int)
+    search = request.args.get('q', '')
+    cat_id = request.args.get('category', '')
+    etalase_id = request.args.get('etalase', '')
+    status = request.args.get('status', 'aktif')
+    stock_filter = request.args.get('stock', 'all')
+    sort = request.args.get('sort', 'nama')
+    print_all = request.args.get('print_all', '0') == '1'
+    grouped = sort == 'etalase'
+
+    q = _filtered_query(tenant_id, default_status='aktif')
+
+    if print_all:
+        rows = q.all()
+        pagination = None
+        total_count = len(rows)
+    else:
+        pagination = q.paginate(page=page, per_page=24, error_out=False)
+        rows = pagination.items
+        total_count = pagination.total
+
+    etalase_groups = None
+    if grouped:
+        etalase_groups = []
+        if rows:
+            for key, g in groupby(
+                rows,
+                key=lambda p: p.etalase.nama if p.etalase else None,
+            ):
+                title = key if key else 'Belum ditentukan'
+                etalase_groups.append((title, list(g)))
+
+    categories = ProductCategory.query.filter_by(tenant_id=tenant_id).order_by(ProductCategory.nama).all()
+    etalases = _etalases_for_tenant(tenant_id)
+    tenant_nama = current_user.tenant.nama if getattr(current_user, 'tenant', None) else ''
+
+    tanggal_cetak = local_today_date(resolve_effective_timezone_id(current_user)).strftime('%d/%m/%Y')
+
+    return render_template(
+        'products/etalase.html',
+        products=pagination,
+        etalase_product_list=rows,
+        etalase_groups=etalase_groups,
+        etalase_total=total_count,
+        print_all=print_all,
+        grouped=grouped,
+        categories=categories,
+        etalases=etalases,
+        search=search,
+        cat_id=cat_id,
+        etalase_id=etalase_id,
+        status=status,
+        stock_filter=stock_filter,
+        sort=sort,
+        tenant_nama=tenant_nama,
+        tanggal_cetak=tanggal_cetak,
     )
 
 
@@ -252,7 +374,7 @@ def export_csv():
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow([
-        'nama', 'barcode', 'kategori', 'satuan', 'harga_beli', 'harga_jual',
+        'nama', 'barcode', 'kategori', 'etalase', 'satuan', 'harga_beli', 'harga_jual', 'harga_coret',
         'min_qty_grosir_1', 'harga_jual_grosir_1', 'min_qty_grosir_2', 'harga_jual_grosir_2',
         'stok', 'stok_minimum', 'supplier', 'aktif',
     ])
@@ -261,9 +383,11 @@ def export_csv():
             p.nama,
             p.barcode or '',
             p.category.nama if p.category else '',
+            p.etalase.nama if p.etalase else '',
             p.satuan,
             p.harga_beli,
             p.harga_jual,
+            p.harga_coret or '',
             p.min_qty_grosir_1 or '',
             p.harga_jual_grosir_1 or '',
             p.min_qty_grosir_2 or '',
@@ -290,9 +414,9 @@ def import_sample():
     if not require_admin():
         return redirect(url_for('products.index'))
     sample = (
-        'nama,barcode,kategori,satuan,harga_beli,harga_jual,min_qty_grosir_1,harga_jual_grosir_1,min_qty_grosir_2,harga_jual_grosir_2,stok_awal,stok_minimum,supplier\n'
-        'Beras Premium 5kg,899111,BERAS,kg,65000,72000,5,70000,10,68000,10,2,CV Sumber Padi\n'
-        'Gula Pasir 1kg,,GULA,kg,12000,13500,,,,,20,5,\n'
+        'nama,barcode,kategori,satuan,harga_beli,harga_jual,harga_coret,min_qty_grosir_1,harga_jual_grosir_1,min_qty_grosir_2,harga_jual_grosir_2,stok_awal,stok_minimum,supplier\n'
+        'Beras Premium 5kg,899111,BERAS,kg,65000,72000,78000,5,70000,10,68000,10,2,CV Sumber Padi\n'
+        'Gula Pasir 1kg,,GULA,kg,12000,13500,,,,,,20,5,\n'
     )
     return Response(
         sample.encode('utf-8-sig'),
@@ -389,6 +513,14 @@ def import_products():
                     stok_min = float((row.get('stok_minimum', '') or '5').replace(',', '.') or 5)
                 except ValueError:
                     stok_min = 5
+                hc_raw = (row.get('harga_coret') or '').strip()
+                harga_coret_imp = None
+                if hc_raw:
+                    try:
+                        hcv = float(hc_raw.replace(',', '.'))
+                        harga_coret_imp = hcv if hcv > 0 else None
+                    except ValueError:
+                        harga_coret_imp = None
 
                 product = Product(
                     tenant_id=tenant_id,
@@ -399,6 +531,7 @@ def import_products():
                     satuan=satuan,
                     harga_beli=hb,
                     harga_jual=hj,
+                    harga_coret=harga_coret_imp,
                     min_qty_grosir_1=tiers['min_qty_grosir_1'],
                     harga_jual_grosir_1=tiers['harga_jual_grosir_1'],
                     min_qty_grosir_2=tiers['min_qty_grosir_2'],
@@ -440,6 +573,19 @@ def import_products():
     return render_template('products/import.html')
 
 
+@products_bp.route('/generate-barcode')
+@login_required
+def generate_barcode():
+    if current_user.role not in ('superadmin', 'admin'):
+        return jsonify({'error': 'forbidden'}), 403
+    tenant_id = current_user.tenant_id
+    exclude_id = request.args.get('exclude_id', type=int)
+    code = _generate_unique_barcode(tenant_id, exclude_id=exclude_id)
+    if not code:
+        return jsonify({'error': 'gagal_membuat_kode'}), 500
+    return jsonify({'barcode': code})
+
+
 @products_bp.route('/add', methods=['GET', 'POST'])
 @login_required
 def add():
@@ -447,13 +593,14 @@ def add():
         return redirect(url_for('products.index'))
     tenant_id = current_user.tenant_id
     categories = ProductCategory.query.filter_by(tenant_id=tenant_id).order_by(ProductCategory.nama).all()
+    etalases = _etalases_for_tenant(tenant_id)
     suppliers = Supplier.query.filter_by(tenant_id=tenant_id, aktif=True).order_by(Supplier.nama).all()
 
     if request.method == 'POST':
         bc = _norm_barcode(request.form.get('barcode'))
         if barcode_taken(tenant_id, bc):
             flash('Barcode sudah dipakai produk lain.', 'danger')
-            return render_template('products/form.html', product=None, categories=categories, suppliers=suppliers, action='Tambah')
+            return render_template('products/form.html', product=None, categories=categories, etalases=etalases, suppliers=suppliers, action='Tambah')
 
         gambar = None
         try:
@@ -461,7 +608,7 @@ def add():
                 gambar = _save_product_image(request.files.get('gambar'), tenant_id)
         except ValueError as e:
             flash(str(e), 'danger')
-            return render_template('products/form.html', product=None, categories=categories, suppliers=suppliers, action='Tambah')
+            return render_template('products/form.html', product=None, categories=categories, etalases=etalases, suppliers=suppliers, action='Tambah')
 
         sid = request.form.get('supplier_id')
         supplier_id = int(sid) if sid else None
@@ -473,20 +620,22 @@ def add():
             tiers = _extract_price_tiers(request.form, harga_jual)
         except TypeError:
             flash('Format harga tidak valid.', 'danger')
-            return render_template('products/form.html', product=None, categories=categories, suppliers=suppliers, action='Tambah')
+            return render_template('products/form.html', product=None, categories=categories, etalases=etalases, suppliers=suppliers, action='Tambah')
         except ValueError as e:
             flash(str(e) or 'Format harga tidak valid.', 'danger')
-            return render_template('products/form.html', product=None, categories=categories, suppliers=suppliers, action='Tambah')
+            return render_template('products/form.html', product=None, categories=categories, etalases=etalases, suppliers=suppliers, action='Tambah')
 
         product = Product(
             tenant_id=tenant_id,
             category_id=request.form.get('category_id') or None,
+            etalase_id=_etalase_id_from_post(tenant_id),
             supplier_id=supplier_id,
             nama=request.form['nama'],
             barcode=bc,
             satuan=request.form.get('satuan', 'pcs'),
             harga_beli=float(request.form.get('harga_beli', 0)),
             harga_jual=harga_jual,
+            harga_coret=_harga_coret_from_form(),
             min_qty_grosir_1=tiers['min_qty_grosir_1'],
             harga_jual_grosir_1=tiers['harga_jual_grosir_1'],
             min_qty_grosir_2=tiers['min_qty_grosir_2'],
@@ -540,7 +689,7 @@ def add():
         flash(f'Produk "{product.nama}" berhasil ditambahkan!', 'success')
         return redirect(url_for('products.index', focus='search', q=(product.barcode or product.nama or '').strip()))
 
-    return render_template('products/form.html', product=None, categories=categories, suppliers=suppliers, action='Tambah')
+    return render_template('products/form.html', product=None, categories=categories, etalases=etalases, suppliers=suppliers, action='Tambah')
 
 
 @products_bp.route('/edit/<int:id>', methods=['GET', 'POST'])
@@ -551,6 +700,7 @@ def edit(id):
     tenant_id = current_user.tenant_id
     product = Product.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
     categories = ProductCategory.query.filter_by(tenant_id=tenant_id).order_by(ProductCategory.nama).all()
+    etalases = _etalases_for_tenant(tenant_id)
     suppliers = Supplier.query.filter(
         Supplier.tenant_id == tenant_id,
         or_(Supplier.aktif == True, Supplier.id == product.supplier_id),
@@ -563,7 +713,7 @@ def edit(id):
         bc = _norm_barcode(request.form.get('barcode'))
         if barcode_taken(tenant_id, bc, exclude_id=product.id):
             flash('Barcode sudah dipakai produk lain.', 'danger')
-            return render_template('products/form.html', product=product, categories=categories, suppliers=suppliers, action='Edit')
+            return render_template('products/form.html', product=product, categories=categories, etalases=etalases, suppliers=suppliers, action='Edit')
 
         if request.files.get('gambar') and request.files.get('gambar').filename:
             try:
@@ -572,7 +722,7 @@ def edit(id):
                 product.gambar = new_g
             except ValueError as e:
                 flash(str(e), 'danger')
-                return render_template('products/form.html', product=product, categories=categories, suppliers=suppliers, action='Edit')
+                return render_template('products/form.html', product=product, categories=categories, etalases=etalases, suppliers=suppliers, action='Edit')
 
         if request.form.get('hapus_gambar'):
             _delete_image_file(product.gambar)
@@ -588,17 +738,19 @@ def edit(id):
             tiers = _extract_price_tiers(request.form, harga_jual)
         except TypeError:
             flash('Format harga tidak valid.', 'danger')
-            return render_template('products/form.html', product=product, categories=categories, suppliers=suppliers, action='Edit')
+            return render_template('products/form.html', product=product, categories=categories, etalases=etalases, suppliers=suppliers, action='Edit')
         except ValueError as e:
             flash(str(e) or 'Format harga tidak valid.', 'danger')
-            return render_template('products/form.html', product=product, categories=categories, suppliers=suppliers, action='Edit')
+            return render_template('products/form.html', product=product, categories=categories, etalases=etalases, suppliers=suppliers, action='Edit')
 
         product.category_id = request.form.get('category_id') or None
+        product.etalase_id = _etalase_id_from_post(tenant_id)
         product.nama = request.form['nama']
         product.barcode = bc
         product.satuan = request.form.get('satuan', 'pcs')
         product.harga_beli = float(request.form.get('harga_beli', 0))
         product.harga_jual = harga_jual
+        product.harga_coret = _harga_coret_from_form()
         product.min_qty_grosir_1 = tiers['min_qty_grosir_1']
         product.harga_jual_grosir_1 = tiers['harga_jual_grosir_1']
         product.min_qty_grosir_2 = tiers['min_qty_grosir_2']
@@ -631,7 +783,7 @@ def edit(id):
         flash(f'Produk "{product.nama}" berhasil diupdate!', 'success')
         return redirect(url_for('products.index', focus='search', q=(product.barcode or product.nama or '').strip()))
 
-    return render_template('products/form.html', product=product, categories=categories, suppliers=suppliers, action='Edit')
+    return render_template('products/form.html', product=product, categories=categories, etalases=etalases, suppliers=suppliers, action='Edit')
 
 
 @products_bp.route('/duplicate/<int:id>', methods=['POST'])
@@ -644,12 +796,14 @@ def duplicate(id):
     copy = Product(
         tenant_id=tenant_id,
         category_id=src.category_id,
+        etalase_id=src.etalase_id,
         supplier_id=src.supplier_id,
         nama=f'{src.nama} (Salinan)',
         barcode=None,
         satuan=src.satuan,
         harga_beli=src.harga_beli,
         harga_jual=src.harga_jual,
+        harga_coret=src.harga_coret,
         min_qty_grosir_1=src.min_qty_grosir_1,
         harga_jual_grosir_1=src.harga_jual_grosir_1,
         min_qty_grosir_2=src.min_qty_grosir_2,
@@ -681,112 +835,25 @@ def delete(id):
 @products_bp.route('/stock-in/<int:id>', methods=['GET', 'POST'])
 @login_required
 def stock_in(id):
-    if not require_admin():
-        return redirect(url_for('products.index'))
-    tenant_id = current_user.tenant_id
-    product = Product.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
-
-    if request.method == 'POST':
-        qty = float(request.form['qty'])
-        keterangan = request.form.get('keterangan', 'Stok masuk')
-        stok_sebelum = product.stok
-        product.stok += qty
-        movement = StockMovement(
-            product_id=product.id,
-            user_id=current_user.id,
-            tipe='masuk',
-            qty=qty,
-            stok_sebelum=stok_sebelum,
-            stok_sesudah=product.stok,
-            keterangan=keterangan,
-        )
-        db.session.add(movement)
-        create_cost_layer(
-            tenant_id=tenant_id,
-            product_id=product.id,
-            qty_in=qty,
-            unit_cost=float(product.harga_beli or 0),
-            source_type='manual_stock_in',
-            source_id=product.id,
-        )
-        db.session.commit()
-        flash(f'Stok {product.nama} berhasil ditambah {qty} {product.satuan}!', 'success')
-        return redirect(url_for('products.index'))
-
-    return render_template('products/stock_in.html', product=product)
+    """Dinonaktifkan: stok masuk hanya lewat pembelian; opname terpisah."""
+    flash(
+        'Stok masuk manual dinonaktifkan. Tambah stok melalui menu Pembelian. '
+        'Penyesuaian stok opname akan tersedia sebagai fitur terpisah.',
+        'info',
+    )
+    return redirect(url_for('products.index'))
 
 
 @products_bp.route('/stock-adjust/<int:id>', methods=['GET', 'POST'])
 @login_required
 def stock_adjust(id):
-    if not require_admin():
-        return redirect(url_for('products.index'))
-    tenant_id = current_user.tenant_id
-    product = Product.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
-
-    if request.method == 'POST':
-        mode = request.form.get('mode', 'delta')
-        keterangan = (request.form.get('keterangan') or 'Koreksi stok').strip() or 'Koreksi stok'
-        stok_sebelum = product.stok
-
-        if mode == 'set':
-            try:
-                baru = float(request.form['stok_fisik'])
-            except (KeyError, ValueError):
-                flash('Stok fisik tidak valid.', 'danger')
-                return render_template('products/stock_adjust.html', product=product)
-            delta = baru - stok_sebelum
-        else:
-            try:
-                delta = float(request.form['delta'])
-            except (KeyError, ValueError):
-                flash('Jumlah koreksi tidak valid.', 'danger')
-                return render_template('products/stock_adjust.html', product=product)
-            baru = stok_sebelum + delta
-
-        if baru < 0:
-            flash('Stok tidak boleh negatif.', 'danger')
-            return render_template('products/stock_adjust.html', product=product)
-        if delta == 0:
-            flash('Tidak ada perubahan stok.', 'warning')
-            return redirect(url_for('products.stock_history', id=product.id))
-
-        product.stok = baru
-        if delta > 0:
-            tipe = 'masuk'
-            qty_mov = delta
-            create_cost_layer(
-                tenant_id=tenant_id,
-                product_id=product.id,
-                qty_in=delta,
-                unit_cost=float(product.harga_beli or 0),
-                source_type='manual_adjustment_in',
-                source_id=product.id,
-            )
-        else:
-            tipe = 'keluar'
-            qty_mov = abs(delta)
-            consume_fifo_stock_out(
-                tenant_id=tenant_id,
-                product=product,
-                qty_needed=qty_mov,
-                actor_user_id=current_user.id,
-                reason='manual_adjustment_out',
-            )
-        db.session.add(StockMovement(
-            product_id=product.id,
-            user_id=current_user.id,
-            tipe=tipe,
-            qty=qty_mov,
-            stok_sebelum=stok_sebelum,
-            stok_sesudah=product.stok,
-            keterangan=keterangan,
-        ))
-        db.session.commit()
-        flash('Koreksi stok tersimpan.', 'success')
-        return redirect(url_for('products.stock_history', id=product.id))
-
-    return render_template('products/stock_adjust.html', product=product)
+    """Dinonaktifkan: koreksi manual diganti alur pembelian + opname."""
+    flash(
+        'Koreksi stok manual dinonaktifkan. Untuk selisih fisik nanti gunakan fitur stok opname. '
+        'Stok bertambah melalui penerimaan pembelian.',
+        'info',
+    )
+    return redirect(url_for('products.index'))
 
 
 @products_bp.route('/history/<int:id>')
@@ -809,6 +876,64 @@ def price_history(id):
     q = ProductAuditLog.query.filter_by(tenant_id=tenant_id, product_id=product.id).order_by(ProductAuditLog.created_at.desc())
     logs = q.paginate(page=page, per_page=30, error_out=False)
     return render_template('products/price_history.html', product=product, logs=logs)
+
+
+@products_bp.route('/etalases')
+@login_required
+def etalases():
+    tenant_id = current_user.tenant_id
+    rows = Etalase.query.filter_by(tenant_id=tenant_id).order_by(Etalase.nama).all()
+    return render_template('products/etalases.html', etalases=rows)
+
+
+@products_bp.route('/etalases/add', methods=['POST'])
+@login_required
+def add_etalase():
+    if not require_admin():
+        return redirect(url_for('products.etalases'))
+    tenant_id = current_user.tenant_id
+    nama = (request.form.get('nama') or '').strip()
+    keterangan = (request.form.get('keterangan') or '').strip() or None
+    if nama:
+        db.session.add(Etalase(tenant_id=tenant_id, nama=nama, keterangan=keterangan))
+        db.session.commit()
+        flash(f'Etalase "{nama}" berhasil ditambahkan.', 'success')
+    else:
+        flash('Nama etalase wajib diisi.', 'warning')
+    return redirect(url_for('products.etalases'))
+
+
+@products_bp.route('/etalases/edit/<int:id>', methods=['POST'])
+@login_required
+def edit_etalase(id):
+    if not require_admin():
+        return redirect(url_for('products.etalases'))
+    tenant_id = current_user.tenant_id
+    row = Etalase.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    nama = (request.form.get('nama') or '').strip()
+    keterangan = (request.form.get('keterangan') or '').strip() or None
+    if not nama:
+        flash('Nama etalase tidak boleh kosong.', 'danger')
+        return redirect(url_for('products.etalases'))
+    row.nama = nama
+    row.keterangan = keterangan
+    db.session.commit()
+    flash('Etalase diperbarui.', 'success')
+    return redirect(url_for('products.etalases'))
+
+
+@products_bp.route('/etalases/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_etalase(id):
+    if not require_admin():
+        return redirect(url_for('products.etalases'))
+    tenant_id = current_user.tenant_id
+    row = Etalase.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    Product.query.filter_by(tenant_id=tenant_id, etalase_id=row.id).update({'etalase_id': None}, synchronize_session=False)
+    db.session.delete(row)
+    db.session.commit()
+    flash('Etalase dihapus. Produk terkait tidak lagi memiliki lokasi etalase.', 'warning')
+    return redirect(url_for('products.etalases'))
 
 
 @products_bp.route('/categories')

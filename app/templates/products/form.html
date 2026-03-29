@@ -23,6 +23,18 @@
           </select>
         </div>
         <div class="form-group">
+          <label class="form-label">Lokasi etalase (rak)</label>
+          <select name="etalase_id" class="form-control">
+            <option value="">— Belum ditentukan —</option>
+            {% for e in etalases %}
+            <option value="{{ e.id }}" {{ 'selected' if product and product.etalase_id == e.id }}>{{ e.nama }}</option>
+            {% endfor %}
+          </select>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+            Membantu kasir menemukan barang di toko. Kelola daftar di <a href="{{ url_for('products.etalases') }}">Lokasi etalase</a>.
+          </div>
+        </div>
+        <div class="form-group">
           <label class="form-label">Supplier default</label>
           <select name="supplier_id" class="form-control">
             <option value="">— Tidak ada —</option>
@@ -33,7 +45,13 @@
         </div>
         <div class="form-group">
           <label class="form-label">Barcode / Kode Produk</label>
-          <input type="text" name="barcode" class="form-control" value="{{ product.barcode if product else '' }}" placeholder="Unik per toko, opsional">
+          <div class="product-barcode-row" style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;">
+            <input type="text" name="barcode" id="productBarcodeInput" class="form-control" value="{{ product.barcode if product else '' }}" placeholder="Unik per toko, opsional" autocomplete="off" style="flex:1;min-width:160px;">
+            <button type="button" class="btn btn-outline" id="btnGenerateBarcode" title="Buat kode angka unik otomatis">Generate barcode</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+            Klik Generate untuk mengisi kode angka 12 digit (unik per toko), cocok untuk dicetak di label etalase dan di-scan di kasir.
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Satuan *</label>
@@ -52,6 +70,13 @@
           <input type="number" name="harga_jual" class="form-control" value="{{ product.harga_jual|int if product else '' }}" min="0" required>
           <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
             Sistem akan memberi peringatan jika harga jual di bawah harga beli (warning only, tetap bisa simpan).
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Harga Normal / Coret (Rp)</label>
+          <input type="number" name="harga_coret" class="form-control" value="{% if product and product.harga_coret %}{{ product.harga_coret }}{% endif %}" min="0" step="0.01" placeholder="Opsional — untuk label etalase (harga dicoret)">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+            Isi jika di label harga ingin menampilkan harga lama yang dicoret (mis. promo). Kosongkan jika tidak dipakai.
           </div>
         </div>
         <div class="form-group">
@@ -119,4 +144,30 @@
     </form>
   </div>
 </div>
+<script>
+(function() {
+  var btn = document.getElementById('btnGenerateBarcode');
+  var input = document.getElementById('productBarcodeInput');
+  if (!btn || !input) return;
+  var url = {{ url_for('products.generate_barcode')|tojson }};
+  {% if product %}
+  url += (url.indexOf('?') >= 0 ? '&' : '?') + 'exclude_id={{ product.id }}';
+  {% endif %}
+  btn.addEventListener('click', function() {
+    btn.disabled = true;
+    fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+      .then(function(x) {
+        if (x.ok && x.d.barcode) {
+          input.value = x.d.barcode;
+          input.focus();
+        } else {
+          alert(x.d.error === 'forbidden' ? 'Akses ditolak.' : 'Gagal membuat kode. Coba lagi.');
+        }
+      })
+      .catch(function() { alert('Gagal membuat kode. Periksa koneksi.'); })
+      .finally(function() { btn.disabled = false; });
+  });
+})();
+</script>
 {% endblock %}

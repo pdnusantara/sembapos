@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Panduan lengkap SembaPOS: dashboard, POS (scan, etalase, grosir, voucher), shift, riwayat transaksi, produk kategori &amp; label etalase, import CSV, pembelian, hutang piutang, biaya operasional, retur, laporan penjualan/stok/produk-kategori/laba kotor/members insight &amp; FIFO health, tier &amp; voucher, cabang &amp; pengguna, marketplace opsional, super admin platform.">
+  <title>Tutorial SembaPOS — Panduan Lengkap Penggunaan</title>
+
+  <link rel="canonical" href="https://sembapos.com/tutorial">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://sembapos.com/tutorial">
+  <meta property="og:title" content="Tutorial SembaPOS — Panduan Lengkap">
+  <meta property="og:description" content="Panduan SembaPOS: POS, shift, riwayat transaksi, produk &amp; etalase, pembelian, hutang piutang, biaya operasional, retur, laporan (termasuk FIFO health), member tier &amp; voucher, cabang, marketplace wilayah, super admin.">
+  <meta property="og:locale" content="id_ID">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: { DEFAULT: '#4f46e5', hover: '#4338ca', light: '#eef2ff', border: '#c7d2fe' },
+            surface: { DEFAULT: '#ffffff', muted: '#f8fafc' },
+            ink: { DEFAULT: '#0f172a', muted: '#64748b', faint: '#94a3b8' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .sidebar-link.active { color: #4f46e5; background: #eef2ff; font-weight: 600; }
+    .sidebar-link.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #4f46e5; border-radius: 0 2px 2px 0; }
+    .step-connector::after { content: ''; position: absolute; left: 50%; top: 40px; bottom: -24px; width: 2px; background: #e2e8f0; transform: translateX(-50%); }
+    .step-connector:last-child::after { display: none; }
+    .tutorial-section { scroll-margin-top: 80px; }
+    .progress-bar { transition: width 0.3s ease; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-up { animation: fadeUp 0.5s ease forwards; }
+  </style>
+</head>
+<body class="bg-surface-muted text-ink min-h-screen">
+
+  <!-- ── SKIP NAV ── -->
+  <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:bg-brand focus:text-white focus:px-4 focus:py-2 focus:rounded-lg">Langsung ke konten</a>
+
+  <!-- ── HEADER ── -->
+  <div id="header-wrap" class="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
+    <header class="max-w-7xl mx-auto px-5 py-4 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2 text-lg font-bold text-ink">
+        <span class="text-2xl">🏪</span>
+        <span>SembaPOS</span>
+      </a>
+      <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-ink-muted">
+        <a href="/#fitur" class="hover:text-brand transition-colors">Fitur</a>
+        <a href="/#cara-kerja" class="hover:text-brand transition-colors">Cara Kerja</a>
+        <a href="/#paket" class="hover:text-brand transition-colors">Paket</a>
+        <a href="/tutorial" class="text-brand font-semibold">Tutorial</a>
+        <a href="/#faq" class="hover:text-brand transition-colors">FAQ</a>
+        <a href="/login" class="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-hover transition-colors">Masuk</a>
+      </nav>
+      <!-- Mobile toggle -->
+      <button id="mob-toggle" class="md:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors" aria-label="Buka menu">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </header>
+    <!-- Mobile menu -->
+    <div id="mob-menu" class="hidden md:hidden border-t border-slate-100 bg-white px-5 py-4 flex flex-col gap-3 text-sm font-medium">
+      <a href="/#fitur" class="text-ink-muted hover:text-brand py-1">Fitur</a>
+      <a href="/#cara-kerja" class="text-ink-muted hover:text-brand py-1">Cara Kerja</a>
+      <a href="/#paket" class="text-ink-muted hover:text-brand py-1">Paket</a>
+      <a href="/tutorial" class="text-brand py-1">Tutorial</a>
+      <a href="/#faq" class="text-ink-muted hover:text-brand py-1">FAQ</a>
+      <a href="/login" class="mt-1 px-4 py-2 bg-brand text-white rounded-lg text-center hover:bg-brand-hover transition-colors">Masuk</a>
+    </div>
+  </div>
+
+  <!-- ── READING PROGRESS BAR ── -->
+  <div class="fixed top-0 left-0 right-0 z-[60] h-0.5 bg-slate-200">
+    <div id="progress-bar" class="progress-bar h-full bg-brand w-0"></div>
+  </div>
+
+  <main id="main-content" class="pt-20">
+
+    <!-- ── HERO TUTORIAL ── -->
+    <section class="bg-gradient-to-br from-brand-light via-white to-indigo-50 py-16 px-5 border-b border-brand-border">
+      <div class="max-w-4xl mx-auto text-center">
+        <span class="chip bg-brand-light text-brand mb-4">📖 Panduan Produk</span>
+        <h1 class="text-3xl md:text-4xl lg:text-5xl font-extrabold text-ink leading-tight mt-3 mb-4">
+          Tutorial Lengkap SembaPOS
+        </h1>
+        <p class="text-lg text-ink-muted max-w-2xl mx-auto mb-8">
+          Pelajari semua fitur SembaPOS — dari kasir harian hingga laporan keuangan — dengan panduan langkah demi langkah yang mudah dipahami.
+        </p>
+        <div class="flex flex-wrap justify-center gap-3">
+          <a href="#mulai" class="px-5 py-2.5 bg-brand text-white rounded-lg font-semibold hover:bg-brand-hover transition-colors shadow-sm">Mulai dari Awal</a>
+          <a href="#pos" class="px-5 py-2.5 bg-white text-ink border border-slate-200 rounded-lg font-semibold hover:border-brand hover:text-brand transition-colors">Langsung ke Kasir →</a>
+        </div>
+        <!-- Quick stats -->
+        <div class="flex flex-wrap justify-center gap-8 mt-10 pt-8 border-t border-brand-border">
+          <div class="text-center"><div class="text-2xl font-bold text-brand">14</div><div class="text-xs text-ink-muted mt-0.5">Topik Utama</div></div>
+          <div class="text-center"><div class="text-2xl font-bold text-brand">80+</div><div class="text-xs text-ink-muted mt-0.5">Langkah &amp; Tips</div></div>
+          <div class="text-center"><div class="text-2xl font-bold text-brand">~35</div><div class="text-xs text-ink-muted mt-0.5">Menit Baca</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TABLE OF CONTENTS CARDS ── -->
+    <section class="max-w-7xl mx-auto px-5 py-10">
+      <h2 class="text-lg font-bold text-ink mb-6 text-center">Pilih topik yang ingin dipelajari</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <a href="#mulai" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">🚀</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Memulai</div><div class="text-xs text-ink-faint">Login &amp; setup</div></div>
+        </a>
+        <a href="#peta-menu" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">🗺️</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Peta menu</div><div class="text-xs text-ink-faint">Sidebar &amp; modul</div></div>
+        </a>
+        <a href="#pos" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">🛒</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">POS &amp; Kasir</div><div class="text-xs text-ink-faint">Shift &amp; jual</div></div>
+        </a>
+        <a href="#transaksi" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">📜</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Riwayat transaksi</div><div class="text-xs text-ink-faint">Cari &amp; struk</div></div>
+        </a>
+        <a href="#produk" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">📦</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Produk &amp; Stok</div><div class="text-xs text-ink-faint">Inventory &amp; label</div></div>
+        </a>
+        <a href="#pembelian" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">🏭</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Pembelian</div><div class="text-xs text-ink-faint">Supplier &amp; PO</div></div>
+        </a>
+        <a href="#keuangan" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">💳</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Keuangan</div><div class="text-xs text-ink-faint">Hutang &amp; biaya</div></div>
+        </a>
+        <a href="#retur" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">↩️</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Retur</div><div class="text-xs text-ink-faint">Retur penjualan</div></div>
+        </a>
+        <a href="#laporan" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">📊</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Laporan</div><div class="text-xs text-ink-faint">Export &amp; FIFO</div></div>
+        </a>
+        <a href="#member" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">👥</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Member &amp; Promo</div><div class="text-xs text-ink-faint">Poin &amp; voucher</div></div>
+        </a>
+        <a href="#cabang" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">🏢</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Cabang &amp; akses</div><div class="text-xs text-ink-faint">Multi toko</div></div>
+        </a>
+        <a href="#marketplace" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">🛍️</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Marketplace B2B</div><div class="text-xs text-ink-faint">Opsional wilayah</div></div>
+        </a>
+        <a href="#superadmin" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">🔑</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Super Admin</div><div class="text-xs text-ink-faint">Operator platform</div></div>
+        </a>
+        <a href="#tips" class="group flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-brand hover:shadow-md transition-all">
+          <span class="text-2xl group-hover:scale-110 transition-transform">💡</span>
+          <div><div class="text-sm font-semibold text-ink group-hover:text-brand">Tips &amp; trik</div><div class="text-xs text-ink-faint">Pintasan</div></div>
+        </a>
+      </div>
+    </section>
+
+    <!-- ── MAIN CONTENT + SIDEBAR ── -->
+    <div class="max-w-7xl mx-auto px-5 pb-20 flex gap-8">
+
+      <!-- Sidebar (desktop) -->
+      <aside class="hidden lg:block w-56 flex-shrink-0">
+        <div class="sticky top-24">
+          <p class="text-xs font-bold text-ink-faint uppercase tracking-widest mb-3">Di halaman ini</p>
+          <nav class="flex flex-col gap-1 max-h-[70vh] overflow-y-auto pr-1" id="sidebar-nav">
+            <a href="#mulai"       class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">🚀 Memulai</a>
+            <a href="#peta-menu"  class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">🗺️ Peta menu</a>
+            <a href="#pos"         class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">🛒 POS &amp; Kasir</a>
+            <a href="#transaksi"   class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">📜 Riwayat transaksi</a>
+            <a href="#produk"      class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">📦 Produk &amp; Stok</a>
+            <a href="#pembelian"   class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">🏭 Pembelian</a>
+            <a href="#keuangan"    class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">💳 Keuangan</a>
+            <a href="#retur"       class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">↩️ Retur</a>
+            <a href="#laporan"     class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">📊 Laporan</a>
+            <a href="#member"      class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">👥 Member &amp; Promo</a>
+            <a href="#cabang"      class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">🏢 Cabang &amp; akses</a>
+            <a href="#marketplace" class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">🛍️ Marketplace B2B</a>
+            <a href="#superadmin"  class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">🔑 Super Admin</a>
+            <a href="#tips"        class="sidebar-link relative text-sm text-ink-muted px-3 py-2 rounded-lg hover:bg-brand-light hover:text-brand transition-all">💡 Tips &amp; trik</a>
+          </nav>
+          <div class="mt-6 p-3 bg-brand-light rounded-xl border border-brand-border">
+            <p class="text-xs font-semibold text-brand mb-2">Butuh bantuan?</p>
+            <!-- TODO: Ganti wa.me ke nomor produksi final; saat ini disamakan dengan app/templates/landing.html -->
+            <a href="https://wa.me/6281234567890?text=Halo%2C%20saya%20butuh%20bantuan%20SembaPOS" target="_blank" rel="noopener noreferrer" class="text-xs text-brand underline hover:no-underline">💬 Chat WhatsApp →</a>
+            <p class="text-[10px] text-ink-faint mt-2 leading-snug">Nomor kontak sama dengan halaman utama; hubungi tim untuk nomor resmi terbaru.</p>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Tutorial content -->
+      <div class="flex-1 min-w-0 space-y-16">
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 1. MEMULAI -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="mulai" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-brand text-white rounded-xl flex items-center justify-center text-lg font-bold shadow-sm">1</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Memulai SembaPOS</h2>
+              <p class="text-sm text-ink-muted">Dari pendaftaran hingga siap bertransaksi</p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+
+            <!-- Step 1.1 -->
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+                <span class="chip bg-brand-light text-brand">Langkah 1</span>
+                <h3 class="font-semibold text-ink">Aktivasi akun toko</h3>
+              </div>
+              <div class="p-5">
+                <p class="text-sm text-ink-muted mb-4">Hubungi tim SembaPOS melalui WhatsApp atau email untuk mendaftar. Akun toko Anda akan diaktifkan dalam 1 hari kerja beserta kredensial login awal.</p>
+                <ol class="space-y-3">
+                  <li class="flex gap-3 text-sm">
+                    <span class="flex-shrink-0 w-6 h-6 bg-brand-light text-brand rounded-full flex items-center justify-center font-bold text-xs">1</span>
+                    <span class="text-ink-muted">Hubungi tim kami via <strong class="text-ink">WhatsApp</strong> atau <strong class="text-ink">email</strong> dengan menyebutkan nama toko dan jumlah cabang.</span>
+                  </li>
+                  <li class="flex gap-3 text-sm">
+                    <span class="flex-shrink-0 w-6 h-6 bg-brand-light text-brand rounded-full flex items-center justify-center font-bold text-xs">2</span>
+                    <span class="text-ink-muted">Tim kami akan menyiapkan akun dan mengirimkan <strong class="text-ink">username &amp; password admin</strong> ke email Anda.</span>
+                  </li>
+                  <li class="flex gap-3 text-sm">
+                    <span class="flex-shrink-0 w-6 h-6 bg-brand-light text-brand rounded-full flex items-center justify-center font-bold text-xs">3</span>
+                    <span class="text-ink-muted">Buka <strong class="text-ink">sembapos.com</strong> di browser dan klik <em>Masuk</em>.</span>
+                  </li>
+                </ol>
+                <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
+                  <span class="text-amber-500 flex-shrink-0">💡</span>
+                  <p class="text-xs text-amber-700">SembaPOS berjalan di browser — tidak perlu instal aplikasi apa pun. Cukup Chrome, Firefox, atau Safari terbaru.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 1.2 -->
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+                <span class="chip bg-brand-light text-brand">Langkah 2</span>
+                <h3 class="font-semibold text-ink">Login dan kenali dashboard</h3>
+              </div>
+              <div class="p-5">
+                <div class="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <p class="text-sm text-ink-muted mb-3">Setelah masuk, Anda akan diarahkan ke <strong class="text-ink">Dashboard</strong>. Di sini Anda bisa melihat ringkasan performa toko hari ini.</p>
+                    <ul class="space-y-2 text-sm">
+                      <li class="flex gap-2"><span class="text-green-500">✓</span> <span class="text-ink-muted">Omzet &amp; transaksi hari ini</span></li>
+                      <li class="flex gap-2"><span class="text-green-500">✓</span> <span class="text-ink-muted">Stok produk yang hampir habis</span></li>
+                      <li class="flex gap-2"><span class="text-green-500">✓</span> <span class="text-ink-muted">Perbandingan vs hari sebelumnya</span></li>
+                      <li class="flex gap-2"><span class="text-green-500">✓</span> <span class="text-ink-muted">Shift kasir yang sedang aktif</span></li>
+                    </ul>
+                    <p class="text-xs text-ink-faint mt-3 leading-relaxed">Di bagian bawah sidebar, <strong class="text-ink">kartu pengguna</strong> menampilkan paket (Basic / Pro / Enterprise) dan masa berlangganan. Tampilan <strong class="text-ink">tema gelap atau terang</strong> bisa mengikuti sistem atau disimpan di browser. Kasir melihat <strong class="text-ink">cabang aktif</strong> di badge atas konten; admin multi-cabang mengatur user per cabang lewat menu Manajemen.</p>
+                  </div>
+                  <!-- Visual mockup dashboard -->
+                  <div class="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col gap-2">
+                    <div class="flex items-center gap-2 mb-1">
+                      <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                      <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                      <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                      <span class="text-xs text-ink-faint ml-1">sembapos.com/dashboard</span>
+                    </div>
+                    <div class="bg-white rounded-lg p-3 border border-slate-200">
+                      <p class="text-xs font-semibold text-ink mb-2">📊 Dashboard Hari Ini</p>
+                      <div class="grid grid-cols-2 gap-2">
+                        <div class="bg-brand-light rounded p-2 text-center"><p class="text-xs text-brand font-bold">Rp 2.4 Jt</p><p class="text-[10px] text-brand/70">Omzet</p></div>
+                        <div class="bg-green-50 rounded p-2 text-center"><p class="text-xs text-green-600 font-bold">47</p><p class="text-[10px] text-green-600/70">Transaksi</p></div>
+                        <div class="bg-amber-50 rounded p-2 text-center"><p class="text-xs text-amber-600 font-bold">3</p><p class="text-[10px] text-amber-600/70">Stok Habis</p></div>
+                        <div class="bg-slate-50 rounded p-2 text-center"><p class="text-xs text-ink font-bold">Aktif</p><p class="text-[10px] text-ink-faint">Shift Kasir</p></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 1.3 -->
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+                <span class="chip bg-brand-light text-brand">Langkah 3</span>
+                <h3 class="font-semibold text-ink">Import produk awal</h3>
+              </div>
+              <div class="p-5">
+                <p class="text-sm text-ink-muted mb-4">Tambahkan produk ke sistem sebelum mulai bertransaksi. Tersedia dua cara:</p>
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <div class="p-4 border border-brand-border bg-brand-light rounded-xl">
+                    <p class="font-semibold text-sm text-brand mb-2">📤 Import via CSV (direkomendasikan)</p>
+                    <ol class="text-xs text-brand/80 space-y-1.5">
+                      <li>1. Unduh template CSV dari menu <em>Produk → Import</em></li>
+                      <li>2. Isi nama, harga, kategori, dan stok di file</li>
+                      <li>3. Upload kembali — produk langsung masuk</li>
+                    </ol>
+                  </div>
+                  <div class="p-4 border border-slate-200 bg-white rounded-xl">
+                    <p class="font-semibold text-sm text-ink mb-2">✏️ Input manual satu per satu</p>
+                    <ol class="text-xs text-ink-muted space-y-1.5">
+                      <li>1. Buka menu <em>Produk → Tambah Produk</em></li>
+                      <li>2. Isi nama, barcode (opsional — ada tombol <strong>Generate barcode</strong>), harga jual &amp; beli, kategori</li>
+                      <li>3. Klik <em>Simpan</em> — produk siap dijual</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 1b. PETA MENU -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="peta-menu" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-slate-700 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">🗺️</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Peta menu (sidebar)</h2>
+              <p class="text-sm text-ink-muted">Setiap modul di navigasi kiri dan fungsinya</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div class="px-5 py-4 border-b border-slate-100">
+              <h3 class="font-semibold text-ink">Menu utama &amp; izin akses</h3>
+              <p class="text-xs text-ink-muted mt-1">Item yang tampil bergantung pada <strong>peran</strong> (kasir / admin) dan <strong>paket</strong> tenant. Kasir biasanya hanya melihat POS, shift, dan modul yang diberi izin.</p>
+            </div>
+            <div class="p-5 overflow-x-auto">
+              <table class="w-full text-sm text-left border-collapse min-w-[520px]">
+                <thead>
+                  <tr class="border-b border-slate-200 text-xs uppercase text-ink-faint">
+                    <th class="py-2 pr-4 font-semibold">Grup / menu</th>
+                    <th class="py-2 font-semibold">Fungsi ringkas</th>
+                  </tr>
+                </thead>
+                <tbody class="text-ink-muted divide-y divide-slate-100">
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Dashboard</td><td class="py-2.5">Ringkasan omzet, transaksi, stok kritis, status shift.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Kasir / POS</td><td class="py-2.5">Penjualan: cari produk, keranjang, diskon, member, pembayaran, struk.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Shift kasir</td><td class="py-2.5">Buka/tutup shift, modal awal, selisih kas, laporan per shift.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Riwayat transaksi</td><td class="py-2.5">Daftar nota, pencarian, buka detail dan cetak ulang struk.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Biaya operasional</td><td class="py-2.5">Mencatat pengeluaran rutin toko (bukan dari menu Laporan).</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Produk, Kategori, Lokasi etalase, Etalase harga</td><td class="py-2.5">Master produk, klasifikasi, rak fisik, cetak label harga.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Supplier &amp; Pembelian (PO)</td><td class="py-2.5">Data supplier, purchase order, terima barang → stok &amp; FIFO.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Member, Tier loyalty, Voucher</td><td class="py-2.5">Data pelanggan, level diskon/poin, kode promo.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Hutang piutang</td><td class="py-2.5">Piutang pelanggan &amp; hutang ke supplier, pelunasan.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Laporan (submenu)</td><td class="py-2.5">Penjualan, pembelian, stok, produk &amp; kategori, laba kotor harian, members insight, FIFO health.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Retur penjualan</td><td class="py-2.5">Nota retur, pengembalian barang ke stok sesuai aturan bisnis.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Marketplace B2B</td><td class="py-2.5">Belanja, keranjang, pesanan — <em>hanya jika diaktifkan untuk wilayah/akun Anda</em>.</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Pengguna &amp; Cabang</td><td class="py-2.5">Admin cabang: kelola user dan cabang (multi toko).</td></tr>
+                  <tr><td class="py-2.5 pr-4 font-medium text-ink">Super Admin</td><td class="py-2.5">Hanya akun operator platform: tenant, paket, log audit, moderasi marketplace — tampil menggantikan menu Manajemen cabang.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 2. POS & KASIR -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="pos" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">🛒</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">POS &amp; Kasir</h2>
+              <p class="text-sm text-ink-muted">Proses transaksi dengan cepat dan akurat</p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+                <span class="chip bg-emerald-50 text-emerald-600">Langkah 1</span>
+                <h3 class="font-semibold text-ink">Buka shift kasir</h3>
+              </div>
+              <div class="p-5">
+                <p class="text-sm text-ink-muted mb-4">Shift kasir wajib dibuka sebelum memproses transaksi. Data penjualan akan terekam per shift sehingga mudah diaudit.</p>
+                <div class="flex flex-col sm:flex-row gap-3">
+                  <div class="flex-1 space-y-2">
+                    <div class="flex gap-3 text-sm items-start">
+                      <span class="flex-shrink-0 w-6 h-6 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center font-bold text-xs">1</span>
+                      <span class="text-ink-muted">Buka menu <strong class="text-ink">Shift &amp; Kasir</strong> dari sidebar.</span>
+                    </div>
+                    <div class="flex gap-3 text-sm items-start">
+                      <span class="flex-shrink-0 w-6 h-6 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center font-bold text-xs">2</span>
+                      <span class="text-ink-muted">Klik <strong class="text-ink">Buka Shift Baru</strong> dan masukkan modal awal kas.</span>
+                    </div>
+                    <div class="flex gap-3 text-sm items-start">
+                      <span class="flex-shrink-0 w-6 h-6 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center font-bold text-xs">3</span>
+                      <span class="text-ink-muted">Sistem mencatat waktu mulai, kasir yang bertugas, dan modal awal secara otomatis.</span>
+                    </div>
+                  </div>
+                  <div class="bg-slate-50 rounded-xl p-4 text-xs text-ink-muted border border-slate-200 sm:w-48 flex-shrink-0">
+                    <p class="font-semibold text-ink mb-2">📋 Info Shift</p>
+                    <p>• Nama kasir</p>
+                    <p>• Waktu mulai</p>
+                    <p>• Modal awal kas</p>
+                    <p>• Cabang aktif</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+                <span class="chip bg-emerald-50 text-emerald-600">Langkah 2</span>
+                <h3 class="font-semibold text-ink">Proses transaksi penjualan</h3>
+              </div>
+              <div class="p-5">
+                <div class="grid sm:grid-cols-3 gap-3 mb-4">
+                  <div class="bg-white border border-slate-200 rounded-xl p-4 text-center hover:border-emerald-300 hover:shadow-sm transition-all">
+                    <div class="text-2xl mb-2">🔍</div>
+                    <p class="text-sm font-semibold text-ink">Cari Produk</p>
+                    <p class="text-xs text-ink-muted mt-1">Ketik nama, SKU, atau scan barcode</p>
+                  </div>
+                  <div class="bg-white border border-slate-200 rounded-xl p-4 text-center hover:border-emerald-300 hover:shadow-sm transition-all">
+                    <div class="text-2xl mb-2">🛒</div>
+                    <p class="text-sm font-semibold text-ink">Tambah ke Keranjang</p>
+                    <p class="text-xs text-ink-muted mt-1">Klik produk atau scan barcode langsung masuk</p>
+                  </div>
+                  <div class="bg-white border border-slate-200 rounded-xl p-4 text-center hover:border-emerald-300 hover:shadow-sm transition-all">
+                    <div class="text-2xl mb-2">💳</div>
+                    <p class="text-sm font-semibold text-ink">Proses Pembayaran</p>
+                    <p class="text-xs text-ink-muted mt-1">Tunai, QRIS, transfer, atau kredit</p>
+                  </div>
+                </div>
+                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex gap-2 mb-4">
+                  <span class="text-emerald-500 flex-shrink-0">✅</span>
+                  <p class="text-xs text-emerald-700">Setelah transaksi selesai, tombol <strong class="text-emerald-800">Cetak struk</strong> membuka tampilan struk di tab baru (bisa dicetak atau dibagikan). Untuk kredit, wajib pilih member terlebih dahulu.</p>
+                </div>
+                <h4 class="text-sm font-semibold text-ink mb-2">Sesuai layar Kasir / POS</h4>
+                <ul class="space-y-2 text-sm text-ink-muted">
+                  <li class="flex gap-2"><span class="text-emerald-500 flex-shrink-0">•</span><span><strong class="text-ink">Cari / scan</strong> — kolom atas: ketik nama atau barcode; <strong>Enter</strong> menambahkan item pertama dari hasil pencarian. Scanner USB/Bluetooth biasanya meniru ketikan + Enter.</span></li>
+                  <li class="flex gap-2"><span class="text-emerald-500 flex-shrink-0">•</span><span><strong class="text-ink">Filter kategori</strong> dan <strong class="text-ink">lokasi etalase</strong> — chip horizontal membatasi grid produk (membantu kasir di lapangan).</span></li>
+                  <li class="flex gap-2"><span class="text-emerald-500 flex-shrink-0">•</span><span><strong class="text-ink">Harga grosir</strong> — kartu produk bisa menampilkan tier G1/G2 bila diisi di master produk; qty di keranjang menentukan harga yang dipakai.</span></li>
+                  <li class="flex gap-2"><span class="text-emerald-500 flex-shrink-0">•</span><span><strong class="text-ink">Keranjang</strong> — <em>Tahan / Ambil</em> untuk antrian belanja; <em>Kosongkan</em> mengosongkan keranjang. Per baris bisa ubah qty; admin dengan izin override bisa set mode harga <em>manual</em> per item.</span></li>
+                  <li class="flex gap-2"><span class="text-emerald-500 flex-shrink-0">•</span><span><strong class="text-ink">Diskon</strong> — diskon manual (rupiah); di modal bayar: pilih member untuk diskon tier, isi <strong>kode voucher</strong> (validasi otomatis). Sistem memilih promo member/tier vs voucher mana yang lebih menguntungkan.</span></li>
+                  <li class="flex gap-2"><span class="text-emerald-500 flex-shrink-0">•</span><span><strong class="text-ink">Bayar</strong> — tunai, transfer, QRIS, kredit; nominal bisa <strong>dibagi</strong> ke beberapa metode. Tombol nominal cepat membantu uang pas.</span></li>
+                  <li class="flex gap-2"><span class="text-emerald-500 flex-shrink-0">•</span><span><strong class="text-ink">Transaksi hari ini</strong> — di bawah grid: daftar nota hari ini; gunakan <strong>Retur/Tukar</strong> untuk mulai retur dari transaksi tersebut.</span></li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+                <span class="chip bg-emerald-50 text-emerald-600">Langkah 3</span>
+                <h3 class="font-semibold text-ink">Tutup shift &amp; laporan kas</h3>
+              </div>
+              <div class="p-5">
+                <p class="text-sm text-ink-muted mb-3">Di akhir hari, tutup shift untuk mengunci data transaksi dan menghasilkan laporan ringkasan per shift.</p>
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <ul class="space-y-2 text-sm">
+                    <li class="flex gap-2"><span class="text-emerald-500">→</span><span class="text-ink-muted">Buka menu <strong>Shift</strong> → klik <strong>Tutup Shift</strong></span></li>
+                    <li class="flex gap-2"><span class="text-emerald-500">→</span><span class="text-ink-muted">Masukkan jumlah fisik uang di laci kas</span></li>
+                    <li class="flex gap-2"><span class="text-emerald-500">→</span><span class="text-ink-muted">Sistem menghitung selisih kas secara otomatis</span></li>
+                    <li class="flex gap-2"><span class="text-emerald-500">→</span><span class="text-ink-muted">Laporan shift tersimpan &amp; bisa diekspor</span></li>
+                  </ul>
+                  <div class="bg-slate-50 rounded-xl p-3 text-xs border border-slate-200">
+                    <p class="font-semibold text-ink mb-1.5">📄 Ringkasan Shift meliputi:</p>
+                    <p class="text-ink-muted">• Total penjualan &amp; jumlah transaksi</p>
+                    <p class="text-ink-muted">• Breakdown per metode bayar</p>
+                    <p class="text-ink-muted">• Selisih kas (over/short)</p>
+                    <p class="text-ink-muted">• Retur &amp; diskon yang diberikan</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 2b. RIWAYAT TRANSAKSI -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="transaksi" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-slate-600 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">📜</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Riwayat transaksi</h2>
+              <p class="text-sm text-ink-muted">Cari nota, buka detail, cetak ulang struk</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div class="p-5 space-y-3 text-sm text-ink-muted">
+              <p>Buka <strong class="text-ink">Riwayat Transaksi</strong> di sidebar — menu ini hanya tampil jika peran Anda diberi akses modul transaksi. Di sini terdaftar penjualan yang sudah selesai dengan nomor nota, waktu, total, dan cabang.</p>
+              <ul class="space-y-2 list-disc list-inside">
+                <li>Gunakan pencarian atau filter tanggal untuk menemukan nota pelanggan.</li>
+                <li>Buka detail transaksi untuk melihat item, diskon, dan metode pembayaran.</li>
+                <li>Untuk struk: buka tautan cetak struk dari detail atau dari daftar (setara dengan halaman struk di POS setelah bayar).</li>
+              </ul>
+              <p class="text-xs text-ink-faint">Retur penjualan memiliki alur tersendiri di menu <strong class="text-ink">Retur penjualan</strong>; dari POS Anda juga bisa memulai retur dari transaksi hari ini.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 3. PRODUK & STOK -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="produk" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-amber-500 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">📦</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Produk &amp; Manajemen Stok</h2>
+              <p class="text-sm text-ink-muted">Kelola inventaris dengan metode FIFO</p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100">
+                <h3 class="font-semibold text-ink">Mengelola data produk</h3>
+              </div>
+              <div class="p-5">
+                <div class="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <p class="text-sm font-medium text-ink mb-3">Data yang bisa dikelola per produk:</p>
+                    <div class="space-y-2">
+                      <div class="flex items-center gap-2 text-sm p-2 bg-slate-50 rounded-lg">
+                        <span class="w-1.5 h-1.5 bg-brand rounded-full flex-shrink-0"></span>
+                        <span class="text-ink-muted"><strong class="text-ink">Nama &amp; SKU/Barcode</strong> — identifikasi unik</span>
+                      </div>
+                      <div class="flex items-center gap-2 text-sm p-2 bg-slate-50 rounded-lg">
+                        <span class="w-1.5 h-1.5 bg-brand rounded-full flex-shrink-0"></span>
+                        <span class="text-ink-muted"><strong class="text-ink">Harga jual &amp; HPP</strong> — dasar perhitungan laba</span>
+                      </div>
+                      <div class="flex items-center gap-2 text-sm p-2 bg-slate-50 rounded-lg">
+                        <span class="w-1.5 h-1.5 bg-brand rounded-full flex-shrink-0"></span>
+                        <span class="text-ink-muted"><strong class="text-ink">Kategori &amp; satuan</strong> — pcs, kg, liter, dll</span>
+                      </div>
+                      <div class="flex items-center gap-2 text-sm p-2 bg-slate-50 rounded-lg">
+                        <span class="w-1.5 h-1.5 bg-brand rounded-full flex-shrink-0"></span>
+                        <span class="text-ink-muted"><strong class="text-ink">Stok minimum</strong> — alert ketika hampir habis</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-ink mb-3">Fitur stok otomatis:</p>
+                    <div class="space-y-2 text-sm">
+                      <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p class="font-semibold text-amber-700 text-xs">📉 FIFO Costing</p>
+                        <p class="text-amber-600 text-xs mt-1">HPP dihitung otomatis dengan metode First-In First-Out. Stok paling lama terjual lebih dulu.</p>
+                      </div>
+                      <div class="p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p class="font-semibold text-red-700 text-xs">🔔 Alert Stok Minimum</p>
+                        <p class="text-red-600 text-xs mt-1">Notifikasi muncul di dashboard ketika stok di bawah ambang yang Anda tentukan.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100">
+                <h3 class="font-semibold text-ink">Alur stok</h3>
+              </div>
+              <div class="p-5">
+                <p class="text-sm text-ink-muted mb-3">Stok <strong>bertambah</strong> melalui penerimaan <strong>pembelian</strong> (bukan input manual per produk). Riwayat pergerakan stok tetap bisa dilihat di menu produk.</p>
+                <div class="flex gap-3 flex-wrap">
+                  <span class="chip bg-slate-100 text-ink">📦 Pembelian → stok masuk</span>
+                  <span class="chip bg-slate-100 text-ink">📜 Riwayat stok per produk</span>
+                </div>
+                <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                  Stok opname / penyesuaian fisik akan ditambahkan sebagai fitur tersendiri; penyesuaian manual dari halaman produk tidak digunakan.
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100">
+                <h3 class="font-semibold text-ink">Submenu inventory (satu grup di sidebar)</h3>
+                <p class="text-xs text-ink-muted mt-1">Selain daftar <strong class="text-ink">Produk</strong>, master data mendukung kategori, rak, label, dan impor massal.</p>
+              </div>
+              <div class="p-5 space-y-4">
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <div class="p-4 border border-slate-200 rounded-xl">
+                    <p class="text-sm font-semibold text-ink mb-1">🏷️ Kategori</p>
+                    <p class="text-xs text-ink-muted">Klasifikasi untuk laporan dan filter POS. Produk mengacu ke satu kategori agar analitik <em>Produk &amp; Kategori</em> akurat.</p>
+                  </div>
+                  <div class="p-4 border border-slate-200 rounded-xl">
+                    <p class="text-sm font-semibold text-ink mb-1">🗂️ Lokasi etalase</p>
+                    <p class="text-xs text-ink-muted">Nama rak atau zona toko. Setiap produk bisa ditautkan ke lokasi — tampil sebagai badge di kartu POS dan bisa difilter.</p>
+                  </div>
+                  <div class="p-4 border border-slate-200 rounded-xl">
+                    <p class="text-sm font-semibold text-ink mb-1">🪧 Etalase harga</p>
+                    <p class="text-xs text-ink-muted">Cetak label harga untuk rak (harga jual, opsional <strong>harga coret</strong> untuk promo tampilan etalase).</p>
+                  </div>
+                  <div class="p-4 border border-slate-200 rounded-xl">
+                    <p class="text-sm font-semibold text-ink mb-1">📤 Import &amp; export CSV</p>
+                    <p class="text-xs text-ink-muted">Unduh template, isi massal, unggah lagi; export daftar produk untuk cadangan atau edit di spreadsheet.</p>
+                  </div>
+                </div>
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-ink-muted">
+                  <p class="font-semibold text-ink mb-2 text-sm">Form produk (tambah/ubah)</p>
+                  <ul class="space-y-1.5 text-xs">
+                    <li><strong class="text-ink">Barcode</strong> — isi manual atau gunakan <strong>Generate barcode</strong> bila perlu kode otomatis.</li>
+                    <li><strong class="text-ink">Grosir</strong> — hingga dua tier (minimal qty + harga) selain harga ecer.</li>
+                    <li><strong class="text-ink">Harga coret</strong> — untuk tampilan promo di label etalase (bukan wajib).</li>
+                    <li><strong class="text-ink">Audit harga &amp; riwayat stok</strong> — lacak perubahan harga dan mutasi stok per SKU (sesuai menu di aplikasi).</li>
+                    <li>Produk bisa <strong class="text-ink">dinonaktifkan</strong> atau diduplikasi untuk varian mirip — kurangi pengetikan ulang.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 4. PEMBELIAN -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="pembelian" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-violet-500 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">🏭</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Pembelian &amp; Supplier</h2>
+              <p class="text-sm text-ink-muted">Kelola purchase order dan penerimaan barang</p>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div class="p-5">
+              <div class="grid sm:grid-cols-3 gap-4 mb-5">
+                <div class="text-center p-4 bg-violet-50 rounded-xl border border-violet-100">
+                  <div class="text-3xl mb-2">🏭</div>
+                  <p class="text-sm font-semibold text-ink">1. Data Supplier</p>
+                  <p class="text-xs text-ink-muted mt-1">Daftarkan nama, kontak, dan termin pembayaran supplier Anda</p>
+                </div>
+                <div class="text-center p-4 bg-violet-50 rounded-xl border border-violet-100">
+                  <div class="text-3xl mb-2">📋</div>
+                  <p class="text-sm font-semibold text-ink">2. Buat Purchase Order</p>
+                  <p class="text-xs text-ink-muted mt-1">Pilih supplier, tambahkan produk &amp; kuantitas, kirim PO</p>
+                </div>
+                <div class="text-center p-4 bg-violet-50 rounded-xl border border-violet-100">
+                  <div class="text-3xl mb-2">✅</div>
+                  <p class="text-sm font-semibold text-ink">3. Terima Barang</p>
+                  <p class="text-xs text-ink-muted mt-1">Konfirmasi penerimaan — stok &amp; HPP (FIFO) diperbarui otomatis</p>
+                </div>
+              </div>
+              <div class="p-3 bg-violet-50 border border-violet-200 rounded-lg text-xs text-violet-700">
+                💡 <strong>Hutang ke supplier</strong> otomatis tercatat saat PO dikonfirmasi. Pelunasan dan status PO (mis. menunggu terima barang) ditindaklanjuti lewat alur pembelian dan menu <strong class="text-violet-800">Hutang piutang</strong>.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 4b. KEUANGAN: HUTANG & BIAYA -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="keuangan" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-rose-500 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">💳</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Keuangan: hutang piutang &amp; biaya</h2>
+              <p class="text-sm text-ink-muted">Piutang pelanggan, hutang supplier, dan pengeluaran operasional</p>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100">
+                <h3 id="keuangan-hutang" class="font-semibold text-ink">Hutang piutang</h3>
+              </div>
+              <div class="p-5 text-sm text-ink-muted space-y-2">
+                <p>Menu <strong class="text-ink">Hutang Piutang</strong> memusatkan tagihan: piutang dari penjualan kredit ke pelanggan/member, dan hutang ke supplier dari pembelian.</p>
+                <ul class="list-disc list-inside space-y-1 text-xs">
+                  <li>Saring per jenis (pelanggan vs supplier), periode, atau status.</li>
+                  <li>Catat pembayaran / pelunasan sehingga saldo terbarui.</li>
+                  <li>Hubungkan dengan kebiasaan toko: kredit di POS wajib memilih member agar piutang terlacak.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100">
+                <h3 id="keuangan-biaya" class="font-semibold text-ink">Biaya operasional</h3>
+              </div>
+              <div class="p-5 text-sm text-ink-muted space-y-2">
+                <p><strong class="text-ink">Biaya operasional</strong> berada di sidebar utama (bukan di submenu Laporan). Gunakan untuk mencatat pengeluaran rutin: listrik, sewa, gaji kasir, konsumsi, transport, dll.</p>
+                <p class="text-xs text-ink-faint">Laporan <strong class="text-ink">Laba kotor harian</strong> mempertimbangkan data penjualan, retur, HPP, dan biaya operasional per hari — ini yang paling mendekati gambaran &quot;kas keluar masuk operasional&quot; di sisi laporan; tidak ada kartu terpisah bernama &quot;arus kas&quot; di menu.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 4c. RETUR PENJUALAN -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="retur" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-indigo-500 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">↩️</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Retur penjualan</h2>
+              <p class="text-sm text-ink-muted">Mengembalikan barang dari nota penjualan</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm p-5 text-sm text-ink-muted space-y-3">
+            <p>Buka <strong class="text-ink">Retur penjualan</strong> (sidebar grup Laporan) atau mulai dari <strong class="text-ink">transaksi hari ini</strong> di POS dengan tombol retur/tukar. Pilih nota asli, item yang dikembalikan, dan alasan.</p>
+            <p class="text-xs">Secara konsep, retur mengurangi penjualan bersih dan dapat mengembalikan kuantitas ke stok; lapisan biaya FIFO ikut diperbarui sesuai logika sistem agar HPP tetap konsisten. Detail teknis tampil di laporan stok dan <strong class="text-ink">FIFO health</strong> bila ada ketidaksesuaian.</p>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 5. LAPORAN -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="laporan" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-sky-500 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">📊</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Laporan Bisnis</h2>
+              <p class="text-sm text-ink-muted">Analitik real-time untuk keputusan yang tepat</p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100">
+                <h3 class="font-semibold text-ink">Submenu Laporan (sesuai sidebar)</h3>
+                <p class="text-xs text-ink-muted mt-1">Nama di bawah mengikuti menu aplikasi. Izin akses mengikuti peran pengguna.</p>
+              </div>
+              <div class="p-5">
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div class="p-3 border border-sky-100 bg-sky-50 rounded-xl">
+                    <p class="text-sm font-semibold text-sky-700">📋 Laporan Penjualan</p>
+                    <p class="text-xs text-sky-600 mt-1">Ringkasan penjualan per periode; filter cabang/kasir sesuai halaman. URL: <code class="text-[10px] bg-white/80 px-1 rounded">/reports/</code></p>
+                  </div>
+                  <div class="p-3 border border-sky-100 bg-sky-50 rounded-xl">
+                    <p class="text-sm font-semibold text-sky-700">📥 Laporan Pembelian</p>
+                    <p class="text-xs text-sky-600 mt-1">PO dan penerimaan barang dari supplier; mendukung export CSV.</p>
+                  </div>
+                  <div class="p-3 border border-sky-100 bg-sky-50 rounded-xl">
+                    <p class="text-sm font-semibold text-sky-700">📦 Laporan Stok</p>
+                    <p class="text-xs text-sky-600 mt-1">Posisi stok, nilai, produk kritis. Di halaman ini ada ringkasan kesehatan FIFO dan tautan ke <strong>FIFO health</strong>.</p>
+                  </div>
+                  <div class="p-3 border border-sky-100 bg-sky-50 rounded-xl">
+                    <p class="text-sm font-semibold text-sky-700">📈 Produk &amp; Kategori</p>
+                    <p class="text-xs text-sky-600 mt-1">Breakdown penjualan per produk dan per kategori (bukan kartu terpisah &quot;produk terlaris&quot; — ranking ada di dalam laporan ini).</p>
+                  </div>
+                  <div class="p-3 border border-sky-100 bg-sky-50 rounded-xl">
+                    <p class="text-sm font-semibold text-sky-700">🧮 Laba kotor harian</p>
+                    <p class="text-xs text-sky-600 mt-1">Harian: penjualan bersih, HPP, retur, biaya operasional — gambaran margin operasional.</p>
+                  </div>
+                  <div class="p-3 border border-sky-100 bg-sky-50 rounded-xl">
+                    <p class="text-sm font-semibold text-sky-700">👥 Members insight</p>
+                    <p class="text-xs text-sky-600 mt-1">Perilaku member: frekuensi, nilai, dan kontribusi ke omzet.</p>
+                  </div>
+                  <div class="p-3 border border-violet-100 bg-violet-50 rounded-xl sm:col-span-2 lg:col-span-3">
+                    <p class="text-sm font-semibold text-violet-800">🩺 FIFO health <span class="font-normal text-violet-600">(admin)</span></p>
+                    <p class="text-xs text-violet-700 mt-1">Halaman khusus <code class="text-[10px] bg-white/70 px-1 rounded">/reports/fifo-health</code> mendeteksi ketidakcocokan antara stok dan lapisan biaya FIFO, layer yang hilang, atau event fallback. Juga dijangkau dari ringkasan di <strong>Laporan Stok</strong>. Admin dapat menjalankan tindakan rekonsiliasi per produk bila tersedia.</p>
+                  </div>
+                </div>
+                <p class="text-xs text-ink-faint mt-4">Pengeluaran non-pembelian harian: gunakan menu <strong class="text-ink">Biaya operasional</strong> (<code class="bg-slate-100 px-1 rounded">/operating-expenses</code>), bukan submenu laporan.</p>
+                <p class="text-xs text-ink-faint mt-2">Ringkasan kas per shift: lewat modul <strong class="text-ink">Shift kasir</strong>, bukan sebagai item terpisah di submenu Laporan.</p>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100">
+                <h3 class="font-semibold text-ink">Export laporan</h3>
+              </div>
+              <div class="p-5 flex flex-col sm:flex-row gap-4 items-start">
+                <div class="flex-1 text-sm text-ink-muted">
+                  Banyak laporan mendukung <strong class="text-ink">Export CSV</strong> (penjualan, pembelian, stok, laba kotor harian, dll.) — atur rentang tanggal dan filter, lalu unduh untuk Excel atau Google Sheets. Tombol export tersedia di masing-masing halaman laporan.
+                </div>
+                <div class="flex gap-2 flex-shrink-0">
+                  <span class="chip bg-green-50 text-green-600">📄 CSV</span>
+                  <span class="chip bg-slate-100 text-ink-muted">🖨️ Print</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 6. MEMBER & PROMO -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="member" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-pink-500 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">👥</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Member &amp; Program Loyalitas</h2>
+              <p class="text-sm text-ink-muted">Bangun hubungan jangka panjang dengan pelanggan</p>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div class="p-5 space-y-4">
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <h4 class="text-sm font-semibold text-ink mb-3">Cara mendaftarkan member:</h4>
+                  <ol class="space-y-2">
+                    <li class="flex gap-3 text-sm">
+                      <span class="flex-shrink-0 w-6 h-6 bg-pink-50 text-pink-600 rounded-full flex items-center justify-center font-bold text-xs">1</span>
+                      <span class="text-ink-muted">Buka menu <strong class="text-ink">Member</strong> (grup Pelanggan) → klik <strong class="text-ink">Tambah Member</strong></span>
+                    </li>
+                    <li class="flex gap-3 text-sm">
+                      <span class="flex-shrink-0 w-6 h-6 bg-pink-50 text-pink-600 rounded-full flex items-center justify-center font-bold text-xs">2</span>
+                      <span class="text-ink-muted">Isi nama, nomor HP, dan data lain yang dipakai toko. Tier aktif mengikuti pengaturan di <strong class="text-ink">Tier loyalty</strong>.</span>
+                    </li>
+                    <li class="flex gap-3 text-sm">
+                      <span class="flex-shrink-0 w-6 h-6 bg-pink-50 text-pink-600 rounded-full flex items-center justify-center font-bold text-xs">3</span>
+                      <span class="text-ink-muted">Di POS, pilih member di modal bayar — diskon persen tier diterapkan; kredit wajib dengan member terpilih.</span>
+                    </li>
+                  </ol>
+                  <p class="text-xs text-ink-faint mt-3">Admin tenant: submenu <strong class="text-ink">Tier loyalty</strong> dan <strong class="text-ink">Voucher promo</strong> ada di grup Pelanggan untuk mengatur level diskon/poin dan kode promo yang bisa divalidasi di kasir.</p>
+                </div>
+                <div class="space-y-2">
+                  <h4 class="text-sm font-semibold text-ink mb-3">Fitur yang tersedia:</h4>
+                  <div class="p-3 bg-pink-50 rounded-lg border border-pink-100 text-xs text-pink-700">
+                    <strong>🎯 Tier &amp; poin</strong><br>Diskon persen per tier dihitung di POS; poin/loyalty mengikuti kebijakan yang Anda aktifkan di master member dan tier.
+                  </div>
+                  <div class="p-3 bg-pink-50 rounded-lg border border-pink-100 text-xs text-pink-700">
+                    <strong>🎟️ Voucher promo</strong><br>Buat kode diskon di menu Voucher; kasir memasukkan kode di POS — sistem membandingkan dengan diskon member/tier.
+                  </div>
+                  <div class="p-3 bg-pink-50 rounded-lg border border-pink-100 text-xs text-pink-700">
+                    <strong>📊 Members insight</strong><br>Laporan agregat perilaku member ada di submenu Laporan (bukan hanya halaman daftar member).
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 7. MULTI CABANG -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="cabang" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-orange-500 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">🏢</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Manajemen Multi Cabang</h2>
+              <p class="text-sm text-ink-muted">Satu sistem untuk semua cabang Anda</p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="p-5">
+                <p class="text-sm text-ink-muted mb-4">Admin pemilik tenant membuka grup <strong class="text-ink">Manajemen</strong> di sidebar: <strong class="text-ink">Pengguna</strong> untuk akun kasir/admin, <strong class="text-ink">Cabang</strong> untuk lokasi toko.</p>
+                <div class="grid sm:grid-cols-3 gap-3 mb-4">
+                  <div class="p-4 bg-orange-50 rounded-xl border border-orange-100 text-center">
+                    <div class="text-2xl mb-2">🏗️</div>
+                    <p class="text-sm font-semibold text-ink">Cabang</p>
+                    <p class="text-xs text-ink-muted mt-1">Manajemen → Cabang → tambah atau ubah cabang; batas jumlah mengikuti paket di kartu pengguna.</p>
+                  </div>
+                  <div class="p-4 bg-orange-50 rounded-xl border border-orange-100 text-center">
+                    <div class="text-2xl mb-2">👥</div>
+                    <p class="text-sm font-semibold text-ink">Pengguna</p>
+                    <p class="text-xs text-ink-muted mt-1">Manajemen → Pengguna: undang kasir/admin, tetapkan cabang &amp; izin modul (POS, laporan, produk, dll.).</p>
+                  </div>
+                  <div class="p-4 bg-orange-50 rounded-xl border border-orange-100 text-center">
+                    <div class="text-2xl mb-2">📊</div>
+                    <p class="text-sm font-semibold text-ink">Laporan per cabang</p>
+                    <p class="text-xs text-ink-muted mt-1">Di tiap laporan, pilih cabang bila multi-cabang — data tetap terisolasi antar cabang untuk kasir.</p>
+                  </div>
+                </div>
+                <div class="p-3 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
+                  🔐 <strong>Isolasi data</strong> — kasir biasanya hanya melihat cabangnya. Admin tenant mengatur siapa boleh akses laporan, inventory, atau hanya POS.
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100">
+                <h3 class="font-semibold text-ink">Manajemen hak akses pengguna</h3>
+              </div>
+              <div class="p-5">
+                <div class="grid sm:grid-cols-3 gap-3">
+                  <div class="p-3 border border-slate-200 rounded-xl text-center">
+                    <div class="text-xl mb-1">🛡️</div>
+                    <p class="text-xs font-bold text-ink">Admin (pemilik tenant)</p>
+                    <p class="text-xs text-ink-muted mt-1">Kelola semua cabang milik tenant, pengguna, produk, dan laporan sesuai paket.</p>
+                  </div>
+                  <div class="p-3 border border-slate-200 rounded-xl text-center">
+                    <div class="text-xl mb-1">🛠️</div>
+                    <p class="text-xs font-bold text-ink">Admin terbatas</p>
+                    <p class="text-xs text-ink-muted mt-1">Bisa diatur per modul: misalnya stok tanpa akses biaya operasional.</p>
+                  </div>
+                  <div class="p-3 border border-slate-200 rounded-xl text-center">
+                    <div class="text-xl mb-1">💼</div>
+                    <p class="text-xs font-bold text-ink">Kasir</p>
+                    <p class="text-xs text-ink-muted mt-1">Biasanya POS, shift, dan riwayat sesuai izin — tanpa manajemen cabang.</p>
+                  </div>
+                </div>
+                <p class="text-xs text-ink-faint mt-3">Akun <strong class="text-ink">Super Admin</strong> platform (operator SembaPOS) berbeda: mengelola banyak tenant — lihat bagian <a href="#superadmin" class="text-brand underline hover:no-underline">Super Admin</a> di tutorial ini.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 8. MARKETPLACE B2B -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="marketplace" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-teal-500 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">🛍️</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Marketplace B2B</h2>
+              <p class="text-sm text-ink-muted">Beli produk dari supplier langsung di dalam sistem</p>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div class="p-5">
+              <div class="p-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                <strong>Ketersediaan:</strong> grup menu <strong>Marketplace</strong> hanya ditampilkan untuk tenant tertentu (saat ini mengacu pada pengaturan wilayah/kabupaten di data tenant, mis. katalog untuk wilayah yang diaktifkan). Jika sidebar Anda tidak memiliki grup ini, fitur belum diaktifkan untuk akun Anda — alur pembelian tetap melalui <strong>Supplier &amp; Pembelian (PO)</strong>.
+              </div>
+              <p class="text-sm text-ink-muted mb-4">Marketplace B2B memungkinkan Anda memesan produk dari supplier atau distributor yang terdaftar, langsung dari dalam SembaPOS — tanpa harus pindah aplikasi.</p>
+              <div class="space-y-3">
+                <div class="flex gap-4 items-start">
+                  <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center font-bold text-sm">1</div>
+                  <div>
+                    <p class="text-sm font-semibold text-ink">Belanja</p>
+                    <p class="text-xs text-ink-muted mt-0.5">Menu <strong>Belanja</strong> — katalog supplier dan produk; harga grosir sesuai penjual.</p>
+                  </div>
+                </div>
+                <div class="flex gap-4 items-start">
+                  <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center font-bold text-sm">2</div>
+                  <div>
+                    <p class="text-sm font-semibold text-ink">Keranjang</p>
+                    <p class="text-xs text-ink-muted mt-0.5">Menu <strong>Keranjang</strong> — kumpulkan kuantitas lalu lanjut checkout sesuai alur marketplace.</p>
+                  </div>
+                </div>
+                <div class="flex gap-4 items-start">
+                  <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center font-bold text-sm">3</div>
+                  <div>
+                    <p class="text-sm font-semibold text-ink">Pesanan saya</p>
+                    <p class="text-xs text-ink-muted mt-0.5">Menu <strong>Pesanan Saya</strong> — pantau status hingga barang diterima.</p>
+                  </div>
+                </div>
+                <div class="flex gap-4 items-start">
+                  <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center font-bold text-sm">4</div>
+                  <div>
+                    <p class="text-sm font-semibold text-ink">Terima barang → stok otomatis</p>
+                    <p class="text-xs text-ink-muted mt-0.5">Saat pesanan dikonfirmasi diterima, stok produk di toko Anda diperbarui secara otomatis.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 8b. SUPER ADMIN PLATFORM -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="superadmin" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-slate-800 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">🔑</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Super Admin (operator platform)</h2>
+              <p class="text-sm text-ink-muted">Bukan admin toko — khusus tim pengelola SembaPOS</p>
+            </div>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm p-5 text-sm text-ink-muted space-y-3">
+            <p>Jika Anda masuk sebagai <strong class="text-ink">Super Admin</strong>, sidebar menampilkan grup <strong class="text-ink">Super Admin</strong> (bukan Cabang/Pengguna tenant). Di sini dikelola seluruh ekosistem multi-tenant:</p>
+            <ul class="list-disc list-inside space-y-1 text-xs">
+              <li><strong class="text-ink">Daftar tenant</strong> — buka, tambah, ubah data toko pelanggan platform.</li>
+              <li><strong class="text-ink">Paket tenant</strong> — definisi dan penempatan paket langganan.</li>
+              <li><strong class="text-ink">Log audit</strong> — jejak aktivitas penting untuk kepatuhan dan dukungan.</li>
+              <li><strong class="text-ink">Marketplace (moderasi)</strong> — penjual, persetujuan, dan antrean moderasi B2B.</li>
+            </ul>
+            <p class="text-xs text-ink-faint">Pemilik toko sehari-hari tidak perlu bagian ini; fokus ke modul Dashboard hingga Manajemen seperti di atas.</p>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- 9. TIPS & TRIK -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section id="tips" class="tutorial-section">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-yellow-400 text-white rounded-xl flex items-center justify-center text-lg shadow-sm">💡</div>
+            <div>
+              <h2 class="text-xl font-bold text-ink">Tips &amp; Trik</h2>
+              <p class="text-sm text-ink-muted">Maksimalkan penggunaan SembaPOS</p>
+            </div>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">⌨️</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Gunakan barcode scanner</p>
+                  <p class="text-xs text-ink-muted mt-1">Scan barcode produk di layar POS untuk checkout 3× lebih cepat. Dukung scanner USB maupun Bluetooth.</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">📱</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Buka di tablet sebagai kasir</p>
+                  <p class="text-xs text-ink-muted mt-1">Tampilan responsif bekerja baik di tablet Android/iPad. Kasir bisa beroperasi tanpa PC.</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">📊</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Cek laporan setiap pagi</p>
+                  <p class="text-xs text-ink-muted mt-1">Buka dashboard tiap pagi untuk melihat performa kemarin dan stok yang perlu segera dipesan ulang.</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">🔐</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Atur hak akses minimal</p>
+                  <p class="text-xs text-ink-muted mt-1">Beri kasir akses hanya ke modul POS. Laporan dan stok hanya untuk admin agar data tetap aman.</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">💾</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Ekspor CSV rutin</p>
+                  <p class="text-xs text-ink-muted mt-1">Export laporan penjualan bulanan ke CSV sebagai backup dan arsip keuangan bisnis Anda.</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">🎯</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Aktifkan program member</p>
+                  <p class="text-xs text-ink-muted mt-1">Pelanggan setia yang punya poin cenderung kembali lebih sering. Mulai program loyalitas sejak awal.</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">🪧</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Label etalase rutin</p>
+                  <p class="text-xs text-ink-muted mt-1">Setelah ubah harga, cetak ulang lewat <strong class="text-ink">Etalase harga</strong> agar rak selaras dengan kasir dan hindari salah tarif.</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">📤</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Export stok berkala</p>
+                  <p class="text-xs text-ink-muted mt-1">Dari <strong class="text-ink">Laporan Stok</strong> atau export produk CSV untuk arsip dan cek cepat di spreadsheet.</p>
+                </div>
+              </div>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-start gap-3">
+                <span class="text-xl flex-shrink-0">🩺</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Cek FIFO health</p>
+                  <p class="text-xs text-ink-muted mt-1">Admin: tinjau <strong class="text-ink">/reports/fifo-health</strong> atau tautan dari Laporan Stok setelah migrasi data atau retur besar.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- CTA BANTUAN -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <section class="bg-gradient-to-br from-brand to-indigo-700 rounded-2xl p-8 text-white text-center shadow-lg">
+          <h2 class="text-2xl font-bold mb-3">Masih punya pertanyaan?</h2>
+          <p class="text-indigo-100 mb-6 max-w-md mx-auto text-sm">Tim kami siap membantu Anda onboarding, migrasi data, atau menjawab pertanyaan teknis apa pun.</p>
+          <div class="flex flex-wrap justify-center gap-3">
+            <!-- TODO: Ganti wa.me ke nomor produksi final; saat ini disamakan dengan app/templates/landing.html -->
+            <a href="https://wa.me/6281234567890?text=Halo%2C%20saya%20butuh%20bantuan%20penggunaan%20SembaPOS" target="_blank" rel="noopener noreferrer"
+               class="px-5 py-2.5 bg-white text-brand rounded-lg font-semibold hover:bg-indigo-50 transition-colors shadow-sm">
+              💬 Chat WhatsApp
+            </a>
+            <a href="/login" class="px-5 py-2.5 bg-white/10 border border-white/30 text-white rounded-lg font-semibold hover:bg-white/20 transition-colors">
+              Coba Langsung →
+            </a>
+          </div>
+          <p class="mt-4 text-xs text-indigo-200">Biasanya kami membalas dalam &lt; 2 jam di hari kerja</p>
+        </section>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── BACK TO TOP ── -->
+  <button id="back-to-top" aria-label="Kembali ke atas"
+    class="fixed bottom-6 right-6 w-10 h-10 bg-brand text-white rounded-full shadow-lg flex items-center justify-center opacity-0 pointer-events-none transition-all hover:bg-brand-hover z-40">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+  </button>
+
+  <!-- ── FOOTER ── -->
+  <footer class="bg-white border-t border-slate-200 py-8 px-5">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <a href="/" class="flex items-center gap-2 text-base font-bold text-ink">
+          <span class="text-xl">🏪</span> SembaPOS
+        </a>
+        <nav class="flex flex-wrap justify-center gap-4 text-sm text-ink-muted">
+          <a href="/#fitur" class="hover:text-brand">Fitur</a>
+          <a href="/#cara-kerja" class="hover:text-brand">Cara Kerja</a>
+          <a href="/#paket" class="hover:text-brand">Paket</a>
+          <a href="/tutorial" class="text-brand font-medium">Tutorial</a>
+          <a href="/#faq" class="hover:text-brand">FAQ</a>
+          <a href="/login" class="hover:text-brand">Masuk</a>
+        </nav>
+        <p class="text-xs text-ink-faint">&copy; 2026 SembaPOS — PT Turangga Jaya Teknologi</p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // ── Mobile menu toggle ──
+    const mobToggle = document.getElementById('mob-toggle');
+    const mobMenu = document.getElementById('mob-menu');
+    mobToggle.addEventListener('click', () => {
+      mobMenu.classList.toggle('hidden');
+    });
+    mobMenu.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', () => mobMenu.classList.add('hidden'));
+    });
+
+    // ── Reading progress bar ──
+    const progressBar = document.getElementById('progress-bar');
+    window.addEventListener('scroll', () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+      progressBar.style.width = progress + '%';
+    }, { passive: true });
+
+    // ── Back to top button ──
+    const backToTop = document.getElementById('back-to-top');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 300) {
+        backToTop.style.opacity = '1';
+        backToTop.style.pointerEvents = 'auto';
+      } else {
+        backToTop.style.opacity = '0';
+        backToTop.style.pointerEvents = 'none';
+      }
+    }, { passive: true });
+    backToTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // ── Sidebar active section tracking (Intersection Observer) ──
+    const sections = document.querySelectorAll('.tutorial-section');
+    const sidebarLinks = document.querySelectorAll('.sidebar-link');
+
+    const sectionObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          sidebarLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('href') === '#' + id) {
+              link.classList.add('active');
+            }
+          });
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach(sec => sectionObserver.observe(sec));
+
+    // ── Smooth scroll for anchor links ──
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        const targetId = this.getAttribute('href');
+        if (targetId === '#') return;
+        const targetEl = document.querySelector(targetId);
+        if (targetEl) {
+          e.preventDefault();
+          window.scrollTo({ top: targetEl.offsetTop - 88, behavior: 'smooth' });
+        }
+      });
+    });
+
+    // ── Fade-in on scroll ──
+    const fadeObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('fade-up');
+          fadeObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.tutorial-section').forEach(el => {
+      el.style.opacity = '0';
+      fadeObserver.observe(el);
+    });
+
+    // Override: ensure fade-up makes the element visible
+    const style = document.createElement('style');
+    style.textContent = '.fade-up { opacity: 1 !important; }';
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>

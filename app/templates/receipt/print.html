@@ -13,7 +13,7 @@
   <div style="font-size:12px;margin-bottom:10px;">
     <div style="display:flex;justify-content:space-between;">
       <span>No: {{ trx.nomor }}</span>
-      <span>{{ trx.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+      <span>{{ trx.created_at|local_dt('%d/%m/%Y %H:%M') }}</span>
     </div>
     <div style="display:flex;justify-content:space-between;">
       <span>Kasir: {{ trx.user.nama }}</span>

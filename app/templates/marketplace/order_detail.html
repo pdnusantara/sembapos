@@ -62,7 +62,7 @@
                   {% if h.catatan %}
                   <div class="mk-timeline-note">{{ h.catatan }}</div>
                   {% endif %}
-                  <div class="mk-timeline-time">{{ h.created_at.strftime('%d %b %Y, %H:%M') }}</div>
+                  <div class="mk-timeline-time">{{ h.created_at|local_dt('%d %b %Y, %H:%M') }}</div>
                 </div>
               </div>
               {% endfor %}

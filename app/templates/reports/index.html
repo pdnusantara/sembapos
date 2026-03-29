@@ -338,7 +338,7 @@
             <td class="text-end {% if trx_laba < 0 %}text-danger{% endif %}">Rp {{ "{:,.0f}".format(trx_laba).replace(",",".") }}</td>
             <td class="text-muted">
               <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-                <span>{{ t.created_at.strftime('%d/%m %H:%M') }}</span>
+                <span>{{ t.created_at|local_dt('%d/%m %H:%M') }}</span>
                 <button
                   type="button"
                   class="btn btn-sm btn-outline trx-toggle-btn"

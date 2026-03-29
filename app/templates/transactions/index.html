@@ -137,7 +137,7 @@
             {% for t in transactions %}
             <tr>
               <td><span class="tx2-num">{{ t.nomor }}</span></td>
-              <td class="tx2-time">{{ t.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+              <td class="tx2-time">{{ t.created_at|local_dt('%d/%m/%Y %H:%M') }}</td>
               <td>
                 <span class="badge {{ 'badge-danger' if t.status == 'batal' else 'badge-success' }}">
                   {{ 'Batal' if t.status == 'batal' else 'Selesai' }}
@@ -200,7 +200,7 @@
           <div class="tx2-mobile-head">
             <div>
               <div class="tx2-num">{{ t.nomor }}</div>
-              <div class="tx2-time">{{ t.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+              <div class="tx2-time">{{ t.created_at|local_dt('%d/%m/%Y %H:%M') }}</div>
             </div>
             <div class="tx2-mobile-total">
               {% set ret_sum_row = (t.sales_returns|map(attribute='total_retur')|sum) if t.sales_returns else 0 %}

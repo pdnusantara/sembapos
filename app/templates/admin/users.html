@@ -129,7 +129,7 @@
             <td data-label="Cabang">{{ user.branch.nama if user.branch else '—' }}</td>
             <td data-label="Login terakhir" class="text-muted" style="font-size:12px;">
               {% if user.last_login %}
-              {{ user.last_login.strftime('%d/%m/%Y %H:%M') }}
+              {{ user.last_login|local_dt('%d/%m/%Y %H:%M') }}
               {% else %}
               —
               {% endif %}
@@ -293,7 +293,7 @@ document.addEventListener('keydown', function(e){
       <tbody>
         {% for row in audit_logs %}
         <tr>
-          <td data-label="Waktu" style="font-size:12px;white-space:nowrap;">{{ row.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td data-label="Waktu" style="font-size:12px;white-space:nowrap;">{{ row.created_at|local_dt('%d/%m/%Y %H:%M') }}</td>
           <td data-label="Aksi">
             {% if row.action == 'user_created' %}<span class="badge badge-success">Buat</span>
             {% elif row.action == 'user_updated' %}<span class="badge badge-info">Ubah</span>

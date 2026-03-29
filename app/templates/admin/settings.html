@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Pengaturan — {{ tenant.nama }}{% endblock %}
+{% block page_title %}⚙️ Pengaturan{% endblock %}
+{% block page_sub %}Zona waktu toko (semua pengguna tenant){% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:560px;">
+  <div class="card-header">
+    <div class="card-title">Zona waktu</div>
+    <div class="card-subtitle">Memengaruhi perhitungan &quot;hari ini&quot; dan grafik di dashboard serta tampilan zona di aplikasi.</div>
+  </div>
+  <form method="POST" style="padding:16px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="form-group">
+      <label class="form-label">Zona waktu</label>
+      <select name="timezone" class="form-control" required>
+        {% for val, label in timezone_choices %}
+        <option value="{{ val }}" {% if val == current_tz %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Simpan</button>
+    <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline" style="margin-left:8px;">Batal</a>
+  </form>
+</div>
+{% endblock %}
