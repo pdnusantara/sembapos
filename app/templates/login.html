@@ -7,7 +7,8 @@
   <meta name="description" content="Masuk ke SembaPOS — kasir cloud multi-tenant untuk toko sembako dan retail Indonesia.">
   <title>Masuk — SembaPOS</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+  {% set favicon_static_path = platform_logo or none %}
+  {% include 'includes/favicon.html' %}
 </head>
 <body>
 <a href="#login-main" class="login-skip">Langsung ke formulir masuk</a>
@@ -15,8 +16,14 @@
   <div class="login-bg" aria-hidden="true"></div>
   <div class="login-card" id="login-main" role="main">
     <header class="login-logo">
-      <div class="logo-circle" aria-hidden="true">🏪</div>
-      <h1>SembaPOS</h1>
+      <div class="logo-circle{% if platform_logo %} logo-circle--platform-logo{% endif %}" aria-hidden="true">
+        {% if platform_logo %}
+        <img src="{{ url_for('static', filename=platform_logo) }}" alt="" class="login-logo-img" width="64" height="64" loading="eager" decoding="async">
+        {% else %}
+        🏪
+        {% endif %}
+      </div>
+      <h1>{{ platform_display_name }}</h1>
       <p class="login-tagline">Kasir cloud · multi-cabang · aman per tenant</p>
       <nav class="login-nav-top" aria-label="Tautan cepat">
         <a href="{{ url_for('landing.index') }}">Beranda</a>
@@ -65,7 +72,7 @@
     <footer class="login-footer">
       <p class="login-footer-lead">Belum punya akun toko?</p>
       <a href="{{ url_for('landing.trial_register') }}" class="login-footer-cta">Daftar trial gratis 30 hari</a>
-      <p class="login-footer-meta">&copy; {{ utc_now().year }} SembaPOS</p>
+      <p class="login-footer-meta">&copy; {{ utc_now().year }} {{ platform_display_name }}</p>
     </footer>
   </div>
 </div>

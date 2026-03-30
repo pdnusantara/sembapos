@@ -1,0 +1,7 @@
+{# favicon_static_path: path relatif dari static/ (mis. uploads/tenants/1/logo.png) atau kosong = emoji default #}
+{% set _default_fav = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>" %}
+{% if favicon_static_path %}
+<link rel="icon" href="{{ url_for('static', filename=favicon_static_path) }}">
+{% else %}
+<link rel="icon" href="{{ _default_fav }}">
+{% endif %}

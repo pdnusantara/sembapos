@@ -22,6 +22,14 @@ app/static/uploads/products/*
 app/static/uploads/marketplace/*
 !app/static/uploads/marketplace/.gitkeep
 
+# Logo tenant (dibuat runtime)
+app/static/uploads/tenants/*
+!app/static/uploads/tenants/.gitkeep
+
+# Logo platform (dibuat runtime)
+app/static/uploads/platform/*
+!app/static/uploads/platform/.gitkeep
+
 # IDE / OS
 .idea/
 .vscode/

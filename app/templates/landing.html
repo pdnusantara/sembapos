@@ -31,7 +31,8 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css', v=landing_css_v) }}">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+  {% set favicon_static_path = platform_logo or none %}
+  {% include 'includes/favicon.html' %}
 
   <!-- Schema.org JSON-LD -->
   <script type="application/ld+json">

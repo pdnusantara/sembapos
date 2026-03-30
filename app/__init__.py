@@ -93,8 +93,22 @@ def create_app():
             marketplace_css_v = v
         return dict(static_css_v=v, landing_css_v=landing_css_v, marketplace_css_v=marketplace_css_v)
 
+    @app.context_processor
+    def _inject_platform_branding():
+        """Logo & nama platform (AppSetting) untuk login, sidebar Super Admin, footer."""
+        try:
+            from .models import AppSetting
+
+            logo = AppSetting.get('platform_logo')
+            name = (AppSetting.get('platform_name') or '').strip() or 'SembaPOS'
+            return {'platform_logo': logo, 'platform_display_name': name}
+        except Exception:
+            return {'platform_logo': None, 'platform_display_name': 'SembaPOS'}
+
     upload_root = os.path.join(app.static_folder, 'uploads', 'products')
     os.makedirs(upload_root, exist_ok=True)
+    os.makedirs(os.path.join(app.static_folder, 'uploads', 'tenants'), exist_ok=True)
+    os.makedirs(os.path.join(app.static_folder, 'uploads', 'platform'), exist_ok=True)
 
     with app.app_context():
         # create_all aman untuk dev SQLite, tapi pada PostgreSQL + multi-worker
@@ -105,6 +119,7 @@ def create_app():
         _ensure_product_price_tiers_columns()
         _ensure_tenant_location_columns()
         _ensure_timezone_columns()
+        _ensure_tenant_logo_column()
         _ensure_new_superadmin_tables()
         _seed_tenant_packages()
         _fix_legacy_announcement_mulai_times()
@@ -501,5 +516,21 @@ def _ensure_tenant_location_columns():
         with db.engine.begin() as conn:
             for stmt in statements:
                 conn.execute(text(stmt))
+    except Exception:
+        pass
+
+
+def _ensure_tenant_logo_column():
+    """Tambah kolom logo tenant (path relatif static) jika belum ada."""
+    from sqlalchemy import inspect, text
+    try:
+        insp = inspect(db.engine)
+        if 'tenants' not in insp.get_table_names():
+            return
+        cols = {c['name'] for c in insp.get_columns('tenants')}
+        if 'logo' in cols:
+            return
+        with db.engine.begin() as conn:
+            conn.execute(text('ALTER TABLE tenants ADD COLUMN logo VARCHAR(255)'))
     except Exception:
         pass

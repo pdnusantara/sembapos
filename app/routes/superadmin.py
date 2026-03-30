@@ -3,6 +3,7 @@ import json
 import os
 import re
 import secrets
+import uuid
 import string
 import shutil as shutil_mod
 import subprocess
@@ -21,6 +22,7 @@ from flask import (
     session,
     Response,
     jsonify,
+    current_app,
 )
 from urllib.request import urlopen, Request
 from urllib.error import URLError
@@ -2214,12 +2216,16 @@ def leads_index():
             {
                 'code': code,
                 'label': label,
+                'count': stats.get(code, 0),
                 'url': _leads_url(status=code),
                 'active': status_filter == code,
             }
         )
 
     leads_url_clear_status = _leads_url(drop_status=True) if status_filter else None
+    leads_url_reset = url_for('superadmin.leads_index')
+    lead_status_label_by_code = dict(LEAD_STATUSES)
+    period_label_active = dict(LEAD_PERIODS).get(period_filter, period_filter)
 
     leads_pagination = None
     if total_pages > 1:
@@ -2244,6 +2250,9 @@ def leads_index():
         leads_tz_short=timezone_short_label(tz_id),
         leads_pagination=leads_pagination,
         leads_url_clear_status=leads_url_clear_status,
+        leads_url_reset=leads_url_reset,
+        lead_status_label_by_code=lead_status_label_by_code,
+        period_label_active=period_label_active,
     )
 
 
@@ -2296,6 +2305,35 @@ def lead_delete(id):
 # PLATFORM SETTINGS
 # ─────────────────────────────────────────────────────────────
 
+PLATFORM_LOGO_KEY = 'platform_logo'
+
+
+def _delete_platform_logo_file(relative_path):
+    if not relative_path:
+        return
+    abs_path = os.path.join(current_app.static_folder, relative_path)
+    if os.path.isfile(abs_path):
+        try:
+            os.remove(abs_path)
+        except OSError:
+            pass
+
+
+def _save_platform_logo(file_storage):
+    if not file_storage or not file_storage.filename:
+        return None
+    raw = file_storage.filename
+    ext = raw.rsplit('.', 1)[-1].lower() if '.' in raw else ''
+    if ext not in current_app.config['PRODUCT_IMAGE_ALLOWED']:
+        raise ValueError('Format logo tidak didukung (png, jpg, jpeg, webp, gif).')
+    folder = os.path.join(current_app.static_folder, 'uploads', 'platform')
+    os.makedirs(folder, exist_ok=True)
+    fname = f'logo_{uuid.uuid4().hex}.{ext}'
+    path_abs = os.path.join(folder, fname)
+    file_storage.save(path_abs)
+    return f'uploads/platform/{fname}'
+
+
 PLATFORM_SETTING_KEYS = [
     ('platform_name', 'Nama Platform', 'Kasir Sembako'),
     ('default_grace_days', 'Grace Days Setelah Expired', '0'),
@@ -2320,6 +2358,22 @@ def platform_settings():
         for key, label, default in PLATFORM_SETTING_KEYS:
             val = request.form.get(key, '').strip()
             AppSetting.set(key, val)
+
+        logo_file = request.files.get('platform_logo_file')
+        if logo_file and logo_file.filename:
+            try:
+                new_path = _save_platform_logo(logo_file)
+                old = AppSetting.get(PLATFORM_LOGO_KEY)
+                _delete_platform_logo_file(old)
+                AppSetting.set(PLATFORM_LOGO_KEY, new_path)
+            except ValueError as e:
+                flash(str(e), 'danger')
+                return redirect(url_for('superadmin.platform_settings'))
+        elif request.form.get('remove_platform_logo'):
+            old = AppSetting.get(PLATFORM_LOGO_KEY)
+            _delete_platform_logo_file(old)
+            AppSetting.set(PLATFORM_LOGO_KEY, None)
+
         _log_sa('platform_settings_update')
         db.session.commit()
         flash('Pengaturan platform disimpan.', 'success')
@@ -2329,10 +2383,13 @@ def platform_settings():
     for key, label, default in PLATFORM_SETTING_KEYS:
         current_settings[key] = AppSetting.get(key, default)
 
+    platform_logo_path = AppSetting.get(PLATFORM_LOGO_KEY)
+
     return render_template(
         'superadmin/platform_settings.html',
         setting_keys=PLATFORM_SETTING_KEYS,
         current_settings=current_settings,
+        platform_logo_path=platform_logo_path,
     )
 
 

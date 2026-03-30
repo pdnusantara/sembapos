@@ -1,26 +1,220 @@
 {% extends 'base.html' %}
 {% block title %}Pengaturan — {{ tenant.nama }}{% endblock %}
 {% block page_title %}⚙️ Pengaturan{% endblock %}
-{% block page_sub %}Zona waktu toko (semua pengguna tenant){% endblock %}
+{% block page_sub %}Profil toko, logo, dan zona waktu{% endblock %}
 
 {% block content %}
-<div class="card" style="max-width:560px;">
-  <div class="card-header">
-    <div class="card-title">Zona waktu</div>
-    <div class="card-subtitle">Memengaruhi perhitungan &quot;hari ini&quot; dan grafik di dashboard serta tampilan zona di aplikasi.</div>
-  </div>
-  <form method="POST" style="padding:16px;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-    <div class="form-group">
-      <label class="form-label">Zona waktu</label>
-      <select name="timezone" class="form-control" required>
-        {% for val, label in timezone_choices %}
-        <option value="{{ val }}" {% if val == current_tz %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
+<form method="POST" enctype="multipart/form-data" style="max-width:640px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+      <div class="card-title">Profil toko</div>
+      <div class="card-subtitle">Nama, kontak, dan alamat tersimpan di data tenant (sama untuk semua cabang).</div>
     </div>
+    <div style="padding:16px;">
+      <div class="form-group">
+        <label class="form-label">Kode toko</label>
+        <input type="text" class="form-control" value="{{ tenant.kode }}" disabled style="opacity:0.7;">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Kode tidak dapat diubah dari sini.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama toko / usaha *</label>
+        <input type="text" name="nama" class="form-control" required maxlength="100" value="{{ tenant.nama }}">
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" maxlength="100" value="{{ tenant.email or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telepon</label>
+          <input type="text" name="telepon" class="form-control" maxlength="20" value="{{ tenant.telepon or '' }}">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label class="form-label">Alamat</label>
+          <input type="text" name="alamat" class="form-control" value="{{ tenant.alamat or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Provinsi</label>
+          <select name="provinsi" id="provinsiSelect" class="form-control">
+            <option value="">Pilih provinsi...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kab/Kota</label>
+          <select name="kab_kota" id="kabSelect" class="form-control" disabled>
+            <option value="">Pilih kab/kota...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kecamatan</label>
+          <select name="kecamatan" id="kecSelect" class="form-control" disabled>
+            <option value="">Pilih kecamatan...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Desa/Kelurahan</label>
+          <select name="desa" id="desaSelect" class="form-control" disabled>
+            <option value="">Pilih desa/kelurahan...</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+      <div class="card-title">Logo toko</div>
+      <div class="card-subtitle">Tampil di struk cetak jika diunggah. PNG, JPG, WebP, atau GIF (maks. sesuai batas unggah server).</div>
+    </div>
+    <div style="padding:16px;">
+      {% if tenant.logo %}
+      <div style="margin-bottom:12px;">
+        <img src="{{ url_for('static', filename=tenant.logo) }}" alt="Logo" style="max-height:80px;max-width:240px;object-fit:contain;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg-muted);">
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" name="remove_logo" value="1">
+          Hapus logo saat simpan
+        </label>
+      </div>
+      {% endif %}
+      <div class="form-group">
+        <label class="form-label">{% if tenant.logo %}Ganti logo{% else %}Unggah logo{% endif %}</label>
+        <input type="file" name="logo" class="form-control" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif">
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+      <div class="card-title">Zona waktu</div>
+      <div class="card-subtitle">Memengaruhi perhitungan &quot;hari ini&quot; dan grafik di dashboard serta tampilan zona di aplikasi.</div>
+    </div>
+    <div style="padding:16px;">
+      <div class="form-group">
+        <label class="form-label">Zona waktu</label>
+        <select name="timezone" class="form-control" required>
+          {% for val, label in timezone_choices %}
+          <option value="{{ val }}" {% if val == current_tz %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;padding:0 0 16px;">
     <button type="submit" class="btn btn-primary">Simpan</button>
-    <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline" style="margin-left:8px;">Batal</a>
-  </form>
-</div>
+    <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline">Batal</a>
+  </div>
+</form>
+
+<script>
+const EXISTING = {
+  provinsi: {{ (tenant.provinsi or '')|tojson }},
+  kab_kota: {{ (tenant.kab_kota or '')|tojson }},
+  kecamatan: {{ (tenant.kecamatan or '')|tojson }},
+  desa: {{ (tenant.desa or '')|tojson }},
+};
+const provinsiSelect = document.getElementById('provinsiSelect');
+const kabSelect = document.getElementById('kabSelect');
+const kecSelect = document.getElementById('kecSelect');
+const desaSelect = document.getElementById('desaSelect');
+
+function resetSelect(el, placeholder, disabled=true) {
+  el.innerHTML = `<option value="">${placeholder}</option>`;
+  el.disabled = disabled;
+}
+
+function fillSelect(el, items, placeholder, selectedValue='') {
+  resetSelect(el, placeholder, false);
+  for (const item of items) {
+    const opt = document.createElement('option');
+    opt.value = item.nama;
+    opt.textContent = item.nama;
+    opt.dataset.code = item.id;
+    if (selectedValue && item.nama === selectedValue) opt.selected = true;
+    el.appendChild(opt);
+  }
+}
+
+async function fetchJSON(url) {
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error('Gagal load wilayah');
+  return await res.json();
+}
+
+async function loadProvinsi() {
+  const data = await fetchJSON('{{ url_for("landing.trial_wilayah_provinsi") }}');
+  fillSelect(provinsiSelect, data, 'Pilih provinsi...', EXISTING.provinsi);
+  const id = provinsiSelect.selectedOptions[0]?.dataset.code;
+  if (id) await loadKab(id);
+}
+
+async function loadKab(provId) {
+  const data = await fetchJSON(`{{ url_for("landing.trial_wilayah_kabupaten", prov_id="PID") }}`.replace('PID', provId));
+  fillSelect(kabSelect, data, 'Pilih kab/kota...', EXISTING.kab_kota);
+  const id = kabSelect.selectedOptions[0]?.dataset.code;
+  if (id) await loadKec(id);
+}
+
+async function loadKec(kabId) {
+  const data = await fetchJSON(`{{ url_for("landing.trial_wilayah_kecamatan", kab_id="KID") }}`.replace('KID', kabId));
+  fillSelect(kecSelect, data, 'Pilih kecamatan...', EXISTING.kecamatan);
+  const id = kecSelect.selectedOptions[0]?.dataset.code;
+  if (id) await loadDesa(id);
+}
+
+async function loadDesa(kecId) {
+  const data = await fetchJSON(`{{ url_for("landing.trial_wilayah_desa", kec_id="CID") }}`.replace('CID', kecId));
+  fillSelect(desaSelect, data, 'Pilih desa/kelurahan...', EXISTING.desa);
+}
+
+provinsiSelect.addEventListener('change', async function() {
+  const id = this.selectedOptions[0]?.dataset.code;
+  resetSelect(kabSelect, 'Pilih kab/kota...', true);
+  resetSelect(kecSelect, 'Pilih kecamatan...', true);
+  resetSelect(desaSelect, 'Pilih desa/kelurahan...', true);
+  if (!id) return;
+  EXISTING.kab_kota = '';
+  EXISTING.kecamatan = '';
+  EXISTING.desa = '';
+  try {
+    await loadKab(id);
+  } catch (e) {
+    resetSelect(kabSelect, 'Gagal load kab/kota', true);
+  }
+});
+
+kabSelect.addEventListener('change', async function() {
+  const id = this.selectedOptions[0]?.dataset.code;
+  resetSelect(kecSelect, 'Pilih kecamatan...', true);
+  resetSelect(desaSelect, 'Pilih desa/kelurahan...', true);
+  if (!id) return;
+  EXISTING.kecamatan = '';
+  EXISTING.desa = '';
+  try {
+    await loadKec(id);
+  } catch (e) {
+    resetSelect(kecSelect, 'Gagal load kecamatan', true);
+  }
+});
+
+kecSelect.addEventListener('change', async function() {
+  const id = this.selectedOptions[0]?.dataset.code;
+  resetSelect(desaSelect, 'Pilih desa/kelurahan...', true);
+  if (!id) return;
+  EXISTING.desa = '';
+  try {
+    await loadDesa(id);
+  } catch (e) {
+    resetSelect(desaSelect, 'Gagal load desa/kelurahan', true);
+  }
+});
+
+loadProvinsi().catch(() => {
+  resetSelect(provinsiSelect, 'Gagal load provinsi', true);
+});
+</script>
 {% endblock %}

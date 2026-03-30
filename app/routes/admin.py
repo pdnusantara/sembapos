@@ -1,7 +1,9 @@
+import os
 import re
+import uuid
 from datetime import datetime
 from functools import wraps
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import or_, func
 from sqlalchemy.exc import IntegrityError
@@ -82,11 +84,38 @@ def validate_password_pair(pw, pw2):
     return pw, None
 
 
+def _delete_tenant_logo_file(relative_path):
+    if not relative_path:
+        return
+    abs_path = os.path.join(current_app.static_folder, relative_path)
+    if os.path.isfile(abs_path):
+        try:
+            os.remove(abs_path)
+        except OSError:
+            pass
+
+
+def _save_tenant_logo(file_storage, tenant_id):
+    if not file_storage or not file_storage.filename:
+        return None
+    raw = file_storage.filename
+    ext = raw.rsplit('.', 1)[-1].lower() if '.' in raw else ''
+    if ext not in current_app.config['PRODUCT_IMAGE_ALLOWED']:
+        raise ValueError('Format logo tidak didukung (png, jpg, jpeg, webp, gif).')
+    sub = str(tenant_id)
+    folder = os.path.join(current_app.static_folder, 'uploads', 'tenants', sub)
+    os.makedirs(folder, exist_ok=True)
+    fname = f'logo_{uuid.uuid4().hex}.{ext}'
+    path_abs = os.path.join(folder, fname)
+    file_storage.save(path_abs)
+    return f'uploads/tenants/{sub}/{fname}'
+
+
 @admin_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def settings():
-    """Zona waktu kalender untuk seluruh pengguna tenant (dashboard, dll.)."""
+    """Profil toko, logo, dan zona waktu untuk seluruh pengguna tenant."""
     if current_user.is_superadmin:
         flash('Super Admin mengatur zona waktu lewat menu Pengaturan di grup Super Admin.', 'info')
         return redirect(url_for('superadmin.index'))
@@ -96,9 +125,42 @@ def settings():
         return redirect(url_for('dashboard.index'))
     tenant = Tenant.query.get_or_404(tenant_id)
     if request.method == 'POST':
+        nama = (request.form.get('nama') or '').strip()
+        if not nama:
+            flash('Nama toko wajib diisi.', 'danger')
+            return redirect(url_for('admin.settings'))
+        tenant.nama = nama[:100]
+        tenant.alamat = (request.form.get('alamat') or '').strip()
+        tenant.provinsi = (request.form.get('provinsi') or '').strip() or None
+        tenant.kab_kota = (request.form.get('kab_kota') or '').strip() or None
+        tenant.kecamatan = (request.form.get('kecamatan') or '').strip() or None
+        tenant.desa = (request.form.get('desa') or '').strip() or None
+        tenant.telepon = (request.form.get('telepon') or '').strip()[:20]
+        tenant.email = (request.form.get('email') or '').strip()[:100]
         tenant.timezone = normalize_timezone_id(request.form.get('timezone'))
+
+        f = request.files.get('logo')
+        if f and f.filename:
+            try:
+                new_path = _save_tenant_logo(f, tenant_id)
+                _delete_tenant_logo_file(tenant.logo)
+                tenant.logo = new_path
+            except ValueError as e:
+                flash(str(e), 'danger')
+                return redirect(url_for('admin.settings'))
+        elif request.form.get('remove_logo'):
+            old = tenant.logo
+            tenant.logo = None
+            _delete_tenant_logo_file(old)
+
+        log_user_audit(
+            tenant_id,
+            current_user.id,
+            'tenant_settings_update',
+            detail='profil toko / logo / zona waktu',
+        )
         db.session.commit()
-        flash('Zona waktu toko disimpan. Berlaku untuk semua pengguna di tenant ini.', 'success')
+        flash('Pengaturan toko disimpan.', 'success')
         return redirect(url_for('admin.settings'))
     return render_template(
         'admin/settings.html',

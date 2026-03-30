@@ -18,7 +18,8 @@
     })();
   </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+  {% set favicon_static_path = current_user.tenant.logo if current_user.is_authenticated and current_user.tenant and current_user.tenant.logo else (platform_logo if current_user.is_authenticated and current_user.is_superadmin and platform_logo else none) %}
+  {% include 'includes/favicon.html' %}
   {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -28,10 +29,18 @@
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
-      <div class="logo-icon">🏪</div>
+      <div class="logo-icon{% if current_user.tenant and current_user.tenant.logo %} logo-icon--tenant{% elif current_user.is_superadmin and platform_logo %} logo-icon--tenant{% endif %}">
+        {% if current_user.tenant and current_user.tenant.logo %}
+        <img src="{{ url_for('static', filename=current_user.tenant.logo) }}" alt="" width="40" height="40" loading="lazy" decoding="async">
+        {% elif current_user.is_superadmin and platform_logo %}
+        <img src="{{ url_for('static', filename=platform_logo) }}" alt="" width="40" height="40" loading="lazy" decoding="async">
+        {% else %}
+        🏪
+        {% endif %}
+      </div>
       <div class="logo-text">
         <div class="logo-title">
-          {% if current_user.tenant %}{{ current_user.tenant.nama }}{% else %}Kasir Platform{% endif %}
+          {% if current_user.tenant %}{{ current_user.tenant.nama }}{% else %}{{ platform_display_name }}{% endif %}
         </div>
         <div class="logo-sub">
           {% if current_user.branch %}{{ current_user.branch.nama }}{% elif current_user.is_superadmin %}Super Admin{% else %}Semua Cabang{% endif %}

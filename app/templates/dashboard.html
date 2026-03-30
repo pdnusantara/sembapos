@@ -4,24 +4,6 @@
 {% block page_sub %}Ringkasan bisnis hari ini · {{ dashboard_timezone_label }}{% endblock %}
 
 {% block content %}
-{% if active_announcements %}
-<div class="card mb-3" style="border-left:4px solid var(--primary);" role="region" aria-label="Pengumuman platform">
-  <div class="card-header" style="align-items:flex-start;">
-    <div>
-      <div class="card-title">📢 Pengumuman dari platform</div>
-      <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Informasi yang sama juga tampil di bagian atas setiap halaman (di bawah bilah judul).</div>
-    </div>
-  </div>
-  <div style="padding:0 16px 16px;">
-    {% for ann in active_announcements %}
-    <div style="padding:12px 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
-      <div style="font-weight:600;margin-bottom:4px;">{{ ann.judul }}</div>
-      <div style="font-size:13px;color:var(--text-muted);line-height:1.55;white-space:pre-wrap;">{{ ann.isi }}</div>
-    </div>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
 <div class="stats-grid">
   <div class="stat-card primary">
     <div class="stat-icon primary">💰</div>

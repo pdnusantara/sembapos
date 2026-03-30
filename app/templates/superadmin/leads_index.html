@@ -2,68 +2,95 @@
 {% import 'superadmin/_breadcrumbs.html' as bc %}
 {% block title %}Leads — Super Admin{% endblock %}
 {% block page_title %}📩 Lead Capture{% endblock %}
-{% block page_sub %}Calon tenant dari landing page (zona {{ leads_tz_short }}){% endblock %}
+{% block page_sub %}Calon tenant dari landing & trial{% endblock %}
 
 {% block content %}
 {{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Leads', '', true)]) }}
 
-<p class="text-muted" style="font-size:13px;margin:-8px 0 16px;">Kartu rentang waktu: jumlah pendaftar per periode (tanpa teks pencarian). Tabel dan kartu status: mengikuti periode, pencarian, dan filter status.</p>
-
-<div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:12px;">
-  {% for row in lead_period_links %}
-  <a href="{{ row.url }}" class="stat-card {% if row.active %}primary{% endif %}" style="text-decoration:none;color:inherit;{% if not row.active %}opacity:0.95{% endif %}">
-    <div class="stat-info">
-      <div class="stat-value">{{ row.count }}</div>
-      <div class="stat-label" style="font-size:12px;line-height:1.3;">{{ row.label }}</div>
+<div class="card sa-leads-filter-panel">
+  <div class="sa-leads-filter-panel__head">
+    <div>
+      <div class="card-title" style="margin:0;">Filter daftar lead</div>
+      <div class="sa-leads-filter-panel__hint">Pilih periode dan status; pencarian menyaring nama, WhatsApp, dan jenis usaha. Angka pada status = jumlah lead di periode &amp; pencarian saat ini.</div>
     </div>
-  </a>
-  {% endfor %}
-</div>
-
-<div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr));margin-bottom:16px;">
-  <div class="stat-card primary"><div class="stat-info"><div class="stat-value">{{ stats.new }}</div><div class="stat-label">Baru</div></div></div>
-  <div class="stat-card warning"><div class="stat-info"><div class="stat-value">{{ stats.contacted }}</div><div class="stat-label">Dihubungi</div></div></div>
-  <div class="stat-card success"><div class="stat-info"><div class="stat-value">{{ stats.converted }}</div><div class="stat-label">Dikonversi</div></div></div>
-  <div class="stat-card danger"><div class="stat-info"><div class="stat-value">{{ stats.rejected }}</div><div class="stat-label">Ditolak</div></div></div>
-</div>
-
-<div class="page-list-toolbar mb-3" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
-  <div style="display:flex;gap:8px;flex-wrap:wrap;">
-    {% for row in lead_status_links %}
-    <a href="{{ row.url }}" class="btn btn-outline btn-sm {% if row.active %}active{% endif %}">{{ row.label }}</a>
-    {% endfor %}
-    {% if status_filter and leads_url_clear_status %}
-    <a href="{{ leads_url_clear_status }}" class="btn btn-outline btn-sm">Semua status</a>
+    {% if period_filter != 'all' or status_filter or q %}
+    <a href="{{ leads_url_reset }}" class="btn btn-outline btn-sm sa-leads-reset">Reset semua filter</a>
     {% endif %}
   </div>
-  <form method="get" action="{{ url_for('superadmin.leads_index') }}" style="display:flex;gap:8px;">
-    {% if period_filter != 'all' %}<input type="hidden" name="period" value="{{ period_filter }}">{% endif %}
-    {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
-    <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Cari nama, WA, jenis usaha...">
-    <button type="submit" class="btn btn-outline btn-sm">Cari</button>
-  </form>
+
+  {% if period_filter != 'all' or status_filter or q %}
+  <div class="sa-leads-active-bar">
+    <span class="sa-leads-active-bar__label">Filter aktif:</span>
+    <span class="sa-leads-active-bar__value">{{ period_label_active }}</span>
+    {% if status_filter %}
+    <span class="sa-leads-active-bar__sep">·</span>
+    <span class="sa-leads-active-bar__value">Status: {{ lead_status_label_by_code.get(status_filter, status_filter) }}</span>
+    {% endif %}
+    {% if q %}
+    <span class="sa-leads-active-bar__sep">·</span>
+    <span class="sa-leads-active-bar__value">Cari: &quot;{{ q }}&quot;</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="sa-leads-section">
+    <div class="sa-leads-section__title">Periode <span class="sa-leads-tz">({{ leads_tz_short }})</span></div>
+    <div class="sa-leads-period-grid">
+      {% for row in lead_period_links %}
+      <a href="{{ row.url }}" class="sa-leads-period-chip {% if row.active %}sa-leads-period-chip--active{% endif %}">
+        <span class="sa-leads-period-chip__count">{{ row.count }}</span>
+        <span class="sa-leads-period-chip__label">{{ row.label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="sa-leads-section">
+    <div class="sa-leads-section__title">Status pipeline</div>
+    <div class="sa-leads-status-row">
+      {% for row in lead_status_links %}
+      <a href="{{ row.url }}" class="sa-leads-status-pill {% if row.active %}sa-leads-status-pill--active{% endif %}">
+        <span class="sa-leads-status-pill__label">{{ row.label }}</span>
+        <span class="sa-leads-status-pill__count">{{ row.count }}</span>
+      </a>
+      {% endfor %}
+      {% if status_filter %}
+      <a href="{{ leads_url_clear_status }}" class="btn btn-outline btn-sm sa-leads-clear-status">Semua status</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="sa-leads-section sa-leads-section--last">
+    <div class="sa-leads-section__title">Pencarian</div>
+    <form method="get" action="{{ url_for('superadmin.leads_index') }}" class="sa-leads-search">
+      {% if period_filter != 'all' %}<input type="hidden" name="period" value="{{ period_filter }}">{% endif %}
+      {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+      <input type="search" name="q" value="{{ q }}" class="form-control sa-leads-search__input" placeholder="Nama, nomor WA, jenis usaha…" autocomplete="off">
+      <button type="submit" class="btn btn-primary btn-sm">Cari</button>
+    </form>
+  </div>
 </div>
 
 <div class="card">
   <div class="card-header">
-    <div class="card-title">Daftar Lead ({{ total }})</div>
+    <div class="card-title">Daftar lead ({{ total }})</div>
   </div>
   <div class="table-wrapper">
     <table class="table">
       <thead>
-        <tr><th>Nama</th><th>Jenis Usaha</th><th>WA</th><th>Lokasi</th><th>Sumber</th><th>Status</th><th>Tanggal</th><th>Trial</th><th>Aksi</th></tr>
+        <tr><th>Nama</th><th>Jenis usaha</th><th>WA</th><th>Lokasi</th><th>Sumber</th><th>Status</th><th>Tanggal</th><th>Trial</th><th>Aksi</th></tr>
       </thead>
       <tbody>
         {% for lead in leads %}
         <tr>
           <td style="font-weight:600;">{{ lead.nama }}</td>
-          <td>{{ lead.jenis_usaha or '-' }}</td>
-          <td style="font-size:12px;">{{ lead.no_wa or '-' }}</td>
-          <td style="font-size:12px;">{{ lead.kabupaten or '-' }}</td>
+          <td>{{ lead.jenis_usaha or '—' }}</td>
+          <td style="font-size:12px;">{{ lead.no_wa or '—' }}</td>
+          <td style="font-size:12px;">{{ lead.kabupaten or '—' }}</td>
           <td><span class="badge badge-info" style="font-size:10px;">{{ lead.source }}</span></td>
           <td>
             <span class="badge {% if lead.status == 'new' %}badge-primary{% elif lead.status == 'contacted' %}badge-warning{% elif lead.status == 'converted' %}badge-success{% else %}badge-danger{% endif %}">
-              {{ lead.status }}
+              {{ lead_status_label_by_code.get(lead.status, lead.status) }}
             </span>
           </td>
           <td class="text-muted" style="font-size:12px;">{{ lead.created_at.strftime('%d/%m/%Y %H:%M') }} UTC</td>
@@ -120,10 +147,10 @@
     </table>
   </div>
   {% if leads_pagination and (leads_pagination.prev or leads_pagination.next) %}
-  <div style="padding:12px 16px;display:flex;gap:8px;justify-content:center;align-items:center;">
-    {% if leads_pagination.prev %}<a class="btn btn-outline btn-sm" href="{{ leads_pagination.prev }}">←</a>{% endif %}
-    <span class="text-muted" style="font-size:13px;">{{ page }} / {{ total_pages }}</span>
-    {% if leads_pagination.next %}<a class="btn btn-outline btn-sm" href="{{ leads_pagination.next }}">→</a>{% endif %}
+  <div class="sa-leads-pagination">
+    {% if leads_pagination.prev %}<a class="btn btn-outline btn-sm" href="{{ leads_pagination.prev }}">← Sebelumnya</a>{% endif %}
+    <span class="text-muted sa-leads-pagination__meta">Halaman {{ page }} dari {{ total_pages }}</span>
+    {% if leads_pagination.next %}<a class="btn btn-outline btn-sm" href="{{ leads_pagination.next }}">Berikutnya →</a>{% endif %}
   </div>
   {% endif %}
 </div>

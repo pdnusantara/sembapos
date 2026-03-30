@@ -11,8 +11,28 @@
   <a href="{{ url_for('superadmin.settings') }}" class="btn btn-outline">🕐 Zona Waktu Pribadi</a>
 </div>
 
-<form method="POST" action="{{ url_for('superadmin.platform_settings') }}">
+<form method="POST" action="{{ url_for('superadmin.platform_settings') }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+  <div class="card mb-3">
+    <div class="card-header"><div class="card-title">🖼️ Logo &amp; branding</div></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+      <p class="text-muted" style="font-size:13px;margin:0;">Tampil di halaman masuk dan sidebar (akun Super Admin). PNG/JPG/WebP/GIF, maks. sesuai batas unggah server.</p>
+      {% if platform_logo_path %}
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <img src="{{ url_for('static', filename=platform_logo_path) }}" alt="Logo platform" style="max-height:72px;max-width:220px;object-fit:contain;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--bg-muted);">
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+        <input type="checkbox" name="remove_platform_logo" value="1">
+        Hapus logo saat simpan
+      </label>
+      {% endif %}
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">{% if platform_logo_path %}Ganti logo{% else %}Unggah logo platform{% endif %}</label>
+        <input type="file" name="platform_logo_file" class="form-control" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif">
+      </div>
+    </div>
+  </div>
 
   <div class="card mb-3">
     <div class="card-header"><div class="card-title">🏷️ Platform</div></div>

@@ -53,6 +53,8 @@ class Tenant(db.Model):
     max_user = db.Column(db.Integer, default=5)
     # IANA timezone, e.g. Asia/Jakarta (WIB); dipakai dashboard & laporan per hari kalender
     timezone = db.Column(db.String(30), nullable=False, default='Asia/Jakarta')
+    # Path relatif dari static/, e.g. uploads/tenants/<id>/logo.png
+    logo = db.Column(db.String(255), nullable=True)
 
     subscription = db.relationship('TenantPackage', back_populates='tenants')
     branches = db.relationship('Branch', backref='tenant', lazy=True, cascade='all, delete-orphan')

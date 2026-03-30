@@ -7,7 +7,8 @@
   <meta name="robots" content="noindex,follow">
   <title>Daftar trial gratis — SembaPOS</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+  {% set favicon_static_path = platform_logo or none %}
+  {% include 'includes/favicon.html' %}
   <style>
     .trial-wizard { position: relative; min-height: 280px; }
     .trial-step { display: none; animation: fadeIn 0.2s ease; }
