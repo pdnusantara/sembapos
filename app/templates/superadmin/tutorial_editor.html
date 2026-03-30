@@ -1,0 +1,256 @@
+{% extends 'base.html' %}
+{% block title %}Tutorial — Super Admin{% endblock %}
+{% block page_title %}🧩 Editor Tutorial (Global){% endblock %}
+{% block page_sub %}Atur konten `sembapos.com/tutorial` tanpa mengubah kode template.{% endblock %}
+
+{% block content %}
+<div class="card" style="border-style:dashed;">
+  <div class="card-header">
+    <div class="card-title">Blok yang ingin diubah</div>
+  </div>
+  <div style="padding:16px;">
+    <form method="GET" action="{{ url_for('superadmin.tutorial_editor') }}">
+      <div class="form-group">
+        <label class="form-label">Block</label>
+        <select name="block" class="form-control" onchange="this.form.submit()">
+          <option value="hero" {% if active_block == 'hero' %}selected{% endif %}>Hero</option>
+          <option value="fiveW1H" {% if active_block == 'fiveW1H' %}selected{% endif %}>5W1H</option>
+          <option value="toc" {% if active_block == 'toc' %}selected{% endif %}>TOC</option>
+          <option value="sidebar" {% if active_block == 'sidebar' %}selected{% endif %}>Sidebar</option>
+
+          <optgroup label="Sections">
+            {% for sec in tutorial.sections %}
+              <option value="section:{{ sec.id }}" {% if active_block == 'section:' ~ sec.id %}selected{% endif %}>
+                {{ sec.id }}
+              </option>
+            {% endfor %}
+          </optgroup>
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:16px;">
+  <div style="flex:1; min-width:360px;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Form Input</div>
+      </div>
+      <div style="padding:16px;">
+        <form method="POST" action="{{ url_for('superadmin.tutorial_editor') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <input type="hidden" name="block" value="{{ active_block }}"/>
+          <input type="hidden" name="action" value="save"/>
+          <input type="hidden" name="move_from" value=""/>
+          <input type="hidden" name="move_dir" value=""/>
+          <input type="hidden" name="add_step" value=""/>
+
+          {% if active_block == 'hero' %}
+            <div class="form-group">
+              <label class="form-label">Hero Badge</label>
+              <input type="text" name="hero_badge" class="form-control" value="{{ tutorial.hero.badge or '' }}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hero Heading</label>
+              <input type="text" name="hero_heading" class="form-control" value="{{ tutorial.hero.heading or '' }}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hero Lead</label>
+              <textarea name="hero_lead" class="form-control" rows="3">{{ tutorial.hero.lead or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">CTA Primary Text</label>
+              <input type="text" name="hero_cta_primary_text" class="form-control" value="{{ tutorial.hero.cta_primary.text if tutorial.hero.cta_primary else '' }}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">CTA Secondary Text</label>
+              <input type="text" name="hero_cta_secondary_text" class="form-control" value="{{ tutorial.hero.cta_secondary.text if tutorial.hero.cta_secondary else '' }}" />
+            </div>
+
+          {% elif active_block == 'fiveW1H' %}
+            <p style="margin:0 0 10px 0; color:var(--text-muted); font-size:13px;">
+              Bullet diambil dari textarea (1 baris = 1 bullet). Jika tidak diisi, deskripsi tetap ditampilkan.
+            </p>
+
+            {% for card in tutorial.fiveW1H.cards %}
+              <div class="card mb-3">
+                <div class="card-header">
+                  <div class="card-title">Card {{ card.label }}</div>
+                </div>
+                <div style="padding:12px;">
+                  <input type="hidden" name="five_label_{{ card.label }}" value="{{ card.label }}" />
+                  <div class="form-group">
+                    <label class="form-label">Subtitle</label>
+                    <input type="text" class="form-control" name="five_subtitle_{{ card.label }}" value="{{ card.subtitle or '' }}" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Title</label>
+                    <input type="text" class="form-control" name="five_title_{{ card.label }}" value="{{ card.title or '' }}" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-control" rows="2" name="five_description_{{ card.label }}">{{ card.description or '' }}</textarea>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Bullets (multiline)</label>
+                    <textarea class="form-control" rows="3" name="five_bullets_{{ card.label }}">{{ (card.bullets or []) | join('\n') }}</textarea>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+
+          {% elif active_block == 'toc' %}
+            <p style="margin:0 0 10px 0; color:var(--text-muted); font-size:13px;">
+              Id TOC mengikuti anchor; yang bisa diubah: icon/title/subtitle.
+            </p>
+            {% for card in tutorial.toc.cards %}
+              <div class="card mb-3">
+                <div class="card-header">
+                  <div class="card-title">TOC {{ card.id }}</div>
+                </div>
+                <div style="padding:12px;">
+                  <input type="hidden" name="toc_id_{{ card.id }}" value="{{ card.id }}" />
+                  <div class="form-group">
+                    <label class="form-label">Icon (emoji)</label>
+                    <input type="text" class="form-control" name="toc_icon_{{ card.id }}" value="{{ card.icon or '' }}" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Title</label>
+                    <input type="text" class="form-control" name="toc_title_{{ card.id }}" value="{{ card.title or '' }}" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Subtitle</label>
+                    <input type="text" class="form-control" name="toc_subtitle_{{ card.id }}" value="{{ card.subtitle or '' }}" />
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+
+          {% elif active_block == 'sidebar' %}
+            {% for link in tutorial.sidebar.links %}
+              <div class="card mb-3">
+                <div class="card-header">
+                  <div class="card-title">Sidebar {{ link.id }}</div>
+                </div>
+                <div style="padding:12px;">
+                  <input type="hidden" name="side_id_{{ link.id }}" value="{{ link.id }}" />
+                  <div class="form-group">
+                    <label class="form-label">Icon (emoji)</label>
+                    <input type="text" class="form-control" name="side_icon_{{ link.id }}" value="{{ link.icon or '' }}" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Title</label>
+                    <input type="text" class="form-control" name="side_title_{{ link.id }}" value="{{ link.title or '' }}" />
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+
+          {% elif active_block.startswith('section:') %}
+            {% set sid = active_block.split(':')[1] %}
+            {% set sec = section_map[sid] %}
+
+            <div class="form-group">
+              <label class="form-label">Section Title</label>
+              <input type="text" class="form-control" name="sec_title" value="{{ sec.title or '' }}"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Section Subtitle</label>
+              <input type="text" class="form-control" name="sec_subtitle" value="{{ sec.subtitle or '' }}"/>
+            </div>
+
+            <hr/>
+            <p style="margin:0 0 10px 0; color:var(--text-muted); font-size:13px;">Step: edit judul, lead, dan bullets (1 baris = 1 bullet).</p>
+
+            {% for step in sec.steps %}
+              <div class="card mb-3">
+                <div class="card-header">
+                  <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <span>Step {{ step.chip_prefix }} {{ step.step_number }}</span>
+                    <span style="display:flex; gap:8px;">
+                      <button type="submit" class="btn btn-outline btn-sm"
+                        onclick="this.closest('form').elements['action'].value='save'; this.closest('form').elements['move_from'].value='{{ loop.index0 }}'; this.closest('form').elements['move_dir'].value='up'; this.closest('form').elements['add_step'].value='';">
+                        ↑
+                      </button>
+                      <button type="submit" class="btn btn-outline btn-sm"
+                        onclick="this.closest('form').elements['action'].value='save'; this.closest('form').elements['move_from'].value='{{ loop.index0 }}'; this.closest('form').elements['move_dir'].value='down'; this.closest('form').elements['add_step'].value='';">
+                        ↓
+                      </button>
+                    </span>
+                  </div>
+                </div>
+                <div style="padding:12px;">
+                  <div class="form-group">
+                    <label class="form-label">Step Title</label>
+                    <input type="text" class="form-control" name="step_title_{{ loop.index0 }}" value="{{ step.title or '' }}"/>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Step Lead</label>
+                    <textarea class="form-control" rows="2" name="step_lead_{{ loop.index0 }}">{{ step.lead or '' }}</textarea>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Step Bullets (multiline)</label>
+                    <textarea class="form-control" rows="4" name="step_bullets_{{ loop.index0 }}">{{ (step.bullets or []) | join('\n') }}</textarea>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+
+            <div class="card mb-3" style="border-style:dashed;">
+              <div class="card-header">
+                <div class="card-title">Tambah Step baru</div>
+              </div>
+              <div style="padding:12px;">
+                <div class="form-group">
+                  <label class="form-label">Step Title</label>
+                  <input type="text" class="form-control" name="new_step_title" value=""/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Step Lead</label>
+                  <textarea class="form-control" rows="2" name="new_step_lead"></textarea>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Step Bullets (multiline)</label>
+                  <textarea class="form-control" rows="4" name="new_step_bullets"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary"
+                  onclick="this.closest('form').elements['action'].value='save'; this.closest('form').elements['add_step'].value='1'; this.closest('form').elements['move_from'].value=''; this.closest('form').elements['move_dir'].value='';">
+                  + Tambah Step
+                </button>
+              </div>
+            </div>
+          {% endif %}
+
+          <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
+            <button type="submit" class="btn btn-primary" onclick="this.closest('form').elements['action'].value='save';">Save</button>
+            <button type="submit" class="btn btn-secondary" onclick="this.closest('form').elements['action'].value='preview';">Preview</button>
+
+            <button type="submit" class="btn btn-danger" formaction="{{ url_for('superadmin.tutorial_editor_reset') }}" formmethod="POST"
+              onclick="return confirm('Reset konten tutorial ke default?');">
+              Reset ke default
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1; min-width:360px;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Preview</div>
+      </div>
+      <div style="padding:12px;">
+        <iframe
+          title="Preview Tutorial"
+          src="{{ url_for('superadmin.tutorial_preview') }}?n={{ preview_nonce }}"
+          style="width:100%; height:78vh; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background:#fff;">
+        </iframe>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

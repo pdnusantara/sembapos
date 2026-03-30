@@ -431,6 +431,85 @@ class StockMovement(db.Model):
         return f'<StockMovement {self.tipe} {self.qty}>'
 
 
+class StockOpnameSession(db.Model):
+    __tablename__ = 'stock_opname_sessions'
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
+    kode = db.Column(db.String(40), nullable=False, unique=True)
+    judul = db.Column(db.String(160), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='draft')  # draft, review, approved, rejected
+    catatan = db.Column(db.Text, nullable=True)
+
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    submitted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    rejected_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    submitted_at = db.Column(db.DateTime, nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    rejected_at = db.Column(db.DateTime, nullable=True)
+    finalized_at = db.Column(db.DateTime, nullable=True)
+
+    tenant = db.relationship('Tenant', backref='stock_opname_sessions', lazy=True)
+    branch = db.relationship('Branch', backref='stock_opname_sessions', lazy=True)
+    creator = db.relationship('User', foreign_keys=[created_by], backref='stock_opname_created', lazy=True)
+    submitter = db.relationship('User', foreign_keys=[submitted_by], backref='stock_opname_submitted', lazy=True)
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by], backref='stock_opname_reviewed', lazy=True)
+    approver = db.relationship('User', foreign_keys=[approved_by], backref='stock_opname_approved', lazy=True)
+    rejector = db.relationship('User', foreign_keys=[rejected_by], backref='stock_opname_rejected', lazy=True)
+
+    def __repr__(self):
+        return f'<StockOpnameSession {self.kode} {self.status}>'
+
+
+class StockOpnameItem(db.Model):
+    __tablename__ = 'stock_opname_items'
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('stock_opname_sessions.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    system_stock = db.Column(db.Float, nullable=False)
+    physical_stock = db.Column(db.Float, nullable=True)
+    selisih = db.Column(db.Float, nullable=False, default=0)
+    alasan = db.Column(db.String(255), nullable=True)
+    catatan = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    session = db.relationship('StockOpnameSession', backref=db.backref('items', lazy=True, cascade='all, delete-orphan'))
+    product = db.relationship('Product', backref='stock_opname_items', lazy=True)
+    creator = db.relationship('User', foreign_keys=[created_by], backref='stock_opname_items_created', lazy=True)
+    updater = db.relationship('User', foreign_keys=[updated_by], backref='stock_opname_items_updated', lazy=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('session_id', 'product_id', name='uq_stock_opname_items_session_product'),
+    )
+
+    def __repr__(self):
+        return f'<StockOpnameItem s#{self.session_id} p#{self.product_id}>'
+
+
+class StockOpnameApprovalLog(db.Model):
+    __tablename__ = 'stock_opname_approval_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('stock_opname_sessions.id'), nullable=False)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    action = db.Column(db.String(40), nullable=False)  # create, add_item, submit_review, approve, reject
+    note = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    session = db.relationship('StockOpnameSession', backref=db.backref('approval_logs', lazy=True, cascade='all, delete-orphan'))
+    actor = db.relationship('User', foreign_keys=[actor_user_id], backref='stock_opname_approval_logs', lazy=True)
+
+    def __repr__(self):
+        return f'<StockOpnameApprovalLog {self.action} s#{self.session_id}>'
+
+
 class ProductAuditLog(db.Model):
     __tablename__ = 'product_audit_logs'
     id = db.Column(db.Integer, primary_key=True)
@@ -819,6 +898,37 @@ class AppSetting(db.Model):
 
     def __repr__(self):
         return f'<AppSetting {self.key}>'
+
+
+# ==========================================
+# SUPERADMIN: TUTORIAL CONTENT (DYNAMIC)
+# ==========================================
+class TutorialPageConfig(db.Model):
+    """
+    Simpan konten halaman tutorial dalam bentuk structured JSON (Text).
+
+    data_json berisi blok HTML yang akan dirender kembali di `tutorial_dynamic.html`.
+    Super Admin dapat mengedit blok-blok ini melalui halaman editor.
+    """
+    __tablename__ = 'tutorial_page_configs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(80), nullable=False, unique=True)  # mis. "tutorial_main"
+    schema_version = db.Column(db.Integer, nullable=False, default=1)
+
+    # JSON string (Text) berisi block HTML & structured metadata
+    data_json = db.Column(db.Text, nullable=False, default='{}')
+
+    aktif = db.Column(db.Boolean, default=True, nullable=False)
+
+    updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    updater = db.relationship('User', foreign_keys=[updated_by], lazy=True)
+
+    def __repr__(self):
+        return f'<TutorialPageConfig {self.slug} v{self.schema_version}>'
 
 
 # ==========================================

@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block title %}Detail Stok Opname{% endblock %}
+{% block page_title %}🧾 {{ opname_session.kode }}{% endblock %}
+{% block page_sub %}{{ opname_session.judul or 'Detail sesi stok opname' }}{% endblock %}
+
+{% block content %}
+<div class="opname-detail-head">
+  <div class="opname-detail-head__meta">
+    <span class="badge {% if opname_session.status == 'approved' %}badge-success{% elif opname_session.status == 'review' %}badge-warning{% elif opname_session.status == 'rejected' %}badge-danger{% else %}badge-info{% endif %}">{{ opname_session.status }}</span>
+    <span class="text-muted">Dibuat {{ opname_session.created_at|local_dt('%Y-%m-%d %H:%M') }}</span>
+  </div>
+  <div class="opname-detail-head__actions">
+    <a href="{{ url_for('products.opname_index') }}" class="btn btn-outline btn-sm">← Kembali</a>
+  </div>
+</div>
+
+<div class="opname-summary-grid">
+  <div class="opname-summary-card">
+    <div class="opname-summary-card__label">Jumlah item</div>
+    <div class="opname-summary-card__value">{{ summary.total_items }}</div>
+  </div>
+  <div class="opname-summary-card opname-summary-card--plus">
+    <div class="opname-summary-card__label">Selisih plus</div>
+    <div class="opname-summary-card__value">+{{ summary.total_plus }}</div>
+  </div>
+  <div class="opname-summary-card opname-summary-card--minus">
+    <div class="opname-summary-card__label">Selisih minus</div>
+    <div class="opname-summary-card__value">-{{ summary.total_minus }}</div>
+  </div>
+  <div class="opname-summary-card">
+    <div class="opname-summary-card__label">Net selisih</div>
+    <div class="opname-summary-card__value">{{ summary.total_selisih }}</div>
+  </div>
+</div>
+
+<div class="layout-two-col">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Input Item Opname</div>
+    </div>
+    <form method="GET" class="opname-search-form">
+      <div class="search-bar">
+        <span class="search-icon">🔎</span>
+        <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="Cari nama/barcode produk...">
+      </div>
+      <button type="submit" class="btn btn-outline">Cari</button>
+    </form>
+    {% if product_candidates %}
+    <div class="opname-candidate-list">
+      {% for p in product_candidates %}
+      <form method="POST" action="{{ url_for('products.opname_add_item', id=opname_session.id) }}" class="opname-candidate-item">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="product_id" value="{{ p.id }}"/>
+        <div class="opname-candidate-item__title">{{ p.nama }}</div>
+        <div class="opname-candidate-item__sub">Sistem: {{ p.stok }} {{ p.satuan }}{% if p.barcode %} · {{ p.barcode }}{% endif %}</div>
+        <div class="opname-candidate-item__inputs">
+          <input type="number" step="0.01" name="physical_stock" class="form-control" placeholder="Stok fisik" required>
+          <input type="text" name="alasan" class="form-control" placeholder="Alasan selisih (wajib jika beda)">
+          <button type="submit" class="btn btn-primary">Simpan</button>
+        </div>
+      </form>
+      {% endfor %}
+    </div>
+    {% elif q %}
+    <div class="opname-empty text-muted">Produk tidak ditemukan untuk pencarian ini.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Workflow Approval</div>
+    </div>
+    <div class="opname-workflow-actions">
+      {% if opname_session.status in ('draft', 'rejected') %}
+      <form method="POST" action="{{ url_for('products.opname_submit_review', id=opname_session.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-warning btn-block">Submit Review</button>
+      </form>
+      {% endif %}
+      {% if opname_session.status == 'review' and can_manage_opname %}
+      <form method="POST" action="{{ url_for('products.opname_approve', id=opname_session.id) }}" class="opname-note-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <textarea name="approval_note" class="form-control" rows="2" placeholder="Catatan approve (wajib)"></textarea>
+        <button type="submit" class="btn btn-success btn-block">Approve & Finalize</button>
+      </form>
+      <form method="POST" action="{{ url_for('products.opname_reject', id=opname_session.id) }}" class="opname-note-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <textarea name="reject_note" class="form-control" rows="2" placeholder="Alasan reject (wajib)"></textarea>
+        <button type="submit" class="btn btn-danger btn-block">Reject</button>
+      </form>
+      {% endif %}
+      {% if not can_manage_opname and opname_session.status == 'review' %}
+      <div class="text-muted">Menunggu approval admin.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header">
+    <div class="card-title">Daftar item opname</div>
+  </div>
+  <div class="table-wrapper admin-table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Produk</th>
+          <th>Stok sistem</th>
+          <th>Stok fisik</th>
+          <th>Selisih</th>
+          <th>Alasan</th>
+          <th>Catatan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in items %}
+        <tr>
+          <td data-label="Produk">{{ i.product.nama if i.product else '—' }}</td>
+          <td data-label="Stok sistem">{{ i.system_stock }}</td>
+          <td data-label="Stok fisik">{{ i.physical_stock if i.physical_stock is not none else '—' }}</td>
+          <td data-label="Selisih">
+            <span class="badge {% if i.selisih > 0 %}badge-success{% elif i.selisih < 0 %}badge-danger{% else %}badge-info{% endif %}">
+              {{ i.selisih }}
+            </span>
+          </td>
+          <td data-label="Alasan">{{ i.alasan or '—' }}</td>
+          <td data-label="Catatan">{{ i.catatan or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted opname-empty">Belum ada item opname.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

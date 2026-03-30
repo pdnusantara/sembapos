@@ -7,23 +7,58 @@
 {% block content %}
 {{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Billing', '', true)]) }}
 
-<div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:16px;">
-  <div class="stat-card warning"><div class="stat-info"><div class="stat-value">{{ stats.unpaid }}</div><div class="stat-label">Belum Bayar</div></div></div>
-  <div class="stat-card danger"><div class="stat-info"><div class="stat-value">{{ stats.overdue }}</div><div class="stat-label">Overdue</div></div></div>
-  <div class="stat-card success"><div class="stat-info"><div class="stat-value">{{ stats.paid }}</div><div class="stat-label">Lunas</div></div></div>
-  <div class="stat-card primary"><div class="stat-info"><div class="stat-value" style="font-size:14px;">Rp {{ "{:,.0f}".format(stats.total_unpaid).replace(",",".") }}</div><div class="stat-label">Total Outstanding</div></div></div>
+<div class="card sa-billing-panel">
+  <div class="sa-billing-panel__head">
+    <div>
+      <div class="card-title" style="margin:0;">Ringkasan invoice</div>
+      <p class="sa-billing-panel__hint">Angka mengikuti tenant yang dipilih di kanan. Klik kartu untuk menyaring daftar.</p>
+    </div>
+  </div>
+
+  <div class="sa-billing-stat-grid">
+    <a href="{{ billing_url(status='unpaid') }}" class="sa-billing-stat-chip sa-billing-stat-chip--unpaid {% if status_filter == 'unpaid' %}sa-billing-stat-chip--active{% endif %}">
+      <span class="sa-billing-stat-chip__value">{{ stats.unpaid }}</span>
+      <span class="sa-billing-stat-chip__label">Belum bayar</span>
+    </a>
+    <a href="{{ billing_url(status='overdue') }}" class="sa-billing-stat-chip sa-billing-stat-chip--overdue {% if status_filter == 'overdue' %}sa-billing-stat-chip--active{% endif %}">
+      <span class="sa-billing-stat-chip__value">{{ stats.overdue }}</span>
+      <span class="sa-billing-stat-chip__label">Jatuh tempo</span>
+    </a>
+    <a href="{{ billing_url(status='paid') }}" class="sa-billing-stat-chip sa-billing-stat-chip--paid {% if status_filter == 'paid' %}sa-billing-stat-chip--active{% endif %}">
+      <span class="sa-billing-stat-chip__value">{{ stats.paid }}</span>
+      <span class="sa-billing-stat-chip__label">Lunas</span>
+    </a>
+    <a href="{{ billing_url(status='cancelled') }}" class="sa-billing-stat-chip sa-billing-stat-chip--cancelled {% if status_filter == 'cancelled' %}sa-billing-stat-chip--active{% endif %}">
+      <span class="sa-billing-stat-chip__value">{{ stats.cancelled }}</span>
+      <span class="sa-billing-stat-chip__label">Dibatalkan</span>
+    </a>
+    <div class="sa-billing-stat-outstanding">
+      <span class="sa-billing-stat-outstanding__value">Rp {{ "{:,.0f}".format(stats.total_unpaid).replace(",",".") }}</span>
+      <span class="sa-billing-stat-outstanding__label">Total outstanding (belum + jatuh tempo)</span>
+    </div>
+  </div>
+
+  {% if status_filter or q or tenant_filter %}
+  <div class="sa-billing-active-bar">
+    <span class="sa-billing-active-bar__label">Filter aktif</span>
+    {% if status_filter %}<span class="sa-billing-active-bar__value">{{ billing_status_labels.get(status_filter, status_filter) }}</span>{% endif %}
+    {% if tenant_filter %}{% if status_filter %}<span class="sa-billing-active-bar__sep">·</span>{% endif %}{% for t in tenants %}{% if t.id == tenant_filter %}<span class="sa-billing-active-bar__value">{{ t.nama }}</span>{% endif %}{% endfor %}{% endif %}
+    {% if q %}<span class="sa-billing-active-bar__sep">·</span><span class="sa-billing-active-bar__value">“{{ q }}”</span>{% endif %}
+    <span class="sa-billing-active-bar__sep">·</span>
+    <a href="{{ billing_url(drop_status=True) }}" class="sa-billing-active-bar__link">Reset status</a>
+    <span class="sa-billing-active-bar__sep">·</span>
+    <a href="{{ url_for('superadmin.billing_index') }}" class="sa-billing-active-bar__link">Reset semua</a>
+  </div>
+  {% endif %}
 </div>
 
-<div class="page-list-toolbar mb-3" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
-  <div style="display:flex;gap:8px;flex-wrap:wrap;">
-    <a href="{{ url_for('superadmin.billing_add') }}" class="btn btn-primary">+ Buat Invoice</a>
-    <a href="{{ url_for('superadmin.billing_index') }}" class="btn btn-outline btn-sm {% if not status_filter %}active{% endif %}">Semua</a>
-    <a href="{{ url_for('superadmin.billing_index', status='unpaid') }}" class="btn btn-outline btn-sm {% if status_filter == 'unpaid' %}active{% endif %}">Unpaid</a>
-    <a href="{{ url_for('superadmin.billing_index', status='overdue') }}" class="btn btn-outline btn-sm {% if status_filter == 'overdue' %}active{% endif %}">Overdue</a>
-    <a href="{{ url_for('superadmin.billing_index', status='paid') }}" class="btn btn-outline btn-sm {% if status_filter == 'paid' %}active{% endif %}">Paid</a>
-  </div>
-  <form method="get" style="display:flex;gap:8px;">
-    <select name="tenant" class="form-control" style="min-width:160px;" onchange="this.form.submit()">
+<div class="sa-billing-toolbar">
+  <a href="{{ url_for('superadmin.billing_add') }}" class="btn btn-primary sa-billing-toolbar__cta">+ Buat invoice</a>
+  <form method="get" class="sa-billing-toolbar__form">
+    {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+    <input type="search" name="q" value="{{ q }}" class="form-control sa-billing-toolbar__search" placeholder="Cari nomor invoice atau nama tenant…" autocomplete="off">
+    <button type="submit" class="btn btn-outline btn-sm">Cari</button>
+    <select name="tenant" class="form-control sa-billing-toolbar__tenant" onchange="this.form.submit()" aria-label="Filter tenant">
       <option value="">Semua tenant</option>
       {% for t in tenants %}
       <option value="{{ t.id }}" {% if tenant_filter == t.id %}selected{% endif %}>{{ t.nama }}</option>
@@ -32,55 +67,70 @@
   </form>
 </div>
 
-<div class="card">
+<div class="card sa-billing-table-card">
+  <div class="card-header sa-billing-table-card__head">
+    <div>
+      <div class="card-title" style="margin:0;">Daftar invoice</div>
+      <div class="sa-billing-table-card__sub">{{ total }} entri{% if total_pages > 1 %} · halaman {{ page }} dari {{ total_pages }}{% endif %}</div>
+    </div>
+  </div>
   <div class="table-wrapper">
-    <table class="table">
+    <table class="table sa-billing-table">
       <thead>
-        <tr><th>No. Invoice</th><th>Tenant</th><th>Nominal</th><th>Periode</th><th>Status</th><th>Tgl Bayar</th><th>Aksi</th></tr>
+        <tr><th>No. invoice</th><th>Tenant</th><th class="sa-billing-num">Nominal</th><th>Periode</th><th>Status</th><th>Tgl bayar</th><th class="sa-billing-th-actions">Aksi</th></tr>
       </thead>
       <tbody>
         {% for inv in invoices %}
         <tr>
-          <td style="font-weight:600;font-family:monospace;">{{ inv.nomor }}</td>
-          <td>{{ inv.tenant.nama if inv.tenant else '-' }}</td>
-          <td style="white-space:nowrap;">Rp {{ "{:,.0f}".format(inv.nominal).replace(",",".") }}</td>
-          <td style="font-size:12px;">
+          <td class="sa-billing-mono">{{ inv.nomor }}</td>
+          <td>{{ inv.tenant.nama if inv.tenant else '—' }}</td>
+          <td class="sa-billing-num">Rp {{ "{:,.0f}".format(inv.nominal).replace(",",".") }}</td>
+          <td class="sa-billing-period">
             {% if inv.periode_mulai %}{{ inv.periode_mulai.strftime('%d/%m/%y') }}{% endif %}
             {% if inv.periode_akhir %} — {{ inv.periode_akhir.strftime('%d/%m/%y') }}{% endif %}
           </td>
           <td>
             <span class="badge {% if inv.status == 'paid' %}badge-success{% elif inv.status == 'overdue' %}badge-danger{% elif inv.status == 'cancelled' %}badge-info{% else %}badge-warning{% endif %}">
-              {{ inv.status.upper() }}
+              {{ billing_status_labels.get(inv.status, inv.status) }}
             </span>
           </td>
-          <td class="text-muted" style="font-size:12px;">{{ inv.tanggal_bayar.strftime('%d/%m/%Y') if inv.tanggal_bayar else '-' }}</td>
-          <td>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;">
-              {% if inv.status in ('unpaid', 'overdue') %}
-              <form method="POST" action="{{ url_for('superadmin.billing_pay', id=inv.id) }}" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <input type="hidden" name="metode_bayar" value="transfer"/>
-                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--success);" onclick="return confirm('Tandai lunas?')">✅</button>
-              </form>
-              <form method="POST" action="{{ url_for('superadmin.billing_cancel', id=inv.id) }}" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger);" onclick="return confirm('Batalkan invoice?')">✕</button>
-              </form>
-              {% endif %}
-            </div>
+          <td class="text-muted sa-billing-date">{{ inv.tanggal_bayar.strftime('%d/%m/%Y') if inv.tanggal_bayar else '—' }}</td>
+          <td class="sa-billing-actions">
+            {% if inv.status in ('unpaid', 'overdue') %}
+            <form method="POST" action="{{ url_for('superadmin.billing_pay', id=inv.id) }}" class="sa-billing-pay-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <select name="metode_bayar" class="form-control sa-billing-pay-form__method" aria-label="Metode bayar">
+                <option value="transfer">Transfer</option>
+                <option value="cash">Cash</option>
+                <option value="qris">QRIS</option>
+                <option value="lainnya">Lainnya</option>
+              </select>
+              <button type="submit" class="btn btn-sm sa-billing-pay-form__btn" onclick="return confirm('Tandai invoice ini lunas?')">Lunas</button>
+            </form>
+            {% if inv.status == 'unpaid' %}
+            <form method="POST" action="{{ url_for('superadmin.billing_overdue', id=inv.id) }}" class="sa-billing-inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button type="submit" class="btn btn-outline btn-sm" title="Tandai jatuh tempo" onclick="return confirm('Tandai invoice ini jatuh tempo?')" aria-label="Jatuh tempo">⏱</button>
+            </form>
+            {% endif %}
+            <form method="POST" action="{{ url_for('superadmin.billing_cancel', id=inv.id) }}" class="sa-billing-inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button type="submit" class="btn btn-outline btn-sm sa-billing-btn-danger" onclick="return confirm('Batalkan invoice?')">Batal</button>
+            </form>
+            {% endif %}
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="text-muted" style="text-align:center;padding:40px;">Belum ada invoice</td></tr>
+        <tr><td colspan="7" class="text-muted sa-billing-empty">Belum ada invoice untuk filter ini</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  {% if total_pages > 1 %}
-  <div style="padding:12px 16px;display:flex;gap:8px;justify-content:center;align-items:center;">
-    {% if page > 1 %}<a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.billing_index', page=page-1, status=status_filter, tenant=tenant_filter) }}">←</a>{% endif %}
-    <span class="text-muted" style="font-size:13px;">{{ page }} / {{ total_pages }}</span>
-    {% if page < total_pages %}<a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.billing_index', page=page+1, status=status_filter, tenant=tenant_filter) }}">→</a>{% endif %}
+  {% if billing_pagination and (billing_pagination.prev or billing_pagination.next) %}
+  <div class="sa-leads-pagination">
+    {% if billing_pagination.prev %}<a class="btn btn-outline btn-sm" href="{{ billing_pagination.prev }}">← Sebelumnya</a>{% endif %}
+    <span class="text-muted sa-leads-pagination__meta">Halaman {{ page }} dari {{ total_pages }}</span>
+    {% if billing_pagination.next %}<a class="btn btn-outline btn-sm" href="{{ billing_pagination.next }}">Berikutnya →</a>{% endif %}
   </div>
   {% endif %}
 </div>

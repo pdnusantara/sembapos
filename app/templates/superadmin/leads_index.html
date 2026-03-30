@@ -10,7 +10,7 @@
 <div class="card sa-leads-filter-panel">
   <div class="sa-leads-filter-panel__head">
     <div>
-      <div class="card-title" style="margin:0;">Filter daftar lead</div>
+      <div class="card-title sa-leads-filter-panel__title">Filter daftar lead</div>
       <div class="sa-leads-filter-panel__hint">Pilih periode dan status; pencarian menyaring nama, WhatsApp, dan jenis usaha. Angka pada status = jumlah lead di periode &amp; pencarian saat ini.</div>
     </div>
     {% if period_filter != 'all' or status_filter or q %}
@@ -71,77 +71,77 @@
   </div>
 </div>
 
-<div class="card">
+<div class="card sa-leads-table-card">
   <div class="card-header">
     <div class="card-title">Daftar lead ({{ total }})</div>
   </div>
-  <div class="table-wrapper">
-    <table class="table">
+  <div class="table-wrapper sa-leads-table-wrapper">
+    <table class="table sa-leads-table">
       <thead>
         <tr><th>Nama</th><th>Jenis usaha</th><th>WA</th><th>Lokasi</th><th>Sumber</th><th>Status</th><th>Tanggal</th><th>Trial</th><th>Aksi</th></tr>
       </thead>
       <tbody>
         {% for lead in leads %}
         <tr>
-          <td style="font-weight:600;">{{ lead.nama }}</td>
-          <td>{{ lead.jenis_usaha or '—' }}</td>
-          <td style="font-size:12px;">{{ lead.no_wa or '—' }}</td>
-          <td style="font-size:12px;">{{ lead.kabupaten or '—' }}</td>
-          <td><span class="badge badge-info" style="font-size:10px;">{{ lead.source }}</span></td>
-          <td>
+          <td data-label="Nama" class="sa-leads-cell-name">{{ lead.nama }}</td>
+          <td data-label="Jenis usaha">{{ lead.jenis_usaha or '—' }}</td>
+          <td data-label="WA" class="sa-leads-cell-small">{{ lead.no_wa or '—' }}</td>
+          <td data-label="Lokasi" class="sa-leads-cell-small">{{ lead.kabupaten or '—' }}</td>
+          <td data-label="Sumber"><span class="badge badge-info sa-leads-source-badge">{{ lead.source }}</span></td>
+          <td data-label="Status">
             <span class="badge {% if lead.status == 'new' %}badge-primary{% elif lead.status == 'contacted' %}badge-warning{% elif lead.status == 'converted' %}badge-success{% else %}badge-danger{% endif %}">
               {{ lead_status_label_by_code.get(lead.status, lead.status) }}
             </span>
           </td>
-          <td class="text-muted" style="font-size:12px;">{{ lead.created_at.strftime('%d/%m/%Y %H:%M') }} UTC</td>
-          <td style="font-size:11px;max-width:200px;">
+          <td data-label="Tanggal" class="text-muted sa-leads-cell-small">{{ lead.created_at.strftime('%d/%m/%Y %H:%M') }} UTC</td>
+          <td data-label="Trial" class="sa-leads-cell-trial">
             {% if lead.trial_tenant_id %}
               {% if lead.trial_expired_at and utc_now() <= lead.trial_expired_at %}
-              <span class="badge badge-success" style="font-size:9px;">Trial aktif</span>
+              <span class="badge badge-success sa-leads-trial-badge">Trial aktif</span>
               {% else %}
-              <span class="badge badge-warning" style="font-size:9px;">Trial berakhir</span>
+              <span class="badge badge-warning sa-leads-trial-badge">Trial berakhir</span>
               {% endif %}
               {% if lead.trial_username %}
-              <div style="margin-top:4px;font-family:monospace;">{{ lead.trial_username }}</div>
+              <div class="sa-leads-trial-user">{{ lead.trial_username }}</div>
               {% endif %}
               {% if lead.trial_password %}
-              <div style="color:var(--text-muted);word-break:break-all;">{{ lead.trial_password }}</div>
+              <div class="sa-leads-trial-password">{{ lead.trial_password }}</div>
               {% endif %}
               {% if lead.trial_expired_at %}
-              <div class="text-muted" style="font-size:10px;">Exp {{ lead.trial_expired_at.strftime('%d/%m/%Y') }}</div>
+              <div class="text-muted sa-leads-trial-exp">Exp {{ lead.trial_expired_at.strftime('%d/%m/%Y') }}</div>
               {% endif %}
               {% if lead.trial_tenant_id %}
-              <a href="{{ url_for('superadmin.view_tenant', id=lead.trial_tenant_id) }}" class="btn btn-outline btn-sm" style="margin-top:6px;padding:2px 6px;font-size:10px;">Tenant</a>
+              <a href="{{ url_for('superadmin.view_tenant', id=lead.trial_tenant_id) }}" class="btn btn-outline btn-sm sa-leads-trial-tenant-btn">Tenant</a>
               {% endif %}
             {% else %}
               <span class="text-muted">—</span>
             {% endif %}
           </td>
-          <td>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;">
-              <form method="POST" action="{{ url_for('superadmin.lead_update_status', id=lead.id) }}" style="display:inline;">
+          <td data-label="Aksi">
+            <div class="sa-leads-actions">
+              <form method="POST" action="{{ url_for('superadmin.lead_update_status', id=lead.id) }}" class="sa-leads-actions__form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <select name="status" onchange="this.form.submit()" class="form-control" style="font-size:11px;padding:2px 4px;min-width:90px;">
+                <select name="status" onchange="this.form.submit()" class="form-control sa-leads-status-select">
                   {% for code, label in lead_statuses %}
                   <option value="{{ code }}" {% if lead.status == code %}selected{% endif %}>{{ label }}</option>
                   {% endfor %}
                 </select>
               </form>
               {% if lead.status != 'converted' %}
-              <form method="POST" action="{{ url_for('superadmin.lead_convert', id=lead.id) }}" style="display:inline;">
+              <form method="POST" action="{{ url_for('superadmin.lead_convert', id=lead.id) }}" class="sa-leads-actions__form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button type="submit" class="btn btn-outline btn-sm" title="Konversi ke tenant">🏢</button>
               </form>
               {% endif %}
-              <form method="POST" action="{{ url_for('superadmin.lead_delete', id=lead.id) }}" style="display:inline;" onsubmit="return confirm('Hapus lead ini?')">
+              <form method="POST" action="{{ url_for('superadmin.lead_delete', id=lead.id) }}" class="sa-leads-actions__form" onsubmit="return confirm('Hapus lead ini?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger);">🗑️</button>
+                <button type="submit" class="btn btn-outline btn-sm sa-leads-btn-delete">🗑️</button>
               </form>
             </div>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:40px;">Belum ada lead untuk filter ini</td></tr>
+        <tr><td colspan="9" class="text-muted sa-leads-empty">Belum ada lead untuk filter ini</td></tr>
         {% endfor %}
       </tbody>
     </table>

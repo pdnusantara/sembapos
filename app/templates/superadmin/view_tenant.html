@@ -1,14 +1,16 @@
 {% extends 'base.html' %}
 {% import 'superadmin/_breadcrumbs.html' as bc %}
 {% block title %}Detail Tenant — {{ tenant.nama }}{% endblock %}
-{% block page_title %}🏢 {{ tenant.nama }}{% endblock %}
-{% block page_sub %}Kode: {{ tenant.kode }} | Paket: {% if tenant.subscription %}{{ tenant.subscription.nama }}{% else %}{{ tenant.paket.upper() }}{% endif %}{% endblock %}
+{% block page_title %}{{ tenant.nama }}{% endblock %}
+{% block page_sub %}Kode {{ tenant.kode }} · {% if tenant.subscription %}{{ tenant.subscription.nama }}{% else %}{{ tenant.paket.upper() }}{% endif %}{% endblock %}
 
 {% block content %}
+<div class="sa-tenant-detail">
 {{ bc.sa_bc([
   ('Super Admin', url_for('superadmin.index'), false),
   (tenant.nama, '', true),
 ]) }}
+
 {% if tenant.subscription and not tenant.subscription.aktif %}
 <div class="alert alert-danger" style="margin-bottom:14px;">
   <strong>Paket nonaktif:</strong> Tenant ini masih memakai paket <code>{{ tenant.subscription.kode }}</code> yang sudah dinonaktifkan. Ubah ke paket aktif lewat Edit tenant.
@@ -28,56 +30,86 @@
 </div>
 {% endif %}
 
-<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center;">
-  <a href="{{ url_for('superadmin.edit_tenant', id=tenant.id) }}" class="btn btn-primary">✏️ Edit tenant</a>
-  <form method="POST" action="{{ url_for('superadmin.impersonate', id=tenant.id) }}" style="display:inline;" onsubmit="return confirm('Masuk sebagai admin tenant ini?');">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-    <button type="submit" class="btn btn-outline">👤 Masuk sebagai tenant</button>
-  </form>
-  <a href="{{ url_for('superadmin.tenant_plan_history', id=tenant.id) }}" class="btn btn-outline">📜 Riwayat paket</a>
-  <a href="{{ url_for('superadmin.index') }}" class="btn btn-outline">← Kembali</a>
-</div>
-
-<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-  <span class="badge {{ 'badge-success' if tenant.aktif else 'badge-danger' }}">{{ 'Tenant aktif' if tenant.aktif else 'Tenant nonaktif' }}</span>
-  {% if expired %}
-  <span class="badge badge-danger">Langganan kedaluwarsa</span>
-  {% elif near_expiry %}
-  <span class="badge badge-warning">Langganan &lt; 14 hari</span>
-  {% endif %}
-  {% if quota_branch_warn or quota_user_warn %}
-  <span class="badge badge-danger">Kuota cabang/user penuh</span>
-  {% elif quota_branch_near or quota_user_near %}
-  <span class="badge badge-warning">Kuota hampir penuh</span>
-  {% endif %}
-</div>
-{% if tenant.tanggal_expired %}
-<p class="text-muted" style="font-size:13px;margin:0 0 12px;">Berlangganan sampai: <strong>{{ tenant.tanggal_expired.strftime('%d/%m/%Y %H:%M') }} UTC</strong></p>
-{% endif %}
+<section class="sa-tenant-detail__hero" aria-label="Ringkasan tenant">
+  <div class="sa-tenant-detail__hero-inner">
+    <p class="sa-tenant-detail__eyebrow">Detail tenant</p>
+    <h1 class="sa-tenant-detail__headline">{{ tenant.nama }}</h1>
+    <p class="sa-tenant-detail__subline">
+      Kode <strong style="color:var(--text-light);">{{ tenant.kode }}</strong>
+      · Paket {% if tenant.subscription %}<strong style="color:var(--text-light);">{{ tenant.subscription.nama }}</strong>{% else %}<strong style="color:var(--text-light);">{{ tenant.paket.upper() }}</strong>{% endif %}
+    </p>
+    <div class="sa-tenant-detail__pills">
+      <span class="badge {{ 'badge-success' if tenant.aktif else 'badge-danger' }}">{{ 'Tenant aktif' if tenant.aktif else 'Tenant nonaktif' }}</span>
+      {% if expired %}
+      <span class="badge badge-danger">Langganan kedaluwarsa</span>
+      {% elif near_expiry %}
+      <span class="badge badge-warning">Langganan &lt; 14 hari</span>
+      {% endif %}
+      {% if quota_branch_warn or quota_user_warn %}
+      <span class="badge badge-danger">Kuota cabang/user penuh</span>
+      {% elif quota_branch_near or quota_user_near %}
+      <span class="badge badge-warning">Kuota hampir penuh</span>
+      {% endif %}
+    </div>
+    {% if tenant.tanggal_expired %}
+    <p class="sa-tenant-detail__expiry">Berlangganan sampai: <strong>{{ tenant.tanggal_expired.strftime('%d/%m/%Y %H:%M') }} UTC</strong></p>
+    {% endif %}
+    <div class="sa-tenant-detail__toolbar">
+      <a href="{{ url_for('superadmin.edit_tenant', id=tenant.id) }}" class="btn btn-primary">Edit tenant</a>
+      <form method="POST" action="{{ url_for('superadmin.impersonate', id=tenant.id) }}" style="display:inline;" onsubmit="return confirm('Masuk sebagai admin tenant ini?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-outline">Masuk sebagai tenant</button>
+      </form>
+      <a href="{{ url_for('superadmin.tenant_plan_history', id=tenant.id) }}" class="btn btn-outline">Riwayat paket</a>
+      <a href="{{ url_for('superadmin.index') }}" class="btn btn-outline">Kembali</a>
+    </div>
+  </div>
+</section>
 
 {% if tenant.subscription %}
 <div class="card mb-3">
-  <div class="card-header"><div class="card-title">📦 Paket &amp; kuota</div></div>
-  <div style="padding:14px 16px;font-size:13px;line-height:1.6;">
-    <p style="margin:0 0 8px;"><strong>{{ tenant.subscription.nama }}</strong> <span class="badge badge-info">{{ tenant.subscription.kode }}</span></p>
-    {% if tenant.subscription.deskripsi %}<p class="text-muted" style="margin:0 0 10px;">{{ tenant.subscription.deskripsi }}</p>{% endif %}
-    <p style="margin:0 0 6px;">Referensi harga: <strong>Rp {{ "{:,.0f}".format(tenant.subscription.harga_bulanan).replace(",",".") }}</strong>/bulan · <strong>Rp {{ "{:,.0f}".format(tenant.subscription.harga_tahunan).replace(",",".") }}</strong>/tahun</p>
-    <p style="margin:0 0 6px;">Kuota paket: max <strong>{% if tenant.subscription.max_cabang >= unlimited_threshold %}∞{% else %}{{ tenant.subscription.max_cabang }}{% endif %}</strong> cabang, <strong>{% if tenant.subscription.max_user >= unlimited_threshold %}∞{% else %}{{ tenant.subscription.max_user }}{% endif %}</strong> user (nilai di tenant bisa disesuaikan manual).</p>
-    <p style="margin:0;color:var(--text-muted);font-size:12px;">Modul tenant: {{ paket_modul_ringkas }}</p>
+  <div class="card-header">
+    <div class="sa-tenant-detail__card-head">
+      <span class="sa-tenant-detail__card-head-icon" aria-hidden="true">📦</span>
+      <div>
+        <div class="card-title" style="margin:0;">Paket &amp; kuota</div>
+        <div style="font-size:12px;color:var(--text-muted);font-weight:400;margin-top:2px;">Referensi dan batas modul</div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:16px 18px;">
+    <p style="margin:0 0 12px;font-size:15px;"><strong>{{ tenant.subscription.nama }}</strong> <span class="badge badge-info">{{ tenant.subscription.kode }}</span></p>
+    {% if tenant.subscription.deskripsi %}<p class="text-muted" style="margin:0 0 14px;line-height:1.55;">{{ tenant.subscription.deskripsi }}</p>{% endif %}
+    <div class="sa-tenant-detail__pkg-grid">
+      <div class="sa-tenant-detail__pkg-item">
+        Referensi harga<br>
+        <strong>Rp {{ "{:,.0f}".format(tenant.subscription.harga_bulanan).replace(",",".") }}</strong>/bulan<br>
+        <strong>Rp {{ "{:,.0f}".format(tenant.subscription.harga_tahunan).replace(",",".") }}</strong>/tahun
+      </div>
+      <div class="sa-tenant-detail__pkg-item">
+        Kuota paket (referensi)<br>
+        <strong>{% if tenant.subscription.max_cabang >= unlimited_threshold %}∞{% else %}{{ tenant.subscription.max_cabang }}{% endif %}</strong> cabang ·
+        <strong>{% if tenant.subscription.max_user >= unlimited_threshold %}∞{% else %}{{ tenant.subscription.max_user }}{% endif %}</strong> user
+      </div>
+    </div>
+    <p class="sa-tenant-detail__pkg-item sa-tenant-detail__pkg-item--muted" style="margin:12px 0 0;">Modul tenant: {{ paket_modul_ringkas }}</p>
   </div>
 </div>
 {% endif %}
 
 <div class="card mb-3">
   <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <div class="card-title">📜 Riwayat paket &amp; kuota</div>
+    <div class="sa-tenant-detail__card-head">
+      <span class="sa-tenant-detail__card-head-icon" aria-hidden="true">📜</span>
+      <div class="card-title" style="margin:0;">Riwayat paket &amp; kuota</div>
+    </div>
     <a href="{{ url_for('superadmin.tenant_plan_history', id=tenant.id) }}" class="btn btn-outline btn-sm">Lihat semua</a>
   </div>
-  <div class="table-wrapper">
+  <div class="table-wrapper sa-tenant-detail__table-wrap">
     <table class="table">
       <thead>
         <tr>
-          <th>Waktu (UTC)</th>
+          <th>Waktu</th>
           <th>Event</th>
           <th>Paket</th>
           <th>Cab / User</th>
@@ -87,46 +119,51 @@
       <tbody>
         {% for r in plan_history_recent %}
         <tr>
-          <td class="text-muted" style="font-size:11px;white-space:nowrap;">{{ r.created_at|local_dt_tz(tenant.timezone if tenant else 'Asia/Jakarta', '%d/%m/%Y %H:%M') }}</td>
+          <td class="text-muted" style="font-size:12px;white-space:nowrap;">{{ r.created_at|local_dt_tz(tenant.timezone if tenant else 'Asia/Jakarta', '%d/%m/%Y %H:%M') }}</td>
           <td><span class="badge badge-info" style="font-size:10px;">{{ r.event }}</span></td>
-          <td style="font-size:11px;">{{ r.old_paket_kode or '—' }} → <strong>{{ r.new_paket_kode or '—' }}</strong></td>
+          <td style="font-size:12px;">{{ r.old_paket_kode or '—' }} → <strong>{{ r.new_paket_kode or '—' }}</strong></td>
           <td style="font-size:11px;">{{ r.old_max_cabang if r.old_max_cabang is not none else '—' }}→{{ r.new_max_cabang if r.new_max_cabang is not none else '—' }} / {{ r.old_max_user if r.old_max_user is not none else '—' }}→{{ r.new_max_user if r.new_max_user is not none else '—' }}</td>
           <td style="font-size:11px;">{% if r.actor %}@{{ r.actor.username }}{% else %}—{% endif %}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-muted" style="text-align:center;padding:16px;">Belum ada riwayat.</td></tr>
+        <tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px;">Belum ada riwayat.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
-<div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:16px;">
+<div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin-bottom:20px;">
   <div class="stat-card primary">
+    <div class="stat-icon primary">💰</div>
     <div class="stat-info">
       <div class="stat-value" style="font-size:14px;">Rp {{ "{:,.0f}".format(total_penjualan).replace(",",".") }}</div>
       <div class="stat-label">Total penjualan</div>
     </div>
   </div>
   <div class="stat-card success">
+    <div class="stat-icon success">🧾</div>
     <div class="stat-info">
       <div class="stat-value">{{ total_transaksi }}</div>
       <div class="stat-label">Total transaksi</div>
     </div>
   </div>
   <div class="stat-card warning">
+    <div class="stat-icon warning">📅</div>
     <div class="stat-info">
       <div class="stat-value" style="font-size:14px;">Rp {{ "{:,.0f}".format(omzet_today).replace(",",".") }}</div>
       <div class="stat-label">Omzet hari ini</div>
     </div>
   </div>
   <div class="stat-card danger">
+    <div class="stat-icon danger">📆</div>
     <div class="stat-info">
       <div class="stat-value" style="font-size:14px;">Rp {{ "{:,.0f}".format(omzet_7).replace(",",".") }}</div>
       <div class="stat-label">7 hari</div>
     </div>
   </div>
   <div class="stat-card primary">
+    <div class="stat-icon primary">📊</div>
     <div class="stat-info">
       <div class="stat-value" style="font-size:14px;">Rp {{ "{:,.0f}".format(omzet_30).replace(",",".") }}</div>
       <div class="stat-label">30 hari</div>
@@ -135,72 +172,131 @@
 </div>
 
 <div class="card mb-3">
-  <div class="card-header"><div class="card-title">📊 Omzet 7 hari terakhir</div></div>
-  <div style="padding:16px;display:flex;align-items:flex-end;gap:8px;min-height:120px;flex-wrap:wrap;">
-    {% for d in chart_7d %}
-    <div style="flex:1;min-width:36px;max-width:64px;display:flex;flex-direction:column;align-items:center;gap:6px;">
-      <div style="width:100%;background:rgba(108,99,255,0.15);border-radius:6px;height:80px;display:flex;align-items:flex-end;overflow:hidden;">
-        <div style="width:100%;height:{{ d.pct }}%;min-height:{{ 4 if d.value > 0 else 0 }}px;background:linear-gradient(180deg,var(--primary),var(--primary-light));border-radius:6px 6px 0 0;"></div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);text-align:center;">{{ d.label }}</div>
-      <div style="font-size:9px;color:var(--text-muted);">Rp {{ "{:,.0f}".format(d.value).replace(",",".") }}</div>
+  <div class="card-header">
+    <div class="sa-tenant-detail__card-head">
+      <span class="sa-tenant-detail__card-head-icon" aria-hidden="true">📈</span>
+      <div class="card-title" style="margin:0;">Omzet 7 hari terakhir</div>
     </div>
-    {% endfor %}
+  </div>
+  <div class="sa-tenant-detail__chart">
+    <div class="sa-tenant-detail__bar-row">
+      {% for d in chart_7d %}
+      <div class="sa-tenant-detail__bar-cell">
+        <div class="sa-tenant-detail__bar-track">
+          <div class="sa-tenant-detail__bar-fill" style="height:{{ d.pct }}%;min-height:{{ 4 if d.value > 0 else 0 }}px;"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);text-align:center;">{{ d.label }}</div>
+        <div style="font-size:9px;color:var(--text-muted);text-align:center;">Rp {{ "{:,.0f}".format(d.value).replace(",",".") }}</div>
+      </div>
+      {% endfor %}
+    </div>
   </div>
 </div>
 
 <div class="layout-split-equal">
   <div class="card">
-    <div class="card-header"><div class="card-title">🏬 Cabang ({{ branches|length }}{% if tenant.max_cabang < unlimited_threshold %} / {{ tenant.max_cabang }}{% else %} / ∞{% endif %})</div></div>
-    <div style="display:flex;flex-direction:column;gap:8px;">
-      {% for b in branches %}
-      <div style="padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    <div class="card-header">
+      <div class="sa-tenant-detail__card-head">
+        <span class="sa-tenant-detail__card-head-icon" aria-hidden="true">🏬</span>
         <div>
-          <div style="font-weight:600;">{{ b.nama }}</div>
-          <div style="font-size:11px;color:var(--text-muted);">{{ b.kode }}</div>
+          <div class="card-title" style="margin:0;">Cabang</div>
+          <div style="font-size:12px;color:var(--text-muted);font-weight:400;">{{ branches|length }}{% if tenant.max_cabang < unlimited_threshold %} / {{ tenant.max_cabang }}{% else %} / ∞{% endif %} terdaftar</div>
         </div>
-        <span class="badge {{ 'badge-success' if b.aktif else 'badge-danger' }}">{{ '✅' if b.aktif else '⛔' }}</span>
       </div>
-      {% endfor %}
+    </div>
+    <div style="padding:12px 16px 16px;">
+      <div class="sa-tenant-detail__list">
+        {% for b in branches %}
+        <div class="sa-tenant-detail__list-item">
+          <div>
+            <div class="sa-tenant-detail__list-name">{{ b.nama }}</div>
+            <div style="font-size:12px;color:var(--text-muted);">{{ b.kode }}</div>
+          </div>
+          <span class="badge {{ 'badge-success' if b.aktif else 'badge-danger' }}">{{ 'Aktif' if b.aktif else 'Nonaktif' }}</span>
+        </div>
+        {% else %}
+        <p class="text-muted" style="text-align:center;padding:12px;margin:0;">Belum ada cabang.</p>
+        {% endfor %}
+      </div>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-header"><div class="card-title">👥 Pengguna ({{ users|length }}{% if tenant.max_user < unlimited_threshold %} / {{ tenant.max_user }}{% else %} / ∞{% endif %})</div></div>
-    <div style="display:flex;flex-direction:column;gap:8px;">
-      {% for u in users %}
-      <div style="padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    <div class="card-header">
+      <div class="sa-tenant-detail__card-head">
+        <span class="sa-tenant-detail__card-head-icon" aria-hidden="true">👥</span>
         <div>
-          <div style="font-weight:600;">{{ u.nama }}</div>
-          <div style="font-size:11px;color:var(--text-muted);">@{{ u.username }}</div>
+          <div class="card-title" style="margin:0;">Pengguna</div>
+          <div style="font-size:12px;color:var(--text-muted);font-weight:400;">{{ users|length }}{% if tenant.max_user < unlimited_threshold %} / {{ tenant.max_user }}{% else %} / ∞{% endif %} akun</div>
         </div>
-        <span class="badge {{ 'badge-primary' if u.role=='admin' else 'badge-warning' }}">{{ u.role }}</span>
+      </div>
+    </div>
+    <div style="padding:12px 16px 16px;">
+      <div class="sa-tenant-detail__list">
+        {% for u in users %}
+        <div class="sa-tenant-detail__list-item">
+          <div>
+            <div class="sa-tenant-detail__list-name">{{ u.nama }}</div>
+            <div style="font-size:12px;color:var(--text-muted);">@{{ u.username }}</div>
+          </div>
+          <span class="badge {{ 'badge-primary' if u.role=='admin' else 'badge-warning' }}">{{ u.role }}</span>
+        </div>
+        {% else %}
+        <p class="text-muted" style="text-align:center;padding:12px;margin:0;">Belum ada pengguna.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div class="sa-tenant-detail__card-head">
+      <span class="sa-tenant-detail__card-head-icon" aria-hidden="true">🚀</span>
+      <div>
+        <div class="card-title" style="margin:0;">Onboarding</div>
+        <div style="font-size:12px;color:var(--text-muted);font-weight:400;">{{ onboarding_done }}/{{ onboarding_steps|length }} langkah</div>
+      </div>
+    </div>
+    <div style="font-size:13px;font-weight:700;color:var(--primary-light);">{{ onboarding_pct }}%</div>
+  </div>
+  <div style="padding:14px 18px 18px;">
+    {% if onboarding_pct == 100 %}
+    <div class="alert alert-success sa-tenant-detail__onboard-banner" style="margin:0 0 14px;">
+      <strong>Tenant sepenuhnya onboard</strong> — semua milestone onboarding tercapai.
+    </div>
+    {% endif %}
+    <div class="sa-tenant-detail__onboard-progress">
+      <div class="sa-tenant-detail__onboard-progress-fill" style="width:{{ onboarding_pct }}%;background:{% if onboarding_pct == 100 %}var(--success){% else %}linear-gradient(90deg,var(--primary),var(--primary-light)){% endif %};"></div>
+    </div>
+    <div>
+      {% for step in onboarding_steps %}
+      <div class="sa-tenant-detail__onboard-row">
+        <span class="sa-tenant-detail__step-icon {% if step.done %}sa-tenant-detail__step-icon--done{% endif %}" aria-hidden="true">{% if step.done %}✓{% else %}○{% endif %}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:var(--text-light);">{{ step.label }}</div>
+          {% if step.done and step.since %}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Sejak {{ step.since.strftime('%d/%m/%Y') }}</div>
+          {% elif step.done %}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Selesai</div>
+          {% else %}
+          <div style="font-size:11px;color:var(--warning);margin-top:4px;line-height:1.45;">{{ step.hint }}</div>
+          {% endif %}
+        </div>
       </div>
       {% endfor %}
     </div>
   </div>
 </div>
 
-<div class="card" style="margin-top:16px;">
+<div class="card sa-tenant-detail__reset-card" style="margin-top:20px;">
   <div class="card-header">
-    <div class="card-title">🚀 Onboarding ({{ onboarding_done }}/{{ onboarding_steps|length }})</div>
-    <div style="font-size:12px;color:var(--text-muted);">{{ onboarding_pct }}% selesai</div>
-  </div>
-  <div style="padding:12px 16px;">
-    <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.1);margin-bottom:12px;overflow:hidden;">
-      <div style="width:{{ onboarding_pct }}%;height:100%;background:{% if onboarding_pct == 100 %}var(--success){% else %}var(--primary){% endif %};border-radius:3px;"></div>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;">
-      {% for step in onboarding_steps %}
-      <span class="badge {% if step.done %}badge-success{% else %}badge-warning{% endif %}">{{ '✅' if step.done else '⬜' }} {{ step.label }}</span>
-      {% endfor %}
+    <div class="sa-tenant-detail__card-head">
+      <span class="sa-tenant-detail__card-head-icon" aria-hidden="true">🔑</span>
+      <div class="card-title" style="margin:0;">Reset password user tenant</div>
     </div>
   </div>
-</div>
-
-<div class="card" style="margin-top:16px;max-width:520px;">
-  <div class="card-header"><div class="card-title">🔑 Reset password user tenant</div></div>
-  <form method="POST" action="{{ url_for('superadmin.reset_tenant_user_password', id=tenant.id) }}" style="padding:16px;">
+  <form method="POST" action="{{ url_for('superadmin.reset_tenant_user_password', id=tenant.id) }}" style="padding:16px 18px 20px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <div class="form-group">
       <label class="form-label">Pilih user</label>
@@ -220,5 +316,6 @@
     </label>
     <button type="submit" class="btn btn-outline">Reset password</button>
   </form>
+</div>
 </div>
 {% endblock %}

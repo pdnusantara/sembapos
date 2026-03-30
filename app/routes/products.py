@@ -7,10 +7,22 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, current_app, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import or_, func, nullslast
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .. import db
-from ..models import Product, ProductCategory, Etalase, StockMovement, Supplier, ProductAuditLog, InventoryCostLayer
-from ..fifo_costing import create_cost_layer
+from ..models import (
+    Product,
+    ProductCategory,
+    Etalase,
+    StockMovement,
+    Supplier,
+    ProductAuditLog,
+    InventoryCostLayer,
+    StockOpnameSession,
+    StockOpnameItem,
+    StockOpnameApprovalLog,
+)
+from ..fifo_costing import create_cost_layer, consume_fifo_stock_out
 from ..timezones import local_today_date, resolve_effective_timezone_id
 
 products_bp = Blueprint('products', __name__, url_prefix='/products')
@@ -217,6 +229,163 @@ def _log_product_audit(
         new_stok_minimum=new_stok_minimum,
         detail=(detail[:2000] if detail else None),
     ))
+
+
+def _opname_code():
+    stamp = datetime.utcnow().strftime('%Y%m%d')
+    token = secrets.token_hex(2).upper()
+    return f'OPN-{stamp}-{token}'
+
+
+def _parse_qty(raw, default=None):
+    if raw is None:
+        return default
+    s = str(raw).strip()
+    if not s:
+        return default
+    s = s.replace(',', '.')
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return default
+
+
+def _can_manage_opname():
+    return current_user.role in ('superadmin', 'admin')
+
+
+def _opname_ready_or_redirect():
+    """
+    Guard agar route opname tidak crash jika migration belum dijalankan.
+    Return response redirect jika belum siap, else None.
+    """
+    try:
+        # Query ringan untuk memastikan tabel sudah ada.
+        db.session.query(StockOpnameSession.id).limit(1).all()
+        return None
+    except (OperationalError, ProgrammingError):
+        db.session.rollback()
+        flash('Fitur stok opname belum siap di database. Jalankan migration terlebih dahulu.', 'warning')
+        return redirect(url_for('products.index'))
+
+
+def _log_opname_action(session_id, action, note=None):
+    db.session.add(StockOpnameApprovalLog(
+        session_id=session_id,
+        actor_user_id=current_user.id,
+        action=action,
+        note=(note[:2000] if note else None),
+    ))
+
+
+def _is_valid_opname_transition(old_status, new_status):
+    allowed = {
+        'draft': {'review'},
+        'review': {'approved', 'rejected'},
+        'rejected': {'review'},
+        'approved': set(),
+    }
+    return new_status in allowed.get(old_status, set())
+
+
+def _opname_status_counts(tenant_id):
+    rows = dict(
+        db.session.query(StockOpnameSession.status, func.count(StockOpnameSession.id))
+        .filter_by(tenant_id=tenant_id)
+        .group_by(StockOpnameSession.status)
+        .all()
+    )
+    return {
+        'draft': int(rows.get('draft', 0) or 0),
+        'review': int(rows.get('review', 0) or 0),
+        'approved': int(rows.get('approved', 0) or 0),
+        'rejected': int(rows.get('rejected', 0) or 0),
+    }
+
+
+def _opname_item_summary(session_id):
+    rows = StockOpnameItem.query.filter_by(session_id=session_id).all()
+    total_selisih = sum(float(r.selisih or 0) for r in rows)
+    total_plus = sum(float(r.selisih or 0) for r in rows if float(r.selisih or 0) > 0)
+    total_minus = sum(abs(float(r.selisih or 0)) for r in rows if float(r.selisih or 0) < 0)
+    return {
+        'total_items': len(rows),
+        'total_selisih': float(total_selisih),
+        'total_plus': float(total_plus),
+        'total_minus': float(total_minus),
+    }
+
+
+def _build_opname_item_data(product, physical_stock):
+    system_stock = float(product.stok or 0)
+    physical = None if physical_stock is None else float(physical_stock)
+    selisih = 0.0 if physical is None else float(physical - system_stock)
+    return system_stock, physical, selisih
+
+
+def _finalize_opname_session(session):
+    tenant_id = current_user.tenant_id
+    items = (
+        StockOpnameItem.query.filter_by(session_id=session.id)
+        .join(Product, Product.id == StockOpnameItem.product_id)
+        .filter(Product.tenant_id == tenant_id)
+        .order_by(StockOpnameItem.id.asc())
+        .all()
+    )
+    for item in items:
+        if item.physical_stock is None:
+            continue
+        product = Product.query.filter_by(id=item.product_id, tenant_id=tenant_id).with_for_update().first()
+        if not product:
+            continue
+        before = float(product.stok or 0)
+        after = float(item.physical_stock or 0)
+        diff = float(after - before)
+        item.system_stock = before
+        item.selisih = diff
+        if abs(diff) < 1e-9:
+            continue
+
+        movement_type = 'masuk' if diff > 0 else 'keluar'
+        movement_qty = abs(diff)
+        db.session.add(StockMovement(
+            product_id=product.id,
+            user_id=current_user.id,
+            tipe=movement_type,
+            qty=movement_qty,
+            stok_sebelum=before,
+            stok_sesudah=after,
+            keterangan=f'Stok opname {session.kode}',
+        ))
+        if diff > 0:
+            create_cost_layer(
+                tenant_id=tenant_id,
+                product_id=product.id,
+                qty_in=movement_qty,
+                unit_cost=float(product.harga_beli or 0),
+                source_type='stock_opname',
+                source_id=session.id,
+            )
+        else:
+            consume_fifo_stock_out(
+                tenant_id=tenant_id,
+                product=product,
+                qty_needed=movement_qty,
+                actor_user_id=current_user.id,
+                reason=f'stock_opname:{session.id}',
+            )
+
+        product.stok = after
+        _log_product_audit(
+            tenant_id=tenant_id,
+            actor_user_id=current_user.id,
+            product_id=product.id,
+            action='stock_opname_adjustment',
+            detail=(
+                f'session={session.kode}; before={before:.4f}; '
+                f'physical={after:.4f}; diff={diff:.4f}; alasan={item.alasan or "-"}'
+            ),
+        )
 
 
 def _filtered_query(tenant_id, default_status='all'):
@@ -854,6 +1023,345 @@ def stock_adjust(id):
         'info',
     )
     return redirect(url_for('products.index'))
+
+
+@products_bp.route('/opname')
+@login_required
+def opname_index():
+    tenant_id = current_user.tenant_id
+    if not tenant_id:
+        flash('Akses ditolak.', 'danger')
+        return redirect(url_for('dashboard.index'))
+    ready_resp = _opname_ready_or_redirect()
+    if ready_resp:
+        return ready_resp
+
+    page = request.args.get('page', 1, type=int)
+    status = (request.args.get('status') or 'all').strip().lower()
+    q = (request.args.get('q') or '').strip()
+
+    query = StockOpnameSession.query.filter_by(tenant_id=tenant_id)
+    if status in ('draft', 'review', 'approved', 'rejected'):
+        query = query.filter(StockOpnameSession.status == status)
+    if q:
+        like = f'%{q}%'
+        query = query.filter(
+            or_(
+                StockOpnameSession.kode.ilike(like),
+                StockOpnameSession.judul.ilike(like),
+            )
+        )
+    sessions = query.order_by(StockOpnameSession.created_at.desc()).paginate(page=page, per_page=12, error_out=False)
+    counts = _opname_status_counts(tenant_id)
+    return render_template(
+        'products/opname_index.html',
+        sessions=sessions,
+        counts=counts,
+        status=status,
+        q=q,
+    )
+
+
+@products_bp.route('/opname/new', methods=['GET', 'POST'])
+@login_required
+def opname_new():
+    tenant_id = current_user.tenant_id
+    if not tenant_id:
+        flash('Akses ditolak.', 'danger')
+        return redirect(url_for('dashboard.index'))
+    ready_resp = _opname_ready_or_redirect()
+    if ready_resp:
+        return ready_resp
+
+    if request.method == 'POST':
+        judul = (request.form.get('judul') or '').strip() or None
+        catatan = (request.form.get('catatan') or '').strip() or None
+        kode = _opname_code()
+        while StockOpnameSession.query.filter_by(kode=kode).first():
+            kode = _opname_code()
+
+        session = StockOpnameSession(
+            tenant_id=tenant_id,
+            branch_id=getattr(current_user, 'branch_id', None),
+            kode=kode,
+            judul=judul,
+            status='draft',
+            catatan=catatan,
+            created_by=current_user.id,
+        )
+        db.session.add(session)
+        db.session.flush()
+        _log_opname_action(session.id, 'create', note='Sesi stok opname dibuat.')
+        db.session.commit()
+        flash('Sesi stok opname berhasil dibuat.', 'success')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    return render_template('products/opname_form.html')
+
+
+@products_bp.route('/opname/<int:id>')
+@login_required
+def opname_detail(id):
+    tenant_id = current_user.tenant_id
+    ready_resp = _opname_ready_or_redirect()
+    if ready_resp:
+        return ready_resp
+    opname_session = StockOpnameSession.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+
+    item_query = (
+        StockOpnameItem.query.filter_by(session_id=opname_session.id)
+        .join(Product, Product.id == StockOpnameItem.product_id)
+        .order_by(Product.nama.asc())
+    )
+    items = item_query.all()
+    summary = _opname_item_summary(opname_session.id)
+    q = (request.args.get('q') or '').strip()
+    product_candidates = []
+    if q:
+        like = f'%{q}%'
+        product_candidates = (
+            Product.query.filter_by(tenant_id=tenant_id, aktif=True)
+            .filter(or_(Product.nama.ilike(like), Product.barcode.ilike(like)))
+            .order_by(Product.nama.asc())
+            .limit(20)
+            .all()
+        )
+    return render_template(
+        'products/opname_detail.html',
+        opname_session=opname_session,
+        items=items,
+        summary=summary,
+        q=q,
+        product_candidates=product_candidates,
+        can_manage_opname=_can_manage_opname(),
+    )
+
+
+@products_bp.route('/opname/<int:id>/item', methods=['POST'])
+@login_required
+def opname_add_item(id):
+    tenant_id = current_user.tenant_id
+    ready_resp = _opname_ready_or_redirect()
+    if ready_resp:
+        return ready_resp
+    session = StockOpnameSession.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    if session.status not in ('draft', 'rejected'):
+        flash('Sesi tidak bisa diubah pada status saat ini.', 'warning')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    product_id = request.form.get('product_id', type=int)
+    product = Product.query.filter_by(id=product_id, tenant_id=tenant_id).first()
+    if not product:
+        barcode = _norm_barcode(request.form.get('barcode'))
+        if barcode:
+            product = Product.query.filter_by(tenant_id=tenant_id, barcode=barcode).first()
+    if not product:
+        flash('Produk tidak ditemukan. Pilih produk atau scan barcode yang valid.', 'danger')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    physical_stock = _parse_qty(request.form.get('physical_stock'), default=None)
+    if physical_stock is not None and physical_stock < 0:
+        flash('Stok fisik tidak boleh negatif.', 'danger')
+        return redirect(url_for('products.opname_detail', id=session.id))
+    alasan = (request.form.get('alasan') or '').strip() or None
+    catatan = (request.form.get('catatan') or '').strip() or None
+    if physical_stock is not None and abs(float(physical_stock or 0) - float(product.stok or 0)) > 1e-9 and not alasan:
+        flash('Alasan wajib diisi jika ada selisih stok.', 'warning')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    system_stock, physical, selisih = _build_opname_item_data(product, physical_stock)
+    item = StockOpnameItem.query.filter_by(session_id=session.id, product_id=product.id).first()
+    if item:
+        item.system_stock = system_stock
+        item.physical_stock = physical
+        item.selisih = selisih
+        item.alasan = alasan
+        item.catatan = catatan
+        item.updated_by = current_user.id
+        action = 'update_item'
+    else:
+        item = StockOpnameItem(
+            session_id=session.id,
+            product_id=product.id,
+            system_stock=system_stock,
+            physical_stock=physical,
+            selisih=selisih,
+            alasan=alasan,
+            catatan=catatan,
+            created_by=current_user.id,
+            updated_by=current_user.id,
+        )
+        db.session.add(item)
+        action = 'add_item'
+
+    _log_opname_action(
+        session.id,
+        action,
+        note=f'{product.nama}: system={system_stock:.4f}, physical={physical if physical is not None else "-"}, selisih={selisih:.4f}',
+    )
+    db.session.commit()
+    flash('Item opname tersimpan.', 'success')
+    return redirect(url_for('products.opname_detail', id=session.id))
+
+
+@products_bp.route('/opname/<int:id>/submit-review', methods=['POST'])
+@login_required
+def opname_submit_review(id):
+    tenant_id = current_user.tenant_id
+    ready_resp = _opname_ready_or_redirect()
+    if ready_resp:
+        return ready_resp
+    session = StockOpnameSession.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    if not _is_valid_opname_transition(session.status, 'review'):
+        flash('Status sesi tidak valid untuk submit review.', 'warning')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    total_items = StockOpnameItem.query.filter_by(session_id=session.id).count()
+    if total_items <= 0:
+        flash('Tambahkan minimal 1 item sebelum submit review.', 'warning')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    missing_physical = StockOpnameItem.query.filter_by(session_id=session.id, physical_stock=None).count()
+    if missing_physical > 0:
+        flash('Masih ada item tanpa stok fisik. Lengkapi terlebih dahulu.', 'warning')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    session.status = 'review'
+    session.submitted_by = current_user.id
+    session.submitted_at = datetime.utcnow()
+    session.reviewed_by = current_user.id
+    session.reviewed_at = datetime.utcnow()
+    _log_opname_action(session.id, 'submit_review', note='Sesi diajukan ke tahap review.')
+    db.session.commit()
+    flash('Sesi berhasil diajukan ke review.', 'success')
+    return redirect(url_for('products.opname_detail', id=session.id))
+
+
+@products_bp.route('/opname/<int:id>/approve', methods=['POST'])
+@login_required
+def opname_approve(id):
+    tenant_id = current_user.tenant_id
+    ready_resp = _opname_ready_or_redirect()
+    if ready_resp:
+        return ready_resp
+    session = StockOpnameSession.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    if not _can_manage_opname():
+        flash('Hanya admin yang dapat approve sesi opname.', 'danger')
+        return redirect(url_for('products.opname_detail', id=session.id))
+    if not _is_valid_opname_transition(session.status, 'approved'):
+        flash('Status sesi tidak valid untuk approve.', 'warning')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    approval_note = (request.form.get('approval_note') or '').strip() or None
+    if not approval_note:
+        flash('Catatan approve wajib diisi untuk audit.', 'warning')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    _finalize_opname_session(session)
+    session.status = 'approved'
+    session.approved_by = current_user.id
+    session.approved_at = datetime.utcnow()
+    session.finalized_at = datetime.utcnow()
+    _log_opname_action(session.id, 'approve', note=approval_note)
+    db.session.commit()
+    flash('Sesi opname di-approve dan stok berhasil diperbarui.', 'success')
+    return redirect(url_for('products.opname_detail', id=session.id))
+
+
+@products_bp.route('/opname/<int:id>/reject', methods=['POST'])
+@login_required
+def opname_reject(id):
+    tenant_id = current_user.tenant_id
+    ready_resp = _opname_ready_or_redirect()
+    if ready_resp:
+        return ready_resp
+    session = StockOpnameSession.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    if not _can_manage_opname():
+        flash('Hanya admin yang dapat reject sesi opname.', 'danger')
+        return redirect(url_for('products.opname_detail', id=session.id))
+    if not _is_valid_opname_transition(session.status, 'rejected'):
+        flash('Status sesi tidak valid untuk reject.', 'warning')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    reject_note = (request.form.get('reject_note') or '').strip()
+    if not reject_note:
+        flash('Alasan reject wajib diisi.', 'warning')
+        return redirect(url_for('products.opname_detail', id=session.id))
+
+    session.status = 'rejected'
+    session.rejected_by = current_user.id
+    session.rejected_at = datetime.utcnow()
+    _log_opname_action(session.id, 'reject', note=reject_note)
+    db.session.commit()
+    flash('Sesi opname direject. Silakan revisi dan submit ulang.', 'warning')
+    return redirect(url_for('products.opname_detail', id=session.id))
+
+
+@products_bp.route('/opname/quick-adjust/<int:product_id>', methods=['POST'])
+@login_required
+def opname_quick_adjust(product_id):
+    tenant_id = current_user.tenant_id
+    ready_resp = _opname_ready_or_redirect()
+    if ready_resp:
+        return ready_resp
+    product = Product.query.filter_by(id=product_id, tenant_id=tenant_id).first_or_404()
+    physical_stock = _parse_qty(request.form.get('physical_stock'), default=None)
+    if physical_stock is None or physical_stock < 0:
+        flash('Isi stok fisik yang valid untuk quick adjust.', 'warning')
+        return redirect(url_for('products.index'))
+    alasan = (request.form.get('alasan') or '').strip()
+    if not alasan:
+        flash('Alasan wajib diisi untuk quick adjust.', 'warning')
+        return redirect(url_for('products.index'))
+
+    kode = _opname_code()
+    while StockOpnameSession.query.filter_by(kode=kode).first():
+        kode = _opname_code()
+    session = StockOpnameSession(
+        tenant_id=tenant_id,
+        branch_id=getattr(current_user, 'branch_id', None),
+        kode=kode,
+        judul=f'Quick adjust: {product.nama}',
+        status='review',
+        catatan='Sesi otomatis dari quick adjust.',
+        created_by=current_user.id,
+        submitted_by=current_user.id,
+        submitted_at=datetime.utcnow(),
+        reviewed_by=current_user.id,
+        reviewed_at=datetime.utcnow(),
+    )
+    db.session.add(session)
+    db.session.flush()
+
+    system_stock, physical, selisih = _build_opname_item_data(product, physical_stock)
+    db.session.add(StockOpnameItem(
+        session_id=session.id,
+        product_id=product.id,
+        system_stock=system_stock,
+        physical_stock=physical,
+        selisih=selisih,
+        alasan=alasan,
+        catatan='Quick adjust',
+        created_by=current_user.id,
+        updated_by=current_user.id,
+    ))
+    _log_opname_action(session.id, 'create', note='Quick adjust session dibuat.')
+    _log_opname_action(session.id, 'submit_review', note='Quick adjust otomatis review.')
+
+    if _can_manage_opname():
+        _finalize_opname_session(session)
+        session.status = 'approved'
+        session.approved_by = current_user.id
+        session.approved_at = datetime.utcnow()
+        session.finalized_at = datetime.utcnow()
+        _log_opname_action(session.id, 'approve', note='Quick adjust di-approve otomatis oleh admin.')
+        db.session.commit()
+        flash(f'Quick adjust selesai untuk "{product.nama}".', 'success')
+        return redirect(url_for('products.stock_history', id=product.id))
+
+    db.session.commit()
+    flash('Quick adjust dibuat dan menunggu approval admin.', 'info')
+    return redirect(url_for('products.opname_detail', id=session.id))
 
 
 @products_bp.route('/history/<int:id>')

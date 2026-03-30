@@ -27,9 +27,14 @@ from ..models import (
     User,
     Branch,
     LeadCapture,
+    TutorialPageConfig,
 )
 from ..permissions import PERMISSION_MODULES, _parse_tenant_package_modules
 from ..subscription import tenant_login_allowed
+from ..tutorial_content import (
+    TUTORIAL_CONFIG_SLUG,
+    ensure_tutorial_page_config_default,
+)
 
 landing_bp = Blueprint('landing', __name__)
 
@@ -208,7 +213,13 @@ def index():
 
 @landing_bp.route('/tutorial')
 def tutorial():
-    return render_template('tutorial.html')
+    try:
+        cfg = ensure_tutorial_page_config_default(slug=TUTORIAL_CONFIG_SLUG, aktif=True)
+        tutorial_data = json.loads(cfg.data_json or '{}')
+        return render_template('tutorial_dynamic.html', tutorial=tutorial_data)
+    except Exception:
+        # Fallback: jika DB/seed gagal, tetap tampil versi statis.
+        return render_template('tutorial.html')
 
 
 @landing_bp.route('/daftar-trial/wilayah/provinsi')

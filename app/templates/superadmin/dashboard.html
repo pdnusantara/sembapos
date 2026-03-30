@@ -4,138 +4,140 @@
 {% block page_sub %}Ringkasan kinerja seluruh tenant{% endblock %}
 
 {% block content %}
-<div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-bottom:20px;">
-  <div class="stat-card primary">
-    <div class="stat-icon primary">🏢</div>
-    <div class="stat-info">
-      <div class="stat-value">{{ total_tenants }}</div>
-      <div class="stat-label">Total Tenant</div>
+<div class="sa-dashboard">
+  <div class="stats-grid sa-dashboard__stats">
+    <div class="stat-card primary sa-dashboard__stat-card">
+      <div class="stat-icon primary">🏢</div>
+      <div class="stat-info">
+        <div class="stat-value">{{ total_tenants }}</div>
+        <div class="stat-label">Total Tenant</div>
+      </div>
+    </div>
+    <div class="stat-card success sa-dashboard__stat-card">
+      <div class="stat-icon success">✅</div>
+      <div class="stat-info">
+        <div class="stat-value">{{ tenants_aktif }}</div>
+        <div class="stat-label">Tenant Aktif</div>
+      </div>
+    </div>
+    <div class="stat-card warning sa-dashboard__stat-card">
+      <div class="stat-icon warning">🆕</div>
+      <div class="stat-info">
+        <div class="stat-value">{{ tenants_baru_bulan }}</div>
+        <div class="stat-label">Baru Bulan Ini</div>
+      </div>
+    </div>
+    <div class="stat-card danger sa-dashboard__stat-card">
+      <div class="stat-icon danger">💰</div>
+      <div class="stat-info">
+        <div class="stat-value sa-dashboard__money-value">Rp {{ "{:,.0f}".format(revenue_today).replace(",",".") }}</div>
+        <div class="stat-label">Revenue Hari Ini</div>
+      </div>
+    </div>
+    <div class="stat-card primary sa-dashboard__stat-card">
+      <div class="stat-icon primary">📈</div>
+      <div class="stat-info">
+        <div class="stat-value sa-dashboard__money-value">Rp {{ "{:,.0f}".format(revenue_month).replace(",",".") }}</div>
+        <div class="stat-label">Revenue Bulan Ini</div>
+      </div>
+    </div>
+    <div class="stat-card warning sa-dashboard__stat-card">
+      <div class="stat-icon warning">⏰</div>
+      <div class="stat-info">
+        <div class="stat-value">{{ expiring_soon|length }}</div>
+        <div class="stat-label">Segera Expired</div>
+      </div>
     </div>
   </div>
-  <div class="stat-card success">
-    <div class="stat-icon success">✅</div>
-    <div class="stat-info">
-      <div class="stat-value">{{ tenants_aktif }}</div>
-      <div class="stat-label">Tenant Aktif</div>
-    </div>
-  </div>
-  <div class="stat-card warning">
-    <div class="stat-icon warning">🆕</div>
-    <div class="stat-info">
-      <div class="stat-value">{{ tenants_baru_bulan }}</div>
-      <div class="stat-label">Baru Bulan Ini</div>
-    </div>
-  </div>
-  <div class="stat-card danger">
-    <div class="stat-icon danger">💰</div>
-    <div class="stat-info">
-      <div class="stat-value" style="font-size:15px;">Rp {{ "{:,.0f}".format(revenue_today).replace(",",".") }}</div>
-      <div class="stat-label">Revenue Hari Ini</div>
-    </div>
-  </div>
-  <div class="stat-card primary">
-    <div class="stat-icon primary">📈</div>
-    <div class="stat-info">
-      <div class="stat-value" style="font-size:15px;">Rp {{ "{:,.0f}".format(revenue_month).replace(",",".") }}</div>
-      <div class="stat-label">Revenue Bulan Ini</div>
-    </div>
-  </div>
-  <div class="stat-card warning">
-    <div class="stat-icon warning">⏰</div>
-    <div class="stat-info">
-      <div class="stat-value">{{ expiring_soon|length }}</div>
-      <div class="stat-label">Segera Expired</div>
-    </div>
-  </div>
-</div>
 
-{% if expired_tenants > 0 or leads_new > 0 or invoices_overdue > 0 or mp_pending > 0 %}
-<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
-  {% if expired_tenants > 0 %}
-  <div class="alert alert-danger" style="margin:0;flex:1;min-width:200px;">
-    <strong>{{ expired_tenants }}</strong> tenant sudah kedaluwarsa
+  {% if expired_tenants > 0 or leads_new > 0 or invoices_overdue > 0 or mp_pending > 0 %}
+  <div class="sa-dashboard__alerts">
+    {% if expired_tenants > 0 %}
+    <div class="alert alert-danger sa-dashboard__alert">
+      <strong>{{ expired_tenants }}</strong> tenant sudah kedaluwarsa
+    </div>
+    {% endif %}
+    {% if invoices_overdue > 0 %}
+    <div class="alert alert-warning sa-dashboard__alert">
+      <strong>{{ invoices_overdue }}</strong> invoice overdue ({{ invoices_unpaid }} belum bayar)
+    </div>
+    {% endif %}
+    {% if leads_new > 0 %}
+    <div class="alert alert-info sa-dashboard__alert">
+      <strong>{{ leads_new }}</strong> lead baru belum ditindak
+    </div>
+    {% endif %}
+    {% if mp_pending > 0 %}
+    <div class="alert alert-warning sa-dashboard__alert">
+      <strong>{{ mp_pending }}</strong> pesanan marketplace pending
+    </div>
+    {% endif %}
   </div>
   {% endif %}
-  {% if invoices_overdue > 0 %}
-  <div class="alert alert-warning" style="margin:0;flex:1;min-width:200px;">
-    <strong>{{ invoices_overdue }}</strong> invoice overdue ({{ invoices_unpaid }} belum bayar)
-  </div>
-  {% endif %}
-  {% if leads_new > 0 %}
-  <div class="alert alert-info" style="margin:0;flex:1;min-width:200px;">
-    <strong>{{ leads_new }}</strong> lead baru belum ditindak
-  </div>
-  {% endif %}
-  {% if mp_pending > 0 %}
-  <div class="alert alert-warning" style="margin:0;flex:1;min-width:200px;">
-    <strong>{{ mp_pending }}</strong> pesanan marketplace pending
-  </div>
-  {% endif %}
-</div>
-{% endif %}
 
-<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
-  <a href="{{ url_for('superadmin.index') }}" class="btn btn-primary">🏢 Kelola Tenant</a>
-  <a href="{{ url_for('superadmin.billing_index') }}" class="btn btn-outline">💳 Billing</a>
-  <a href="{{ url_for('superadmin.leads_index') }}" class="btn btn-outline">📩 Leads</a>
-  <form method="POST" action="{{ url_for('superadmin.notif_send_expiring') }}" style="display:inline;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-    <button type="submit" class="btn btn-outline" onclick="return confirm('Kirim notifikasi ke tenant yang akan expired?')">📤 Kirim Notif Expiring</button>
-  </form>
-</div>
+  <div class="sa-dashboard__actions">
+    <a href="{{ url_for('superadmin.index') }}" class="btn btn-primary">🏢 Kelola Tenant</a>
+    <a href="{{ url_for('superadmin.billing_index') }}" class="btn btn-outline">💳 Billing</a>
+    <a href="{{ url_for('superadmin.leads_index') }}" class="btn btn-outline">📩 Leads</a>
+    <form method="POST" action="{{ url_for('superadmin.notif_send_expiring') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <button type="submit" class="btn btn-outline" onclick="return confirm('Kirim notifikasi ke tenant yang akan expired?')">📤 Kirim Notif Expiring</button>
+    </form>
+  </div>
 
-<div class="layout-split-equal" style="margin-bottom:20px;">
-  <div class="card">
-    <div class="card-header"><div class="card-title">📈 Revenue 30 Hari Terakhir</div></div>
-    <div style="padding:16px;">
-      <canvas id="chart30d" height="200"></canvas>
+  <div class="layout-split-equal sa-dashboard__section">
+    <div class="card sa-dashboard__chart-card">
+      <div class="card-header"><div class="card-title">📈 Revenue 30 Hari Terakhir</div></div>
+      <div class="sa-dashboard__chart-wrap">
+        <canvas id="chart30d" height="200"></canvas>
+      </div>
+    </div>
+    <div class="card sa-dashboard__chart-card">
+      <div class="card-header"><div class="card-title">🏢 Pertumbuhan Tenant (6 Bulan)</div></div>
+      <div class="sa-dashboard__chart-wrap">
+        <canvas id="chartGrowth" height="200"></canvas>
+      </div>
     </div>
   </div>
-  <div class="card">
-    <div class="card-header"><div class="card-title">🏢 Pertumbuhan Tenant (6 Bulan)</div></div>
-    <div style="padding:16px;">
-      <canvas id="chartGrowth" height="200"></canvas>
-    </div>
-  </div>
-</div>
 
-<div class="layout-split-equal">
-  <div class="card">
-    <div class="card-header"><div class="card-title">🏆 Top 5 Tenant Bulan Ini</div></div>
-    <div class="table-wrapper">
-      <table class="table">
-        <thead><tr><th>Tenant</th><th>Kode</th><th style="text-align:right;">Omzet</th></tr></thead>
-        <tbody>
-          {% for t in top_5 %}
-          <tr>
-            <td><a href="{{ url_for('superadmin.view_tenant', id=t.id) }}" style="color:var(--text-light);font-weight:600;">{{ t.nama }}</a></td>
-            <td><span class="badge badge-info">{{ t.kode }}</span></td>
-            <td style="text-align:right;white-space:nowrap;">Rp {{ "{:,.0f}".format(t.omzet).replace(",",".") }}</td>
-          </tr>
-          {% else %}
-          <tr><td colspan="3" class="text-muted" style="text-align:center;padding:20px;">Belum ada data</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <div class="layout-split-equal sa-dashboard__section">
+    <div class="card">
+      <div class="card-header"><div class="card-title">🏆 Top 5 Tenant Bulan Ini</div></div>
+      <div class="table-wrapper">
+        <table class="table">
+          <thead><tr><th>Tenant</th><th>Kode</th><th class="ta-right">Omzet</th></tr></thead>
+          <tbody>
+            {% for t in top_5 %}
+            <tr>
+              <td><a href="{{ url_for('superadmin.view_tenant', id=t.id) }}" class="sa-dashboard__tenant-link">{{ t.nama }}</a></td>
+              <td><span class="badge badge-info">{{ t.kode }}</span></td>
+              <td class="ta-right nowrap">Rp {{ "{:,.0f}".format(t.omzet).replace(",",".") }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-muted sa-dashboard__table-empty">Belum ada data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
-  <div class="card">
-    <div class="card-header"><div class="card-title">⏰ Tenant Segera Expired</div></div>
-    <div class="table-wrapper">
-      <table class="table">
-        <thead><tr><th>Tenant</th><th>Expired</th><th>Aksi</th></tr></thead>
-        <tbody>
-          {% for t in expiring_soon[:10] %}
-          <tr>
-            <td style="font-weight:600;">{{ t.nama }}</td>
-            <td><span class="badge badge-warning">{{ t.tanggal_expired.strftime('%d/%m/%Y') }}</span></td>
-            <td><a href="{{ url_for('superadmin.edit_tenant', id=t.id) }}" class="btn btn-outline btn-sm">Perpanjang</a></td>
-          </tr>
-          {% else %}
-          <tr><td colspan="3" class="text-muted" style="text-align:center;padding:20px;">Tidak ada tenant yang segera expired</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="card-header"><div class="card-title">⏰ Tenant Segera Expired</div></div>
+      <div class="table-wrapper">
+        <table class="table">
+          <thead><tr><th>Tenant</th><th>Expired</th><th>Aksi</th></tr></thead>
+          <tbody>
+            {% for t in expiring_soon[:10] %}
+            <tr>
+              <td class="sa-dashboard__tenant-name">{{ t.nama }}</td>
+              <td><span class="badge badge-warning">{{ t.tanggal_expired.strftime('%d/%m/%Y') }}</span></td>
+              <td><a href="{{ url_for('superadmin.edit_tenant', id=t.id) }}" class="btn btn-outline btn-sm">Perpanjang</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-muted sa-dashboard__table-empty">Tidak ada tenant yang segera expired</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>

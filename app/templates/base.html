@@ -49,12 +49,12 @@
     </div>
 
     <nav class="sidebar-nav">
+      {% if not current_user.is_superadmin %}
       <div class="nav-group">
         <div class="nav-group-label">Menu Utama</div>
         <a href="{{ url_for('dashboard.index') }}" class="nav-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
           <span class="nav-icon">📊</span> Dashboard
         </a>
-        {% if not current_user.is_superadmin %}
         {% if perm('pos') %}
         <a href="{{ url_for('pos.index') }}" class="nav-item {% if request.blueprint == 'pos' %}active{% endif %}">
           <span class="nav-icon">🛒</span> Kasir / POS
@@ -75,8 +75,8 @@
           <span class="nav-icon">💸</span> Biaya operasional
         </a>
         {% endif %}
-        {% endif %}
       </div>
+      {% endif %}
 
       {% if not current_user.is_superadmin %}
       {% if perm('products') or perm('suppliers') or perm('purchases') %}
@@ -94,6 +94,9 @@
         </a>
         <a href="{{ url_for('products.etalase') }}" class="nav-item {% if request.endpoint == 'products.etalase' %}active{% endif %}">
           <span class="nav-icon">🪧</span> Etalase harga
+        </a>
+        <a href="{{ url_for('products.opname_index') }}" class="nav-item {% if request.endpoint in ('products.opname_index', 'products.opname_new', 'products.opname_detail') %}active{% endif %}">
+          <span class="nav-icon">🧮</span> Stok opname
         </a>
         {% endif %}
         {% if perm('suppliers') %}
@@ -215,6 +218,9 @@
         <a href="{{ url_for('superadmin.announcements_index') }}" class="nav-item {% if 'announcement' in (request.endpoint or '') %}active{% endif %}">
           <span class="nav-icon">📢</span> Pengumuman
         </a>
+        <a href="{{ url_for('superadmin.tutorial_editor') }}" class="nav-item {% if request.endpoint == 'superadmin.tutorial_editor' %}active{% endif %}">
+          <span class="nav-icon">📖</span> Tutorial
+        </a>
         <a href="{{ url_for('superadmin.audit_logs') }}" class="nav-item {% if request.endpoint == 'superadmin.audit_logs' %}active{% endif %}">
           <span class="nav-icon">📜</span> Log audit
         </a>
@@ -316,16 +322,6 @@
       {% endif %}
     </div>
     {% endif %}
-    {% if active_announcements %}
-    <div class="announcement-banners-stack" role="region" aria-label="Pengumuman platform">
-    {% for ann in active_announcements %}
-    <div class="announcement-banner" style="padding:10px 16px;font-size:13px;line-height:1.45;border-bottom:1px solid var(--border);background:{% if ann.tipe == 'warning' %}rgba(200,160,0,0.2){% elif ann.tipe == 'danger' %}rgba(180,60,60,0.15){% elif ann.tipe == 'success' %}rgba(60,180,80,0.15){% else %}rgba(80,120,200,0.12){% endif %};color:var(--text-light);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-      <span><strong>{{ ann.judul }}</strong> — {{ ann.isi }}</span>
-      <button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;flex-shrink:0;" title="Sembunyikan di halaman ini">✕</button>
-    </div>
-    {% endfor %}
-    </div>
-    {% endif %}
     <!-- TOPBAR -->
     <header class="topbar">
       <button class="hamburger" onclick="toggleSidebar()">☰</button>
@@ -334,6 +330,33 @@
         <div class="topbar-sub">{% block page_sub %}{% endblock %}</div>
       </div>
       <div class="topbar-right">
+        {% if not current_user.is_superadmin %}
+        <div class="notif-bell-wrap" id="notifBellWrap">
+          <button type="button" class="notif-bell-btn" id="notifBellBtn" aria-label="Lihat pengumuman tenant" aria-expanded="false" aria-controls="notifPanel">
+            🔔
+            <span class="notif-bell-badge" id="notifBellBadge">{{ active_announcements|length }}</span>
+          </button>
+          <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Pengumuman tenant">
+            <div class="notif-panel__head">
+              <div class="notif-panel__title">Pengumuman tenant</div>
+              <button type="button" class="notif-panel__mark-read" id="notifMarkReadBtn">Tandai dibaca</button>
+            </div>
+            <div class="notif-panel__list" id="notifPanelList">
+              {% if active_announcements %}
+              {% for ann in active_announcements %}
+              <article class="notif-item notif-item--{{ ann.tipe or 'info' }}" data-ann-id="{{ ann.id }}">
+                <div class="notif-item__title">{{ ann.judul }}</div>
+                <div class="notif-item__body">{{ ann.isi }}</div>
+                <div class="notif-item__meta">{{ ann.created_at.strftime('%d/%m/%Y %H:%M') }} UTC</div>
+              </article>
+              {% endfor %}
+              {% else %}
+              <div class="notif-panel__empty">Belum ada pengumuman aktif.</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
         {% if current_user.branch %}
         <div class="branch-badge">
           🏬 <span>{{ current_user.branch.nama }}</span>
@@ -420,6 +443,77 @@ function toggleTheme() {
 }
 
 setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+
+// Tenant notifications dropdown
+(function initTenantNotifications() {
+  const bellBtn = document.getElementById('notifBellBtn');
+  const bellWrap = document.getElementById('notifBellWrap');
+  const panel = document.getElementById('notifPanel');
+  const list = document.getElementById('notifPanelList');
+  const badge = document.getElementById('notifBellBadge');
+  const markReadBtn = document.getElementById('notifMarkReadBtn');
+  if (!bellBtn || !bellWrap || !panel || !list || !badge || !markReadBtn) return;
+
+  const annNodes = Array.from(list.querySelectorAll('[data-ann-id]'));
+  const ids = annNodes.map((n) => n.getAttribute('data-ann-id')).filter(Boolean);
+  const storageKey = 'tenant-announcement-read-map-v1';
+
+  function getReadMap() {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveReadMap(map) {
+    try { localStorage.setItem(storageKey, JSON.stringify(map)); } catch (e) {}
+  }
+
+  function updateUnreadCount() {
+    const readMap = getReadMap();
+    let unread = 0;
+    ids.forEach((id) => { if (!readMap[id]) unread += 1; });
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.hidden = unread <= 0;
+  }
+
+  function markAllRead() {
+    const readMap = getReadMap();
+    ids.forEach((id) => { readMap[id] = true; });
+    saveReadMap(readMap);
+    updateUnreadCount();
+  }
+
+  function closePanel() {
+    panel.classList.remove('open');
+    bellBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  bellBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const isOpen = panel.classList.toggle('open');
+    bellBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    if (isOpen) markAllRead();
+  });
+
+  markReadBtn.addEventListener('click', function() {
+    markAllRead();
+    closePanel();
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!bellWrap.contains(e.target)) closePanel();
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closePanel();
+  });
+
+  updateUnreadCount();
+})();
 
 // Toast notification
 function showToast(message, type='info', duration=4000) {

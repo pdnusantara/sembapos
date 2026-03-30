@@ -2,7 +2,7 @@
 {% import 'superadmin/_breadcrumbs.html' as bc %}
 {% block title %}Buat Invoice — Billing{% endblock %}
 {% block page_title %}💳 Buat Invoice{% endblock %}
-{% block page_sub %}Buat tagihan baru untuk tenant{% endblock %}
+{% block page_sub %}Tagihan mengikuti tenant; saran harga bisa dari paket mana pun (upgrade/downgrade){% endblock %}
 
 {% block content %}
 {{ bc.sa_bc([
@@ -11,38 +11,164 @@
   ('Buat Invoice', '', true),
 ]) }}
 
-<div class="card" style="max-width:600px;">
-  <form method="POST" action="{{ url_for('superadmin.billing_add') }}" style="padding:16px;">
+<div class="card sa-billing-form-card" style="max-width:560px;">
+  <div class="card-header" style="padding-bottom:0;">
+    <div class="card-title" style="margin:0;">Data invoice</div>
+    <p class="text-muted" style="font-size:12px;margin:6px 0 0;">Pilih tenant lalu paket untuk <strong>saran harga</strong>. Centang opsi di bawah hanya jika ingin <strong>sekaligus mengubah paket tenant</strong> (selain itu cukup pilih paket untuk mengisi nominal).</p>
+  </div>
+  <form method="POST" action="{{ url_for('superadmin.billing_add') }}" class="sa-billing-form" style="padding:16px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <div class="form-group">
-      <label class="form-label">Tenant</label>
-      <select name="tenant_id" class="form-control" required>
-        <option value="">-- Pilih tenant --</option>
+      <label class="form-label" for="billing-tenant">Tenant</label>
+      <select name="tenant_id" id="billing-tenant" class="form-control" required>
+        <option value="">— Pilih tenant —</option>
         {% for t in tenants %}
         <option value="{{ t.id }}">{{ t.nama }} ({{ t.kode }})</option>
         {% endfor %}
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label">Nominal (Rp)</label>
-      <input type="number" name="nominal" class="form-control" required min="0" step="1000" placeholder="100000">
+      <label class="form-label" for="billing-paket">Saran harga berdasarkan paket</label>
+      <select name="target_paket_id" id="billing-paket" class="form-control" disabled>
+        <option value="">— Pilih tenant dulu —</option>
+        {% for p in packages %}
+        <option value="{{ p.id }}">{{ p.nama }} ({{ p.kode }})</option>
+        {% endfor %}
+      </select>
+      <p class="text-muted" style="font-size:12px;margin-top:6px;">Harga bulanan/tahunan diambil dari paket yang dipilih di sini, bukan hanya paket langganan saat ini.</p>
     </div>
-    <div style="display:flex;gap:12px;">
-      <div class="form-group" style="flex:1;">
-        <label class="form-label">Periode Mulai</label>
+    <div class="form-group">
+      <label class="form-label" for="billing-nominal">Nominal (Rp)</label>
+      <input type="number" name="nominal" id="billing-nominal" class="form-control" required min="1" step="1" placeholder="0" inputmode="numeric">
+      <p id="billing-nominal-hint" class="text-muted" style="font-size:12px;margin-top:6px;min-height:1.25em;"></p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
+        <button type="button" class="btn btn-outline btn-sm" id="billing-fill-monthly" disabled>Pakai harga bulanan</button>
+        <button type="button" class="btn btn-outline btn-sm" id="billing-fill-yearly" disabled>Pakai harga tahunan</button>
+      </div>
+    </div>
+    <div class="form-group" id="billing-ubah-paket-row" style="display:none;">
+      <label class="form-check" style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+        <input type="checkbox" name="ubah_paket" id="billing-ubah-paket" value="1" style="margin-top:3px;">
+        <span style="font-size:13px;">Sekaligus ubah paket tenant ke paket yang dipilih di atas (sinkron kuota dari paket)</span>
+      </label>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <div class="form-group" style="flex:1;min-width:140px;">
+        <label class="form-label">Periode mulai</label>
         <input type="date" name="periode_mulai" class="form-control">
       </div>
-      <div class="form-group" style="flex:1;">
-        <label class="form-label">Periode Akhir</label>
+      <div class="form-group" style="flex:1;min-width:140px;">
+        <label class="form-label">Periode akhir</label>
         <input type="date" name="periode_akhir" class="form-control">
       </div>
     </div>
     <div class="form-group">
       <label class="form-label">Catatan (opsional)</label>
-      <textarea name="catatan" class="form-control" rows="3" placeholder="Catatan tambahan..."></textarea>
+      <textarea name="catatan" class="form-control" rows="3" placeholder="Mis. referensi transfer, periode penagihan…"></textarea>
     </div>
-    <button type="submit" class="btn btn-primary">Buat Invoice</button>
-    <a href="{{ url_for('superadmin.billing_index') }}" class="btn btn-outline" style="margin-left:8px;">Batal</a>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <button type="submit" class="btn btn-primary">Buat invoice</button>
+      <a href="{{ url_for('superadmin.billing_index') }}" class="btn btn-outline">Batal</a>
+    </div>
   </form>
 </div>
+
+<script>
+(function() {
+  var HINTS = {{ tenant_price_hints | tojson }};
+  var PACKAGES = {{ packages_json | tojson }};
+  var byTenantId = {};
+  HINTS.forEach(function(h) { byTenantId[h.id] = h; });
+  var pakById = {};
+  PACKAGES.forEach(function(p) { pakById[p.id] = p; });
+
+  function fmtRp(n) {
+    if (n == null || isNaN(n)) return '—';
+    return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+  }
+
+  var sel = document.getElementById('billing-tenant');
+  var paketSel = document.getElementById('billing-paket');
+  var nom = document.getElementById('billing-nominal');
+  var hint = document.getElementById('billing-nominal-hint');
+  var btnM = document.getElementById('billing-fill-monthly');
+  var btnY = document.getElementById('billing-fill-yearly');
+  var ubahRow = document.getElementById('billing-ubah-paket-row');
+  var ubahChk = document.getElementById('billing-ubah-paket');
+
+  function selectedPaketRow() {
+    var pid = parseInt(paketSel.value, 10);
+    return pakById[pid] || null;
+  }
+
+  function applyPaketHints() {
+    var prow = selectedPaketRow();
+    if (!prow) {
+      hint.textContent = '';
+      btnM.disabled = true;
+      btnY.disabled = true;
+      return;
+    }
+    var parts = [];
+    parts.push('Paket saran: ' + prow.nama + ' (' + prow.kode + ')');
+    if (prow.harga_bulanan > 0) parts.push('Bulanan ' + fmtRp(prow.harga_bulanan));
+    if (prow.harga_tahunan > 0) parts.push('Tahunan ' + fmtRp(prow.harga_tahunan));
+    hint.textContent = parts.length > 1 ? parts.join(' · ') : (prow.nama + ' — tidak ada harga di pengaturan; isi nominal manual.');
+    btnM.disabled = !(prow.harga_bulanan > 0);
+    btnY.disabled = !(prow.harga_tahunan > 0);
+
+    if (prow.harga_bulanan > 0) {
+      nom.value = Math.round(prow.harga_bulanan);
+    } else if (prow.harga_tahunan > 0) {
+      nom.value = Math.round(prow.harga_tahunan);
+    }
+
+    var trow = byTenantId[parseInt(sel.value, 10)];
+    var curPid = trow && trow.paket_id != null ? trow.paket_id : null;
+    var selPid = parseInt(paketSel.value, 10);
+    if (trow && selPid && (curPid === null || curPid !== selPid)) {
+      ubahRow.style.display = '';
+    } else {
+      ubahRow.style.display = 'none';
+      ubahChk.checked = false;
+    }
+  }
+
+  function syncTenant() {
+    var id = parseInt(sel.value, 10);
+    var trow = byTenantId[id];
+    if (!trow) {
+      paketSel.disabled = true;
+      paketSel.value = '';
+      hint.textContent = '';
+      btnM.disabled = true;
+      btnY.disabled = true;
+      ubahRow.style.display = 'none';
+      ubahChk.checked = false;
+      return;
+    }
+    paketSel.disabled = false;
+    var want = trow.paket_id;
+    if (want && pakById[want]) {
+      paketSel.value = String(want);
+    } else if (PACKAGES.length) {
+      paketSel.value = String(PACKAGES[0].id);
+    } else {
+      paketSel.value = '';
+    }
+    applyPaketHints();
+  }
+
+  sel.addEventListener('change', syncTenant);
+  paketSel.addEventListener('change', applyPaketHints);
+  btnM.addEventListener('click', function() {
+    var prow = selectedPaketRow();
+    if (prow && prow.harga_bulanan > 0) nom.value = Math.round(prow.harga_bulanan);
+  });
+  btnY.addEventListener('click', function() {
+    var prow = selectedPaketRow();
+    if (prow && prow.harga_tahunan > 0) nom.value = Math.round(prow.harga_tahunan);
+  });
+})();
+</script>
 {% endblock %}

@@ -1,0 +1,1023 @@
+/* Modern POS Styles */
+:root {
+  --pos-bg: #f4f6f8;
+  --pos-card-bg: #ffffff;
+  --pos-border: #e2e8f0;
+  --pos-primary: #4f46e5;
+  --pos-primary-hover: #4338ca;
+  --pos-text: #1e293b;
+  --pos-text-muted: #64748b;
+  --pos-radius: 16px;
+  --pos-radius-sm: 12px;
+  --pos-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --pos-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] {
+  --pos-bg: #0f172a;
+  --pos-card-bg: #1e293b;
+  --pos-border: #334155;
+  --pos-primary: #6366f1;
+  --pos-primary-hover: #818cf8;
+  --pos-text: #f8fafc;
+  --pos-text-muted: #94a3b8;
+  --pos-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  --pos-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Override body background for POS */
+body.pos-full-view {
+  background-color: var(--pos-bg);
+}
+
+/*
+ * Scroll fix: pos-layout harus punya tinggi tetap agar grid row-nya mendapat
+ * constraint, sehingga pos-products-body / pos-cart-body dapat overflow-y:auto.
+ * Pendekatan: pos-layout pakai height:calc(...) eksplisit, bukan flex chain
+ * (flex:1 pada rantai auto-height tidak menghasilkan constraint nyata di WebKit).
+ */
+.main-content:has(.pos-page-bleed) {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+body.pos-full-view .main-content:has(.pos-page-bleed) {
+  min-height: 100dvh;
+  min-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+/* Mode normal (sidebar + topbar): izinkan scroll area konten — hidden membuat halaman “macet” */
+.page-content:has(.pos-page-bleed) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  /*
+   * overflow: hidden (bukan auto) agar scroll terjadi DI DALAM panel
+   * produk/keranjang, bukan di page-content.
+   * overflow-x: clip tetap diperlukan untuk mencegah horizontal ghost scroll.
+   */
+  overflow: hidden;
+  overflow-x: clip;
+}
+
+body.pos-full-view .page-content:has(.pos-page-bleed) {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+}
+
+.pos-page-bleed {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pos-shift-strip {
+  background: var(--pos-card-bg);
+  border: 1px solid var(--pos-border);
+  border-radius: var(--pos-radius);
+  box-shadow: var(--pos-shadow-sm);
+  margin-bottom: 16px;
+  padding: 12px 20px;
+  flex-shrink: 0;
+}
+
+.pos-layout {
+  display: grid;
+  grid-template-columns: 1fr 400px !important;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+  min-height: 0;
+  /*
+   * Tinggi tetap wajib ada agar grid row mendapat constraint.
+   * Tanpa ini, minmax(0,1fr) pada grid-template-rows tidak bisa menyusut
+   * sehingga pos-products-body / pos-cart-body tidak punya "batas atas"
+   * untuk overflow-y:auto bekerja.
+   * 48px = padding page-content (24px atas + 24px bawah dari style.css).
+   */
+  height: calc(100dvh - var(--topbar-height) - 48px);
+  height: calc(100vh - var(--topbar-height) - 48px);
+}
+
+body.pos-full-view .pos-layout {
+  /* Full-view: sidebar+topbar tersembunyi, gunakan flex chain dari main-content */
+  flex: 1 1 0%;
+  min-height: 0;
+  max-height: 100%;
+  height: auto !important;
+}
+
+/* Left Side: Products */
+.pos-products {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  min-width: 0;
+  /* height:100% memastikan kolom grid ini mengisi baris grid sepenuhnya */
+  height: 100%;
+  background: var(--pos-bg);
+  border-radius: var(--pos-radius);
+  overflow: hidden;
+}
+
+.pos-products-header {
+  background: var(--pos-card-bg);
+  padding: 16px;
+  border-radius: var(--pos-radius);
+  box-shadow: var(--pos-shadow-sm);
+  margin-bottom: 16px;
+  border: 1px solid var(--pos-border);
+  flex-shrink: 0;
+}
+
+.pos-search-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.pos-search-wrap .search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--pos-text-muted);
+  font-size: 18px;
+}
+
+.pos-search-wrap input {
+  width: 100%;
+  padding: 14px 14px 14px 44px;
+  border-radius: var(--pos-radius-sm);
+  border: 1px solid var(--pos-border);
+  background: var(--pos-bg);
+  color: var(--pos-text);
+  font-size: 15px;
+  transition: all 0.2s;
+}
+
+.pos-search-wrap input:focus {
+  outline: none;
+  border-color: var(--pos-primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  background: var(--pos-card-bg);
+}
+
+.pos-filters {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.pos-filters::-webkit-scrollbar { display: none; }
+
+.pos-filter-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pos-filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pos-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.pos-chip {
+  padding: 8px 16px;
+  border-radius: 99px;
+  background: var(--pos-bg);
+  border: 1px solid var(--pos-border);
+  color: var(--pos-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.pos-chip:hover {
+  background: var(--pos-border);
+}
+
+.pos-chip.active {
+  background: var(--pos-primary);
+  color: #fff;
+  border-color: var(--pos-primary);
+}
+
+/* Product Grid */
+.pos-products-body {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 4px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.pos-products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  padding-bottom: 20px;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.pos-product-card {
+  background: var(--pos-card-bg);
+  border-radius: var(--pos-radius);
+  border: 1px solid var(--pos-border);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--pos-shadow-sm);
+  position: relative;
+}
+
+.pos-product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--pos-shadow);
+  border-color: var(--pos-primary);
+}
+
+.pos-product-card:active {
+  transform: translateY(0);
+}
+
+.pos-product-img-wrap {
+  aspect-ratio: 1;
+  background: var(--pos-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.pos-product-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pos-product-img-wrap .emoji {
+  font-size: 48px;
+}
+
+.pos-product-info {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.pos-product-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pos-text);
+  line-height: 1.3;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pos-product-price {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pos-primary);
+  margin-top: auto;
+}
+
+.pos-product-stock {
+  font-size: 11px;
+  color: var(--pos-text-muted);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pos-product-stock.low {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.pos-product-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+
+/* Right Side: Cart */
+.pos-cart-container {
+  background: var(--pos-card-bg);
+  border-radius: var(--pos-radius);
+  border: 1px solid var(--pos-border);
+  box-shadow: var(--pos-shadow);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  /* height:100% memastikan kolom grid ini mengisi baris grid sepenuhnya */
+  height: 100%;
+  overflow: hidden;
+}
+
+.pos-cart-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--pos-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--pos-card-bg);
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.pos-cart-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--pos-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pos-cart-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pos-btn-icon {
+  background: var(--pos-bg);
+  border: 1px solid var(--pos-border);
+  color: var(--pos-text);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--pos-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pos-btn-icon:hover {
+  background: var(--pos-border);
+}
+
+.pos-cart-body {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0;
+  background: var(--pos-bg);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.pos-cart-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--pos-text-muted);
+  padding: 32px;
+  text-align: center;
+}
+
+.pos-cart-empty .icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.pos-cart-empty h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--pos-text);
+}
+
+.pos-cart-items {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pos-cart-item {
+  background: var(--pos-card-bg);
+  border-radius: var(--pos-radius-sm);
+  padding: 12px;
+  border: 1px solid var(--pos-border);
+  box-shadow: var(--pos-shadow-sm);
+}
+
+.pos-cart-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.pos-cart-item-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--pos-text);
+  line-height: 1.3;
+  padding-right: 12px;
+}
+
+.pos-cart-item-delete {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pos-cart-item-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.pos-cart-item-price {
+  font-size: 14px;
+  color: var(--pos-text-muted);
+}
+
+.pos-cart-item-subtotal {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--pos-primary);
+}
+
+.pos-cart-item-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pos-qty-control {
+  display: flex;
+  align-items: center;
+  background: var(--pos-bg);
+  border-radius: 8px;
+  border: 1px solid var(--pos-border);
+  overflow: hidden;
+}
+
+.pos-qty-btn {
+  background: transparent;
+  border: none;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  color: var(--pos-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pos-qty-btn:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.pos-qty-val {
+  width: 40px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.pos-price-mode-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--pos-border);
+  background: var(--pos-card-bg);
+  font-size: 12px;
+  color: var(--pos-text);
+  outline: none;
+}
+
+.pos-cart-footer {
+  background: var(--pos-card-bg);
+  border-top: 1px solid var(--pos-border);
+  padding: 20px;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.pos-summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--pos-text-muted);
+}
+
+.pos-summary-row.total {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--pos-border);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--pos-text);
+}
+
+.pos-summary-row.discount {
+  color: #10b981;
+}
+
+.pos-btn-pay {
+  width: 100%;
+  background: var(--pos-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--pos-radius-sm);
+  padding: 16px;
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.pos-btn-pay:hover {
+  background: var(--pos-primary-hover);
+  transform: translateY(-2px);
+}
+
+.pos-btn-pay:disabled {
+  background: var(--pos-border);
+  color: var(--pos-text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Mobile Tabs */
+.pos-mobile-nav {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .pos-layout {
+    grid-template-columns: 1fr 340px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-content:has(.pos-page-bleed) {
+    /* Mobile: padding bawah untuk nav bar tetap */
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.pos-full-view .page-content:has(.pos-page-bleed) {
+    overflow: hidden;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pos-layout {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: minmax(0, 1fr);
+    /* Mobile: tidak pakai fixed height; biarkan konten mengalir */
+    height: auto !important;
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .pos-cart-container {
+    display: none;
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: none;
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid var(--pos-border);
+  }
+
+  .pos-cart-container.active {
+    display: flex;
+  }
+
+  .pos-products {
+    max-height: none;
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .pos-mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--pos-card-bg);
+    border-top: 1px solid var(--pos-border);
+    z-index: 110;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .pos-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--pos-text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    gap: 4px;
+    cursor: pointer;
+  }
+  
+  .pos-nav-item.active {
+    color: var(--pos-primary);
+  }
+  
+  .pos-nav-item .icon {
+    font-size: 20px;
+  }
+  
+  .pos-nav-badge {
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    position: absolute;
+    top: 4px;
+    right: calc(50% - 24px);
+  }
+  
+  .pos-products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px;
+  }
+  
+  .pos-product-img-wrap {
+    padding: 8px;
+  }
+  
+  .pos-product-name {
+    font-size: 12px;
+  }
+  
+  .pos-product-price {
+    font-size: 13px;
+  }
+}
+
+/* Pay Modal: header tetap, isi WAJIB punya batas tinggi agar overflow-y:auto jalan (flex 1 1 auto sering gagal di WebKit) */
+#payModal .modal.pos-pay-modal,
+.modal.pos-pay-modal {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  align-self: center !important;
+  max-height: min(90dvh, 720px) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: var(--pos-radius) !important;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35) !important;
+}
+
+.pos-pay-modal-head {
+  flex-shrink: 0;
+  background: var(--pos-bg) !important;
+  border-bottom: 1px solid var(--pos-border) !important;
+  padding: 18px 20px !important;
+  margin: 0 !important;
+  border-radius: var(--pos-radius) var(--pos-radius) 0 0 !important;
+}
+
+.pos-pay-modal-title.modal-title {
+  margin-bottom: 4px !important;
+  font-size: 18px !important;
+}
+
+/* Area form: scroll pakai tinggi maks eksplisit (andalkan ini, bukan hanya flex) */
+#payModal .pos-pay-modal-body.cart-payment,
+.pos-pay-modal-body.cart-payment,
+.pos-pay-modal-body {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  /* Pastikan selalu ada "kolam" scroll walau parent flex bermasalah */
+  max-height: min(78dvh, 640px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+  touch-action: pan-y !important;
+  padding: 18px 20px 22px !important;
+  margin: 0 !important;
+}
+
+@media (min-height: 700px) {
+  #payModal .pos-pay-modal-body.cart-payment,
+  .pos-pay-modal-body.cart-payment,
+  .pos-pay-modal-body {
+    max-height: min(80dvh, 680px) !important;
+  }
+}
+
+/* Bottom sheet HP: lebih banyak ruang isi, tetap ada batas agar scroll jelas */
+@media (max-width: 768px) {
+  #payModal .pos-pay-modal-body.cart-payment,
+  #payModal .pos-pay-modal-body {
+    max-height: min(calc(88dvh - 120px), 720px) !important;
+  }
+}
+
+#payModal .pos-pay-modal-body.cart-payment::-webkit-scrollbar,
+.pos-pay-modal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+#payModal .pos-pay-modal-body.cart-payment::-webkit-scrollbar-thumb,
+.pos-pay-modal-body::-webkit-scrollbar-thumb {
+  background: var(--pos-border);
+  border-radius: 8px;
+}
+
+.payment-methods {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 480px) {
+  .payment-methods {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+}
+
+.method-btn {
+  border-radius: var(--pos-radius-sm) !important;
+  border: 1px solid var(--pos-border) !important;
+  background: var(--pos-bg) !important;
+  color: var(--pos-text) !important;
+  font-weight: 600 !important;
+  padding: 10px 8px !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  transition: all 0.2s !important;
+  min-height: 44px;
+}
+
+.method-btn.active {
+  background: var(--pos-primary) !important;
+  color: #fff !important;
+  border-color: var(--pos-primary) !important;
+}
+
+#payModal .form-label {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  color: var(--pos-text-muted) !important;
+  margin-bottom: 8px !important;
+  display: block;
+}
+
+.payment-input {
+  display: flex;
+  align-items: stretch;
+  background: var(--pos-card-bg);
+  border: 1px solid var(--pos-border);
+  border-radius: var(--pos-radius-sm);
+  overflow: hidden;
+  margin-bottom: 10px;
+  min-height: 48px;
+}
+
+.payment-input .currency-prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--pos-bg);
+  border-right: 1px solid var(--pos-border);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--pos-text-muted);
+  flex-shrink: 0;
+}
+
+.payment-input input {
+  border: none !important;
+  background: transparent !important;
+  padding: 12px 14px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  width: 100%;
+  min-width: 0;
+}
+
+.pos-quick-cash {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.pos-quick-cash-btn {
+  background: var(--pos-bg);
+  border: 1px solid var(--pos-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pos-text);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 40px;
+}
+
+.pos-quick-cash-btn:hover {
+  background: var(--pos-border);
+  border-color: var(--pos-primary);
+}
+
+.change-display {
+  background: var(--pos-bg);
+  border-radius: var(--pos-radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--pos-border);
+  gap: 12px;
+}
+
+.change-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--pos-text-muted);
+}
+
+.change-value {
+  font-size: clamp(16px, 4vw, 20px);
+  font-weight: 800;
+  color: #10b981;
+  font-variant-numeric: tabular-nums;
+}
+
+#payModal .btn-checkout {
+  width: 100%;
+  margin-top: 16px !important;
+  min-height: 48px;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  border-radius: var(--pos-radius-sm) !important;
+}
+
+#payModal #discountDecisionPanel {
+  border-color: var(--pos-border) !important;
+  background: var(--pos-bg) !important;
+  border-radius: var(--pos-radius-sm) !important;
+}
+
+/* Success Modal Enhancements */
+.success-animation {
+  padding: 20px 0;
+}
+
+.success-icon {
+  font-size: 64px;
+  display: block;
+  margin-bottom: 16px;
+  animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes scaleIn {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Search Panel */
+.pos-search-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: var(--pos-card-bg);
+  border: 1px solid var(--pos-border);
+  border-radius: var(--pos-radius);
+  box-shadow: var(--pos-shadow);
+  z-index: 50;
+  max-height: 300px;
+  overflow-y: auto;
+  display: none;
+}
+
+.pos-search-panel.visible {
+  display: block;
+}
+
+.pos-search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-bottom: 1px solid var(--pos-border);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pos-search-row:hover {
+  background: var(--pos-bg);
+}
+
+.pos-search-row img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: var(--pos-bg);
+}
+
+
+/* Scrollbar for modern look */
+.pos-products-body::-webkit-scrollbar,
+.pos-cart-body::-webkit-scrollbar {
+  width: 6px;
+}
+.pos-products-body::-webkit-scrollbar-track,
+.pos-cart-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.pos-products-body::-webkit-scrollbar-thumb,
+.pos-cart-body::-webkit-scrollbar-thumb {
+  background-color: var(--pos-border);
+  border-radius: 10px;
+}
+
+/* Adjustments for smaller screens */
+@media (max-width: 480px) {
+  .pos-products-header {
+    padding: 12px;
+  }
+  .pos-search-wrap input {
+    padding: 12px 12px 12px 40px;
+  }
+}

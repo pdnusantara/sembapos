@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}Stok Opname{% endblock %}
+{% block page_title %}🧮 Stok Opname{% endblock %}
+{% block page_sub %}Sesi opname draft, review, approval{% endblock %}
+
+{% block content %}
+<div class="opname-kpi-grid">
+  <div class="opname-kpi-card">
+    <div class="opname-kpi-card__label">Draft</div>
+    <div class="opname-kpi-card__value">{{ counts.draft }}</div>
+  </div>
+  <div class="opname-kpi-card opname-kpi-card--review">
+    <div class="opname-kpi-card__label">Review</div>
+    <div class="opname-kpi-card__value">{{ counts.review }}</div>
+  </div>
+  <div class="opname-kpi-card opname-kpi-card--approved">
+    <div class="opname-kpi-card__label">Approved</div>
+    <div class="opname-kpi-card__value">{{ counts.approved }}</div>
+  </div>
+  <div class="opname-kpi-card opname-kpi-card--rejected">
+    <div class="opname-kpi-card__label">Rejected</div>
+    <div class="opname-kpi-card__value">{{ counts.rejected }}</div>
+  </div>
+</div>
+
+<div class="card opname-toolbar-card">
+  <form method="GET" class="opname-toolbar">
+    <div class="search-bar opname-toolbar__search">
+      <span class="search-icon">🔍</span>
+      <input type="text" name="q" class="form-control" value="{{ q }}" placeholder="Cari kode/judul sesi opname...">
+    </div>
+    <select name="status" class="form-control opname-toolbar__status">
+      <option value="all" {{ 'selected' if status == 'all' }}>Semua status</option>
+      <option value="draft" {{ 'selected' if status == 'draft' }}>Draft</option>
+      <option value="review" {{ 'selected' if status == 'review' }}>Review</option>
+      <option value="approved" {{ 'selected' if status == 'approved' }}>Approved</option>
+      <option value="rejected" {{ 'selected' if status == 'rejected' }}>Rejected</option>
+    </select>
+    <button type="submit" class="btn btn-outline">Terapkan</button>
+    <a href="{{ url_for('products.opname_new') }}" class="btn btn-primary">➕ Sesi Opname Baru</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrapper admin-table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Judul</th>
+          <th>Status</th>
+          <th>Dibuat</th>
+          <th>Dibuat oleh</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sessions.items %}
+        <tr>
+          <td data-label="Kode"><span class="badge badge-primary">{{ s.kode }}</span></td>
+          <td data-label="Judul">{{ s.judul or '—' }}</td>
+          <td data-label="Status">
+            <span class="badge {% if s.status == 'approved' %}badge-success{% elif s.status == 'review' %}badge-warning{% elif s.status == 'rejected' %}badge-danger{% else %}badge-info{% endif %}">
+              {{ s.status }}
+            </span>
+          </td>
+          <td data-label="Dibuat" class="text-muted">{{ s.created_at|local_dt('%Y-%m-%d %H:%M') }}</td>
+          <td data-label="Dibuat oleh">{{ s.creator.nama if s.creator else '—' }}</td>
+          <td data-label="Aksi">
+            <a href="{{ url_for('products.opname_detail', id=s.id) }}" class="btn btn-outline btn-sm">Buka</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-muted opname-empty">Belum ada sesi stok opname.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if sessions.pages > 1 %}
+<div class="pagination">
+  {% if sessions.has_prev %}
+  <a href="{{ url_for('products.opname_index', page=sessions.prev_num, status=status, q=q) }}" class="page-btn">‹</a>
+  {% endif %}
+  {% for p in sessions.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+    {% if p %}
+    <a href="{{ url_for('products.opname_index', page=p, status=status, q=q) }}" class="page-btn {{ 'active' if p == sessions.page }}">{{ p }}</a>
+    {% else %}
+    <span class="page-btn">…</span>
+    {% endif %}
+  {% endfor %}
+  {% if sessions.has_next %}
+  <a href="{{ url_for('products.opname_index', page=sessions.next_num, status=status, q=q) }}" class="page-btn">›</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -39,12 +39,30 @@ from ..timezones import (
     resolve_effective_timezone_id,
     timezone_short_label,
 )
+from ..tutorial_content import (
+    TUTORIAL_CONFIG_SLUG,
+    build_default_tutorial_data,
+    ensure_tutorial_page_config_default,
+    normalize_tutorial_data,
+    validate_tutorial_data_structure,
+)
+
+
+def _tutorial_preview_tmp_dir():
+    # Hindari session cookie terlalu besar: preview disimpan ke file server.
+    return os.path.join(current_app.root_path, 'tmp', 'tutorial_previews')
+
+
+def _tutorial_preview_tmp_path(preview_id: str):
+    return os.path.join(_tutorial_preview_tmp_dir(), f'{preview_id}.json')
 from ..models import (
     Tenant,
     User,
     Branch,
     Transaction,
     Product,
+    ProductCategory,
+    Supplier,
     SuperadminAuditLog,
     TenantPackage,
     TenantPlanHistory,
@@ -192,6 +210,221 @@ def _log_sa(action, tenant_id=None, detail=None):
     ))
 
 
+@superadmin_bp.route('/tutorial', methods=['GET', 'POST'])
+@login_required
+@superadmin_required
+def tutorial_editor():
+    cfg = ensure_tutorial_page_config_default(slug=TUTORIAL_CONFIG_SLUG, aktif=True)
+    tutorial = json.loads(cfg.data_json or '{}')
+
+    def _parse_bullets_multiline(s):
+        lines = (s or '').splitlines()
+        out = []
+        for ln in lines:
+            t = (ln or '').strip()
+            if not t:
+                continue
+            out.append(t)
+        return out
+
+    # Allowed blocks: hero | fiveW1H | toc | sidebar | section:<id>
+    active_block = request.values.get('block') or request.args.get('block') or 'hero'
+    if active_block not in {'hero', 'fiveW1H', 'toc', 'sidebar'} and not active_block.startswith('section:'):
+        active_block = 'hero'
+
+    section_map = {s.get('id'): s for s in (tutorial.get('sections') or [])}
+    if active_block.startswith('section:'):
+        sid = active_block.split(':', 1)[1]
+        if sid not in section_map:
+            active_block = 'hero'
+
+    preview_tutorial = tutorial
+    preview_nonce = session.get('tutorial_preview_nonce', 0)
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'save')
+        block = request.form.get('block', active_block)
+        if block not in {'hero', 'fiveW1H', 'toc', 'sidebar'} and not block.startswith('section:'):
+            flash('Block tidak valid.', 'danger')
+            return redirect(url_for('superadmin.tutorial_editor', block='hero'))
+
+        # Reload config in case it has been updated by another session.
+        cfg = ensure_tutorial_page_config_default(slug=TUTORIAL_CONFIG_SLUG, aktif=True)
+        tutorial = json.loads(cfg.data_json or '{}')
+        section_map = {s.get('id'): s for s in (tutorial.get('sections') or [])}
+
+        if block.startswith('section:'):
+            sid = block.split(':', 1)[1]
+            if sid not in section_map:
+                flash('Section tidak ditemukan.', 'danger')
+                return redirect(url_for('superadmin.tutorial_editor', block='hero'))
+
+        updated = tutorial
+
+        if block == 'hero':
+            updated.setdefault('hero', {})
+            updated['hero']['badge'] = (request.form.get('hero_badge') or '').strip()
+            updated['hero']['heading'] = (request.form.get('hero_heading') or '').strip()
+            updated['hero']['lead'] = (request.form.get('hero_lead') or '').strip()
+            updated['hero'].setdefault('cta_primary', {'href': '#mulai', 'text': ''})
+            updated['hero'].setdefault('cta_secondary', {'href': '#pos', 'text': ''})
+            updated['hero']['cta_primary']['text'] = (request.form.get('hero_cta_primary_text') or '').strip()
+            updated['hero']['cta_secondary']['text'] = (request.form.get('hero_cta_secondary_text') or '').strip()
+
+        elif block == 'fiveW1H':
+            updated.setdefault('fiveW1H', {})
+            cards = updated.get('fiveW1H', {}).get('cards') or []
+            for card in cards:
+                label = (card.get('label') or '').strip()
+                if not label:
+                    continue
+                card['subtitle'] = (request.form.get(f'five_subtitle_{label}') or '').strip()
+                card['title'] = (request.form.get(f'five_title_{label}') or '').strip()
+                card['description'] = (request.form.get(f'five_description_{label}') or '').strip()
+                card['bullets'] = _parse_bullets_multiline(request.form.get(f'five_bullets_{label}'))
+
+        elif block == 'toc':
+            updated.setdefault('toc', {})
+            cards = updated.get('toc', {}).get('cards') or []
+            for card in cards:
+                cid = (card.get('id') or '').strip()
+                if not cid:
+                    continue
+                card['icon'] = (request.form.get(f'toc_icon_{cid}') or '').strip()
+                card['title'] = (request.form.get(f'toc_title_{cid}') or '').strip()
+                card['subtitle'] = (request.form.get(f'toc_subtitle_{cid}') or '').strip()
+
+        elif block == 'sidebar':
+            updated.setdefault('sidebar', {})
+            links = updated.get('sidebar', {}).get('links') or []
+            for link in links:
+                sid = (link.get('id') or '').strip()
+                if not sid:
+                    continue
+                link['icon'] = (request.form.get(f'side_icon_{sid}') or '').strip()
+                link['title'] = (request.form.get(f'side_title_{sid}') or '').strip()
+
+        elif block.startswith('section:'):
+            sid = block.split(':', 1)[1]
+            sec = section_map[sid]
+            sec['title'] = (request.form.get('sec_title') or '').strip()
+            sec['subtitle'] = (request.form.get('sec_subtitle') or '').strip()
+
+            steps = sec.get('steps') or []
+            for idx, st in enumerate(steps):
+                st['title'] = (request.form.get(f'step_title_{idx}') or '').strip()
+                st['lead'] = (request.form.get(f'step_lead_{idx}') or '').strip()
+                st['bullets'] = _parse_bullets_multiline(request.form.get(f'step_bullets_{idx}'))
+
+            # Reorder steps (swap with neighbor)
+            move_from_raw = (request.form.get('move_from') or '').strip()
+            move_dir = (request.form.get('move_dir') or '').strip().lower()
+            if move_from_raw.isdigit() and move_dir in {'up', 'down'}:
+                move_from = int(move_from_raw)
+                if 0 <= move_from < len(steps):
+                    swap_to = move_from - 1 if move_dir == 'up' else move_from + 1
+                    if 0 <= swap_to < len(steps):
+                        steps[move_from], steps[swap_to] = steps[swap_to], steps[move_from]
+
+            # Add new step
+            if (request.form.get('add_step') or '').strip() == '1':
+                default_chip = steps[0].get('chip_prefix') if steps else 'Langkah'
+                new_step = {
+                    'step_number': len(steps) + 1,
+                    'chip_prefix': default_chip,
+                    'title': (request.form.get('new_step_title') or '').strip(),
+                    'lead': (request.form.get('new_step_lead') or '').strip(),
+                    'bullets': _parse_bullets_multiline(request.form.get('new_step_bullets') or ''),
+                }
+                steps.append(new_step)
+
+            # Normalize step numbers & chip prefix after reorder/add
+            default_chip = steps[0].get('chip_prefix') if steps else 'Langkah'
+            for idx, st in enumerate(steps):
+                st['chip_prefix'] = default_chip
+                st['step_number'] = idx + 1
+
+        preview_tutorial = updated
+
+        updated = normalize_tutorial_data(updated)
+        errors = validate_tutorial_data_structure(updated)
+        if errors:
+            flash('Gagal validasi konten tutorial: ' + '; '.join(errors[:6]), 'danger')
+            return redirect(url_for('superadmin.tutorial_editor', block=block))
+
+        if action == 'preview':
+            preview_id = uuid.uuid4().hex
+            tmp_dir = _tutorial_preview_tmp_dir()
+            os.makedirs(tmp_dir, exist_ok=True)
+            tmp_path = _tutorial_preview_tmp_path(preview_id)
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                f.write(json.dumps(updated, ensure_ascii=False))
+            session['tutorial_preview_id'] = preview_id
+            session['tutorial_preview_nonce'] = int(datetime.utcnow().timestamp())
+            flash('Preview dibuat (belum tersimpan).', 'info')
+            return redirect(url_for('superadmin.tutorial_editor', block=block))
+
+        cfg.updated_by = current_user.id
+        cfg.data_json = json.dumps(updated, ensure_ascii=False)
+        db.session.commit()
+        _log_sa('tutorial_update', detail=f'block={block}')
+        flash('Konten tutorial disimpan.', 'success')
+        session.pop('tutorial_preview_id', None)
+        return redirect(url_for('superadmin.tutorial_editor', block=block))
+
+    # Build section map for template
+    section_map = {s.get('id'): s for s in (tutorial.get('sections') or [])}
+    return render_template(
+        'superadmin/tutorial_editor.html',
+        tutorial=tutorial,
+        active_block=active_block,
+        section_map=section_map,
+        preview_nonce=preview_nonce,
+    )
+
+
+@superadmin_bp.route('/tutorial/preview', methods=['GET'])
+@login_required
+@superadmin_required
+def tutorial_preview():
+    try:
+        cfg = ensure_tutorial_page_config_default(slug=TUTORIAL_CONFIG_SLUG, aktif=True)
+        preview_id = session.get('tutorial_preview_id')
+        if preview_id:
+            tmp_path = _tutorial_preview_tmp_path(preview_id)
+            try:
+                with open(tmp_path, 'r', encoding='utf-8') as f:
+                    tutorial_data = json.loads(f.read() or '{}')
+            except Exception:
+                tutorial_data = json.loads(cfg.data_json or '{}')
+        else:
+            tutorial_data = json.loads(cfg.data_json or '{}')
+
+        tutorial_data = normalize_tutorial_data(tutorial_data)
+        errors = validate_tutorial_data_structure(tutorial_data)
+        if errors:
+            return render_template('tutorial.html')
+        return render_template('tutorial_dynamic.html', tutorial=tutorial_data)
+    except Exception:
+        return render_template('tutorial.html')
+
+
+@superadmin_bp.route('/tutorial/reset', methods=['POST'])
+@login_required
+@superadmin_required
+def tutorial_editor_reset():
+    cfg = ensure_tutorial_page_config_default(slug=TUTORIAL_CONFIG_SLUG, aktif=True)
+    block = (request.form.get('block') or 'hero').strip()
+
+    updated = build_default_tutorial_data()
+    cfg.updated_by = current_user.id
+    cfg.data_json = json.dumps(updated, ensure_ascii=False)
+    db.session.commit()
+    _log_sa('tutorial_reset', detail=f'block={block}')
+    flash('Konten tutorial di-reset ke default.', 'success')
+    return redirect(url_for('superadmin.tutorial_editor', block=block))
+
+
 def _record_plan_history(
     tenant_id,
     event,
@@ -217,6 +450,42 @@ def _record_plan_history(
         old_max_user=old_max_user,
         new_max_user=new_max_user,
     ))
+
+
+def _set_tenant_package_and_quotas(tenant, pkg, max_cabang, max_user):
+    """Set tenant paket + kuota; catat riwayat & audit jika berubah."""
+    old_pid = tenant.paket_id
+    old_kode = tenant.paket
+    old_mc = tenant.max_cabang
+    old_mu = tenant.max_user
+    tenant.paket_id = pkg.id
+    tenant.paket = pkg.kode
+    tenant.max_cabang = max_cabang
+    tenant.max_user = max_user
+    if (
+        old_pid != tenant.paket_id
+        or (old_kode or '') != (tenant.paket or '')
+        or old_mc != tenant.max_cabang
+        or old_mu != tenant.max_user
+    ):
+        _record_plan_history(
+            tenant.id,
+            'plan_change',
+            old_pid,
+            tenant.paket_id,
+            old_kode,
+            tenant.paket,
+            old_mc,
+            tenant.max_cabang,
+            old_mu,
+            tenant.max_user,
+        )
+        _log_sa(
+            'tenant_plan_change',
+            tenant.id,
+            detail=f'paket {(old_kode or "")}→{tenant.paket} '
+            f'cab {old_mc}→{tenant.max_cabang} user {old_mu}→{tenant.max_user}',
+        )
 
 
 def _paket_preview_labels(modules_json):
@@ -783,10 +1052,6 @@ def wilayah_desa(kec_id):
 def edit_tenant(id):
     tenant = Tenant.query.get_or_404(id)
     if request.method == 'POST':
-        old_pid = tenant.paket_id
-        old_kode = tenant.paket
-        old_mc = tenant.max_cabang
-        old_mu = tenant.max_user
         try:
             paket_id = int(request.form.get('paket_id') or 0)
         except (TypeError, ValueError):
@@ -815,39 +1080,12 @@ def edit_tenant(id):
         tenant.desa = (request.form.get('desa') or '').strip() or None
         tenant.telepon = request.form.get('telepon', '')
         tenant.email = request.form.get('email', '')
-        tenant.paket_id = pkg.id
-        tenant.paket = pkg.kode
-        tenant.max_cabang = max_cabang
-        tenant.max_user = max_user
         tenant.aktif = bool(request.form.get('aktif'))
         exp = _parse_expiry_date(request.form.get('tanggal_expired'))
         tenant.tanggal_expired = exp
         tenant.timezone = normalize_timezone_id(request.form.get('timezone'))
 
-        if (
-            old_pid != tenant.paket_id
-            or (old_kode or '') != (tenant.paket or '')
-            or old_mc != tenant.max_cabang
-            or old_mu != tenant.max_user
-        ):
-            _record_plan_history(
-                tenant.id,
-                'plan_change',
-                old_pid,
-                tenant.paket_id,
-                old_kode,
-                tenant.paket,
-                old_mc,
-                tenant.max_cabang,
-                old_mu,
-                tenant.max_user,
-            )
-            _log_sa(
-                'tenant_plan_change',
-                tenant.id,
-                detail=f'paket {(old_kode or "")}→{tenant.paket} '
-                f'cab {old_mc}→{tenant.max_cabang} user {old_mu}→{tenant.max_user}',
-            )
+        _set_tenant_package_and_quotas(tenant, pkg, max_cabang, max_user)
         _log_sa('tenant_edit', tenant.id)
         db.session.commit()
         flash('Data tenant diperbarui.', 'success')
@@ -1030,18 +1268,105 @@ def view_tenant(id):
         .all()
     )
 
-    from ..models import Supplier
     onboarding_steps = []
+
+    has_category = ProductCategory.query.filter_by(tenant_id=id).first() is not None
+    cat_since = db.session.query(func.min(ProductCategory.created_at)).filter_by(
+        tenant_id=id
+    ).scalar()
+    onboarding_steps.append({
+        'label': 'Kategori produk dibuat',
+        'done': has_category,
+        'since': cat_since,
+        'hint': 'Minta tenant buat minimal 1 kategori di menu Produk > Kategori',
+    })
+
     has_products = Product.query.filter_by(tenant_id=id, aktif=True).count() > 0
+    prod_since = db.session.query(func.min(Product.created_at)).filter(
+        Product.tenant_id == id,
+        Product.aktif.is_(True),
+    ).scalar()
+    onboarding_steps.append({
+        'label': 'Produk ditambahkan',
+        'done': has_products,
+        'since': prod_since,
+        'hint': 'Minta tenant tambah produk di menu Produk',
+    })
+
+    n_products = Product.query.filter_by(tenant_id=id, aktif=True).count()
+    has_5_products = n_products >= 5
+    onboarding_steps.append({
+        'label': 'Produk ≥ 5',
+        'done': has_5_products,
+        'since': None,
+        'hint': 'Minta tenant tambah minimal 5 produk aktif',
+    })
+
     has_supplier = Supplier.query.filter_by(tenant_id=id).first() is not None
+    sup_since = db.session.query(func.min(Supplier.created_at)).filter_by(
+        tenant_id=id
+    ).scalar()
+    onboarding_steps.append({
+        'label': 'Supplier ditambahkan',
+        'done': has_supplier,
+        'since': sup_since,
+        'hint': 'Minta tenant tambah supplier di menu Pembelian > Supplier',
+    })
+
     has_tx = total_transaksi > 0
-    has_multi_user = len([u for u in users if u.aktif]) > 1
-    has_multi_branch = len([b for b in branches if b.aktif]) > 1
-    onboarding_steps.append({'label': 'Produk ditambahkan', 'done': has_products})
-    onboarding_steps.append({'label': 'Supplier ditambahkan', 'done': has_supplier})
-    onboarding_steps.append({'label': 'Transaksi pertama', 'done': has_tx})
-    onboarding_steps.append({'label': 'Multi-user aktif', 'done': has_multi_user})
-    onboarding_steps.append({'label': 'Cabang tambahan', 'done': has_multi_branch})
+    tx1_since = db.session.query(func.min(Transaction.created_at)).filter(
+        Transaction.tenant_id == id,
+        Transaction.status == 'selesai',
+    ).scalar()
+    onboarding_steps.append({
+        'label': 'Transaksi pertama',
+        'done': has_tx,
+        'since': tx1_since,
+        'hint': 'Minta tenant coba transaksi pertama di kasir',
+    })
+
+    has_10_tx = total_transaksi >= 10
+    tx10_since = None
+    if has_10_tx:
+        tx10_since = (
+            db.session.query(Transaction.created_at)
+            .filter_by(tenant_id=id, status='selesai')
+            .order_by(Transaction.created_at.asc())
+            .offset(9)
+            .limit(1)
+            .scalar()
+        )
+    onboarding_steps.append({
+        'label': '10 transaksi pertama',
+        'done': has_10_tx,
+        'since': tx10_since,
+        'hint': (
+            'Milestone aktif — 10 transaksi selesai menunjukkan tenant rutin pakai kasir'
+        ),
+    })
+
+    active_users_sorted = sorted([u for u in users if u.aktif], key=lambda u: u.id)
+    has_multi_user = len(active_users_sorted) > 1
+    user2_since = active_users_sorted[1].created_at if len(active_users_sorted) > 1 else None
+    onboarding_steps.append({
+        'label': 'Multi-user aktif',
+        'done': has_multi_user,
+        'since': user2_since,
+        'hint': 'Minta tenant tambah 1 user staf di menu Pengguna',
+    })
+
+    active_branches_sorted = sorted([b for b in branches if b.aktif], key=lambda b: b.id)
+    has_multi_branch = len(active_branches_sorted) > 1
+    branch2_since = (
+        active_branches_sorted[1].created_at if len(active_branches_sorted) > 1 else None
+    )
+    onboarding_steps.append({
+        'label': 'Cabang tambahan',
+        'done': has_multi_branch,
+        'since': branch2_since,
+        'hint': 'Minta tenant tambah cabang di menu Cabang',
+    })
+
     onboarding_done = sum(1 for s in onboarding_steps if s['done'])
     onboarding_pct = int(100 * onboarding_done / len(onboarding_steps)) if onboarding_steps else 0
 
@@ -1912,49 +2237,174 @@ def _platform_monthly_revenue(year, month):
     ).scalar() or 0
 
 
-def _tenant_health_score(tenant):
+def _health_score_components(tx_7d, tx_30d, products, users_active):
+    """Hitung skor 0–100 dan breakdown poin per komponen (sama logika lama)."""
+    pts_7 = 0
+    if tx_7d >= 10:
+        pts_7 = 40
+    elif tx_7d >= 3:
+        pts_7 = 25
+    elif tx_7d >= 1:
+        pts_7 = 10
+
+    pts_30 = 0
+    if tx_30d >= 50:
+        pts_30 = 25
+    elif tx_30d >= 15:
+        pts_30 = 15
+    elif tx_30d >= 1:
+        pts_30 = 5
+
+    pts_prod = 0
+    if products >= 20:
+        pts_prod = 20
+    elif products >= 5:
+        pts_prod = 10
+
+    pts_users = 0
+    if users_active >= 2:
+        pts_users = 15
+    elif users_active >= 1:
+        pts_users = 5
+
+    breakdown = {
+        'tx_7d': pts_7,
+        'tx_30d': pts_30,
+        'products': pts_prod,
+        'users': pts_users,
+    }
+    score = min(100, sum(breakdown.values()))
+    return score, breakdown
+
+
+def _format_breakdown_tooltip(breakdown):
+    labels = (
+        ('tx_7d', 'Trx 7H'),
+        ('tx_30d', 'Trx 30H'),
+        ('products', 'Produk'),
+        ('users', 'User'),
+    )
+    parts = []
+    for key, lab in labels:
+        v = breakdown[key]
+        if v > 0:
+            parts.append(f'{lab}: +{v}')
+    return ' · '.join(parts) if parts else 'Tidak ada skor'
+
+
+def _tenant_health_risk_hint(level, tx_7d, tx_30d, products, users_active):
+    if level == 'healthy':
+        return 'Aktif'
+    parts = []
+    if tx_7d == 0:
+        parts.append('0 trx 7 hari')
+    if tx_30d < 15:
+        parts.append(f'{tx_30d} trx 30 hari')
+    if products < 5:
+        parts.append(f'{products} produk aktif')
+    if users_active < 2:
+        parts.append(f'{users_active} user aktif')
+    return ' · '.join(parts) if parts else 'Perlu review'
+
+
+def _tenant_health_data_for_tenants(tenants):
+    """
+    Batch query (5 query total untuk semua tenant): tx 7d/30d, last tx, produk, user.
+    """
+    if not tenants:
+        return []
     now = datetime.utcnow()
     since_7d = now - timedelta(days=7)
     since_30d = now - timedelta(days=30)
-    tx_7d = Transaction.query.filter(
-        Transaction.tenant_id == tenant.id,
-        Transaction.status == 'selesai',
-        Transaction.created_at >= since_7d,
-    ).count()
-    tx_30d = Transaction.query.filter(
-        Transaction.tenant_id == tenant.id,
-        Transaction.status == 'selesai',
-        Transaction.created_at >= since_30d,
-    ).count()
-    products = Product.query.filter_by(tenant_id=tenant.id, aktif=True).count()
-    users_active = User.query.filter_by(tenant_id=tenant.id, aktif=True).count()
+    tenant_ids = [t.id for t in tenants]
 
-    score = 0
-    if tx_7d >= 10:
-        score += 40
-    elif tx_7d >= 3:
-        score += 25
-    elif tx_7d >= 1:
-        score += 10
+    tx_7d_map = dict(
+        db.session.query(
+            Transaction.tenant_id,
+            func.count(Transaction.id),
+        ).filter(
+            Transaction.status == 'selesai',
+            Transaction.created_at >= since_7d,
+            Transaction.tenant_id.in_(tenant_ids),
+        ).group_by(Transaction.tenant_id).all()
+    )
 
-    if tx_30d >= 50:
-        score += 25
-    elif tx_30d >= 15:
-        score += 15
-    elif tx_30d >= 1:
-        score += 5
+    tx_30d_map = dict(
+        db.session.query(
+            Transaction.tenant_id,
+            func.count(Transaction.id),
+        ).filter(
+            Transaction.status == 'selesai',
+            Transaction.created_at >= since_30d,
+            Transaction.tenant_id.in_(tenant_ids),
+        ).group_by(Transaction.tenant_id).all()
+    )
 
-    if products >= 20:
-        score += 20
-    elif products >= 5:
-        score += 10
+    last_tx_map = dict(
+        db.session.query(
+            Transaction.tenant_id,
+            func.max(Transaction.created_at),
+        ).filter(
+            Transaction.status == 'selesai',
+            Transaction.tenant_id.in_(tenant_ids),
+        ).group_by(Transaction.tenant_id).all()
+    )
 
-    if users_active >= 2:
-        score += 15
-    elif users_active >= 1:
-        score += 5
+    products_map = dict(
+        db.session.query(
+            Product.tenant_id,
+            func.count(Product.id),
+        ).filter(
+            Product.aktif.is_(True),
+            Product.tenant_id.in_(tenant_ids),
+        ).group_by(Product.tenant_id).all()
+    )
 
-    return min(100, score), tx_7d, tx_30d
+    users_map = dict(
+        db.session.query(
+            User.tenant_id,
+            func.count(User.id),
+        ).filter(
+            User.aktif.is_(True),
+            User.tenant_id.in_(tenant_ids),
+        ).group_by(User.tenant_id).all()
+    )
+
+    health_data = []
+    for t in tenants:
+        tid = t.id
+        tx_7d = tx_7d_map.get(tid, 0)
+        tx_30d = tx_30d_map.get(tid, 0)
+        products = products_map.get(tid, 0)
+        users_active = users_map.get(tid, 0)
+        last_tx = last_tx_map.get(tid)
+        score, breakdown = _health_score_components(tx_7d, tx_30d, products, users_active)
+        if score >= 60:
+            level = 'healthy'
+        elif score >= 30:
+            level = 'warning'
+        else:
+            level = 'danger'
+        days_since_last_tx = None
+        if last_tx:
+            days_since_last_tx = max(0, (now - last_tx).days)
+        health_data.append({
+            'tenant': t,
+            'score': score,
+            'level': level,
+            'tx_7d': tx_7d,
+            'tx_30d': tx_30d,
+            'products': products,
+            'users_active': users_active,
+            'last_tx': last_tx,
+            'days_since_last_tx': days_since_last_tx,
+            'breakdown_tooltip': _format_breakdown_tooltip(breakdown),
+            'risk_hint': _tenant_health_risk_hint(
+                level, tx_7d, tx_30d, products, users_active
+            ),
+        })
+    health_data.sort(key=lambda x: x['score'])
+    return health_data
 
 
 @superadmin_bp.route('/dashboard')
@@ -2397,37 +2847,86 @@ def platform_settings():
 # TENANT HEALTH SCORES
 # ─────────────────────────────────────────────────────────────
 
+def _tenant_health_level_label(level):
+    if level == 'healthy':
+        return 'Sehat'
+    if level == 'warning':
+        return 'Perhatian'
+    return 'Berisiko'
+
+
 @superadmin_bp.route('/tenant-health')
 @login_required
 @superadmin_required
 def tenant_health():
     tenants = Tenant.query.filter_by(aktif=True).order_by(Tenant.nama).all()
-    health_data = []
-    for t in tenants:
-        score, tx_7d, tx_30d = _tenant_health_score(t)
-        if score >= 60:
-            level = 'healthy'
-        elif score >= 30:
-            level = 'warning'
-        else:
-            level = 'danger'
-        health_data.append({
-            'tenant': t,
-            'score': score,
-            'level': level,
-            'tx_7d': tx_7d,
-            'tx_30d': tx_30d,
-        })
-    health_data.sort(key=lambda x: x['score'])
+    health_data_all = _tenant_health_data_for_tenants(tenants)
+    health_counts = {
+        'healthy': sum(1 for h in health_data_all if h['level'] == 'healthy'),
+        'warning': sum(1 for h in health_data_all if h['level'] == 'warning'),
+        'danger': sum(1 for h in health_data_all if h['level'] == 'danger'),
+    }
 
     filter_level = request.args.get('level', '').strip()
+    health_data = health_data_all
     if filter_level:
-        health_data = [h for h in health_data if h['level'] == filter_level]
+        health_data = [h for h in health_data_all if h['level'] == filter_level]
 
     return render_template(
         'superadmin/tenant_health.html',
         health_data=health_data,
+        health_data_all=health_data_all,
+        health_counts=health_counts,
         filter_level=filter_level,
+    )
+
+
+@superadmin_bp.route('/tenant-health/export')
+@login_required
+@superadmin_required
+def tenant_health_export():
+    tenants = Tenant.query.filter_by(aktif=True).order_by(Tenant.nama).all()
+    rows = _tenant_health_data_for_tenants(tenants)
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        [
+            'Tenant',
+            'Kode',
+            'Skor',
+            'Status',
+            'Trx 7H',
+            'Trx 30H',
+            'Trx Terakhir (UTC)',
+        ]
+    )
+    for h in rows:
+        t = h['tenant']
+        last_cell = ''
+        if h['last_tx']:
+            last_cell = h['last_tx'].strftime('%Y-%m-%d %H:%M:%S')
+        writer.writerow(
+            [
+                t.nama,
+                t.kode or '',
+                h['score'],
+                _tenant_health_level_label(h['level']),
+                h['tx_7d'],
+                h['tx_30d'],
+                last_cell,
+            ]
+        )
+
+    data = buf.getvalue()
+    fn = f'tenant-health-{datetime.utcnow().strftime("%Y%m%d-%H%M")}.csv'
+    return Response(
+        data,
+        mimetype='text/csv; charset=utf-8',
+        headers={
+            'Content-Disposition': f'attachment; filename={fn}',
+            'Content-Type': 'text/csv; charset=utf-8',
+        },
     )
 
 
@@ -2451,6 +2950,44 @@ def _generate_invoice_number():
     return f'{prefix}-{seq:04d}'
 
 
+BILLING_STATUS_LABELS = {
+    'unpaid': 'Belum Bayar',
+    'overdue': 'Jatuh Tempo',
+    'paid': 'Lunas',
+    'cancelled': 'Dibatalkan',
+}
+
+
+def _billing_stats(tenant_id=None):
+    """Hitung per status + total nominal unpaid+overdue; opsional filter tenant."""
+    def _q():
+        qq = TenantInvoice.query
+        if tenant_id:
+            qq = qq.filter_by(tenant_id=tenant_id)
+        return qq
+
+    total_unpaid_q = db.session.query(func.coalesce(func.sum(TenantInvoice.nominal), 0)).filter(
+        TenantInvoice.status.in_(['unpaid', 'overdue'])
+    )
+    if tenant_id:
+        total_unpaid_q = total_unpaid_q.filter(TenantInvoice.tenant_id == tenant_id)
+
+    return {
+        'unpaid': _q().filter_by(status='unpaid').count(),
+        'overdue': _q().filter_by(status='overdue').count(),
+        'paid': _q().filter_by(status='paid').count(),
+        'cancelled': _q().filter_by(status='cancelled').count(),
+        'total_unpaid': total_unpaid_q.scalar() or 0,
+    }
+
+
+def _redirect_billing_back():
+    ref = request.referrer
+    if ref and ref.startswith(request.host_url):
+        return redirect(ref)
+    return redirect(url_for('superadmin.billing_index'))
+
+
 @superadmin_bp.route('/billing')
 @login_required
 @superadmin_required
@@ -2458,12 +2995,23 @@ def billing_index():
     page = max(1, int(request.args.get('page', 1) or 1))
     status_filter = request.args.get('status', '').strip()
     tid = request.args.get('tenant', type=int)
+    q_text = (request.args.get('q') or '').strip()
 
     query = TenantInvoice.query
     if status_filter:
         query = query.filter_by(status=status_filter)
     if tid:
         query = query.filter_by(tenant_id=tid)
+    if q_text:
+        like = f'%{q_text}%'
+        query = query.filter(
+            or_(
+                TenantInvoice.nomor.ilike(like),
+                TenantInvoice.tenant_id.in_(
+                    db.session.query(Tenant.id).filter(Tenant.nama.ilike(like))
+                ),
+            )
+        )
     query = query.order_by(TenantInvoice.created_at.desc())
 
     total = query.count()
@@ -2472,16 +3020,30 @@ def billing_index():
         page = total_pages
     invoices = query.offset((page - 1) * PER_PAGE).limit(PER_PAGE).all()
 
-    stats = {
-        'unpaid': TenantInvoice.query.filter_by(status='unpaid').count(),
-        'paid': TenantInvoice.query.filter_by(status='paid').count(),
-        'overdue': TenantInvoice.query.filter_by(status='overdue').count(),
-        'total_unpaid': db.session.query(
-            func.coalesce(func.sum(TenantInvoice.nominal), 0)
-        ).filter(TenantInvoice.status.in_(['unpaid', 'overdue'])).scalar() or 0,
-    }
+    stats = _billing_stats(tid)
 
     tenants = Tenant.query.order_by(Tenant.nama).all()
+
+    def _billing_url(page_num=None, status=None, drop_status=False):
+        args = {}
+        if q_text:
+            args['q'] = q_text
+        if tid:
+            args['tenant'] = tid
+        if not drop_status:
+            st = status if status is not None else status_filter
+            if st:
+                args['status'] = st
+        if page_num is not None and page_num > 1:
+            args['page'] = page_num
+        return url_for('superadmin.billing_index', **args)
+
+    billing_pagination = None
+    if total_pages > 1:
+        billing_pagination = {
+            'prev': _billing_url(page_num=page - 1) if page > 1 else None,
+            'next': _billing_url(page_num=page + 1) if page < total_pages else None,
+        }
 
     return render_template(
         'superadmin/billing_index.html',
@@ -2491,8 +3053,12 @@ def billing_index():
         total=total,
         status_filter=status_filter,
         tenant_filter=tid,
+        q=q_text,
         stats=stats,
         tenants=tenants,
+        billing_status_labels=BILLING_STATUS_LABELS,
+        billing_url=_billing_url,
+        billing_pagination=billing_pagination,
     )
 
 
@@ -2512,6 +3078,33 @@ def billing_add():
             nominal = float(request.form.get('nominal', 0))
         except (TypeError, ValueError):
             pass
+        if nominal <= 0:
+            flash('Nominal harus lebih dari 0.', 'danger')
+            return redirect(url_for('superadmin.billing_add'))
+
+        ubah_paket = bool(request.form.get('ubah_paket'))
+        try:
+            target_paket_id = int(request.form.get('target_paket_id') or 0)
+        except (TypeError, ValueError):
+            target_paket_id = 0
+
+        paket_diubah = False
+        if ubah_paket:
+            if not target_paket_id:
+                flash('Pilih paket tujuan untuk mengubah paket tenant.', 'danger')
+                return redirect(url_for('superadmin.billing_add'))
+            pkg = TenantPackage.query.get(target_paket_id)
+            if not pkg:
+                flash('Paket tidak ditemukan.', 'danger')
+                return redirect(url_for('superadmin.billing_add'))
+            if not pkg.aktif and pkg.id != tenant.paket_id:
+                flash('Paket tujuan tidak aktif.', 'danger')
+                return redirect(url_for('superadmin.billing_add'))
+            if tenant.paket_id != pkg.id:
+                kuota = _paket_kuota_map()
+                d_mc, d_mu = kuota.get(pkg.kode.lower(), (pkg.max_cabang, pkg.max_user))
+                _set_tenant_package_and_quotas(tenant, pkg, int(d_mc), int(d_mu))
+                paket_diubah = True
 
         inv = TenantInvoice(
             tenant_id=tid,
@@ -2524,13 +3117,68 @@ def billing_add():
             created_by=current_user.id,
         )
         db.session.add(inv)
-        _log_sa('invoice_create', tid, detail=f'nomor={inv.nomor} nominal={nominal}')
+        detail = f'nomor={inv.nomor} nominal={nominal}'
+        if paket_diubah:
+            detail += f' ubah_paket_id={target_paket_id}'
+        _log_sa('invoice_create', tid, detail=detail)
         db.session.commit()
-        flash(f'Invoice {inv.nomor} dibuat.', 'success')
+        msg = f'Invoice {inv.nomor} dibuat.'
+        if paket_diubah:
+            msg += ' Paket tenant diperbarui.'
+        flash(msg, 'success')
         return redirect(url_for('superadmin.billing_index'))
 
-    tenants = Tenant.query.filter_by(aktif=True).order_by(Tenant.nama).all()
-    return render_template('superadmin/billing_form.html', invoice=None, tenants=tenants)
+    tenants = (
+        Tenant.query.options(joinedload(Tenant.subscription))
+        .filter_by(aktif=True)
+        .order_by(Tenant.nama)
+        .all()
+    )
+    pids = {t.paket_id for t in tenants if t.paket_id}
+    if pids:
+        packages = (
+            TenantPackage.query.filter(
+                or_(TenantPackage.aktif.is_(True), TenantPackage.id.in_(pids)),
+            )
+            .order_by(TenantPackage.sort_order, TenantPackage.nama)
+            .all()
+        )
+    else:
+        packages = (
+            TenantPackage.query.filter_by(aktif=True)
+            .order_by(TenantPackage.sort_order, TenantPackage.nama)
+            .all()
+        )
+    packages_json = [
+        {
+            'id': p.id,
+            'nama': p.nama,
+            'kode': p.kode,
+            'harga_bulanan': float(p.harga_bulanan),
+            'harga_tahunan': float(p.harga_tahunan),
+        }
+        for p in packages
+    ]
+    tenant_price_hints = []
+    for t in tenants:
+        pkg = t.subscription
+        tenant_price_hints.append(
+            {
+                'id': t.id,
+                'paket_id': pkg.id if pkg else None,
+                'harga_bulanan': float(pkg.harga_bulanan) if pkg else 0.0,
+                'harga_tahunan': float(pkg.harga_tahunan) if pkg else 0.0,
+                'paket_nama': pkg.nama if pkg else None,
+            }
+        )
+    return render_template(
+        'superadmin/billing_form.html',
+        invoice=None,
+        tenants=tenants,
+        tenant_price_hints=tenant_price_hints,
+        packages=packages,
+        packages_json=packages_json,
+    )
 
 
 @superadmin_bp.route('/billing/<int:id>/pay', methods=['POST'])
@@ -2538,13 +3186,31 @@ def billing_add():
 @superadmin_required
 def billing_pay(id):
     inv = TenantInvoice.query.get_or_404(id)
+    if inv.status not in ('unpaid', 'overdue'):
+        flash('Invoice ini tidak bisa ditandai lunas.', 'warning')
+        return _redirect_billing_back()
     inv.status = 'paid'
     inv.tanggal_bayar = datetime.utcnow()
     inv.metode_bayar = request.form.get('metode_bayar', 'transfer').strip()
     _log_sa('invoice_paid', inv.tenant_id, detail=f'nomor={inv.nomor}')
     db.session.commit()
     flash(f'Invoice {inv.nomor} ditandai lunas.', 'success')
-    return redirect(url_for('superadmin.billing_index'))
+    return _redirect_billing_back()
+
+
+@superadmin_bp.route('/billing/<int:id>/overdue', methods=['POST'])
+@login_required
+@superadmin_required
+def billing_overdue(id):
+    inv = TenantInvoice.query.get_or_404(id)
+    if inv.status == 'unpaid':
+        inv.status = 'overdue'
+        _log_sa('invoice_overdue', inv.tenant_id, detail=f'nomor={inv.nomor}')
+        db.session.commit()
+        flash(f'Invoice {inv.nomor} ditandai jatuh tempo.', 'warning')
+    else:
+        flash('Hanya invoice berstatus Belum Bayar yang bisa ditandai jatuh tempo.', 'info')
+    return _redirect_billing_back()
 
 
 @superadmin_bp.route('/billing/<int:id>/cancel', methods=['POST'])
@@ -2556,7 +3222,7 @@ def billing_cancel(id):
     _log_sa('invoice_cancel', inv.tenant_id, detail=f'nomor={inv.nomor}')
     db.session.commit()
     flash(f'Invoice {inv.nomor} dibatalkan.', 'success')
-    return redirect(url_for('superadmin.billing_index'))
+    return _redirect_billing_back()
 
 
 # ─────────────────────────────────────────────────────────────

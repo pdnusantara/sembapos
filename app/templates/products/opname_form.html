@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Sesi Stok Opname Baru{% endblock %}
+{% block page_title %}➕ Sesi Stok Opname{% endblock %}
+{% block page_sub %}Buat sesi opname untuk input hitung fisik{% endblock %}
+
+{% block content %}
+<div class="card opname-form-card">
+  <form method="POST" action="{{ url_for('products.opname_new') }}" class="opname-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="form-group">
+      <label class="form-label">Judul sesi (opsional)</label>
+      <input type="text" name="judul" class="form-control" placeholder="Contoh: Opname Gudang Akhir Bulan">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Catatan awal</label>
+      <textarea name="catatan" rows="4" class="form-control" placeholder="Catatan briefing tim opname..."></textarea>
+    </div>
+    <div class="opname-form-actions">
+      <a href="{{ url_for('products.opname_index') }}" class="btn btn-outline">Batal</a>
+      <button type="submit" class="btn btn-primary">Buat sesi</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

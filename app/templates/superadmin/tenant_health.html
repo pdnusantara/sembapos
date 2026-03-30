@@ -7,6 +7,24 @@
 {% block content %}
 {{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Health Monitor', '', true)]) }}
 
+<div class="tenant-health-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
+  <a href="{{ url_for('superadmin.tenant_health', level='healthy') }}" class="card" style="text-decoration:none;padding:14px 16px;border:1px solid var(--border, rgba(255,255,255,0.12));border-radius:8px;background:var(--card-bg, rgba(0,0,0,0.15));transition:opacity 0.15s;">
+    <div style="font-size:12px;color:var(--success);font-weight:600;">Sehat</div>
+    <div style="font-size:24px;font-weight:700;color:var(--text-light);">{{ health_counts.healthy }}</div>
+    <div style="font-size:11px;color:var(--text-muted);">skor ≥ 60</div>
+  </a>
+  <a href="{{ url_for('superadmin.tenant_health', level='warning') }}" class="card" style="text-decoration:none;padding:14px 16px;border:1px solid var(--border, rgba(255,255,255,0.12));border-radius:8px;background:var(--card-bg, rgba(0,0,0,0.15));">
+    <div style="font-size:12px;color:var(--warning);font-weight:600;">Perlu Perhatian</div>
+    <div style="font-size:24px;font-weight:700;color:var(--text-light);">{{ health_counts.warning }}</div>
+    <div style="font-size:11px;color:var(--text-muted);">skor 30–59</div>
+  </a>
+  <a href="{{ url_for('superadmin.tenant_health', level='danger') }}" class="card" style="text-decoration:none;padding:14px 16px;border:1px solid var(--border, rgba(255,255,255,0.12));border-radius:8px;background:var(--card-bg, rgba(0,0,0,0.15));">
+    <div style="font-size:12px;color:var(--danger);font-weight:600;">Berisiko</div>
+    <div style="font-size:24px;font-weight:700;color:var(--text-light);">{{ health_counts.danger }}</div>
+    <div style="font-size:11px;color:var(--text-muted);">skor &lt; 30</div>
+  </a>
+</div>
+
 <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
   <a href="{{ url_for('superadmin.tenant_health') }}" class="btn btn-outline btn-sm {% if not filter_level %}active{% endif %}">Semua</a>
   <a href="{{ url_for('superadmin.tenant_health', level='danger') }}" class="btn btn-outline btn-sm {% if filter_level == 'danger' %}active{% endif %}" style="{% if filter_level == 'danger' %}border-color:var(--danger);color:var(--danger);{% endif %}">Berisiko</a>
@@ -15,27 +33,41 @@
 </div>
 
 <div class="card">
-  <div class="card-header">
-    <div class="card-title">{{ health_data|length }} Tenant Aktif</div>
+  <div class="card-header" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;">
+    <div class="card-title">{{ health_data_all|length }} Tenant Aktif</div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+      <label for="search-tenant" class="sr-only">Cari nama tenant</label>
+      <input type="search" id="search-tenant" class="form-control" placeholder="Cari nama / kode…" style="min-width:200px;max-width:280px;padding:6px 10px;font-size:13px;" autocomplete="off">
+      <a href="{{ url_for('superadmin.tenant_health_export') }}" class="btn btn-outline btn-sm">Ekspor CSV</a>
+    </div>
   </div>
   <div class="table-wrapper">
-    <table class="table">
+    <table class="table" id="tenant-health-table">
       <thead>
-        <tr><th>Tenant</th><th>Skor</th><th>Status</th><th>Trx 7 Hari</th><th>Trx 30 Hari</th><th>Aksi</th></tr>
+        <tr>
+          <th>Tenant</th>
+          <th>Skor</th>
+          <th>Status</th>
+          <th>Trx 7 Hari</th>
+          <th>Trx 30 Hari</th>
+          <th>Trx Terakhir</th>
+          <th>Faktor Risiko</th>
+          <th>Aksi</th>
+        </tr>
       </thead>
       <tbody>
         {% for h in health_data %}
-        <tr>
+        <tr class="tenant-health-row" data-search-text="{{ (h.tenant.nama ~ ' ' ~ (h.tenant.kode or ''))|lower|e }}">
           <td>
             <a href="{{ url_for('superadmin.view_tenant', id=h.tenant.id) }}" style="font-weight:600;color:var(--text-light);">{{ h.tenant.nama }}</a>
             <div style="font-size:11px;color:var(--text-muted);">{{ h.tenant.kode }}</div>
           </td>
           <td>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <div style="width:60px;height:8px;border-radius:4px;background:rgba(255,255,255,0.1);overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:8px;" title="{{ h.breakdown_tooltip }}">
+              <div style="width:100px;height:8px;border-radius:4px;background:rgba(255,255,255,0.1);overflow:hidden;">
                 <div style="width:{{ h.score }}%;height:100%;border-radius:4px;background:{% if h.level == 'healthy' %}var(--success){% elif h.level == 'warning' %}var(--warning){% else %}var(--danger){% endif %};"></div>
               </div>
-              <span style="font-size:13px;font-weight:600;">{{ h.score }}</span>
+              <span style="font-size:13px;font-weight:600;" title="{{ h.breakdown_tooltip }}">{{ h.score }}</span>
             </div>
           </td>
           <td>
@@ -45,15 +77,42 @@
           </td>
           <td style="text-align:center;">{{ h.tx_7d }}</td>
           <td style="text-align:center;">{{ h.tx_30d }}</td>
+          <td style="font-size:13px;">
+            {% if h.days_since_last_tx is not none %}
+              {% if h.days_since_last_tx == 0 %}Hari ini{% elif h.days_since_last_tx == 1 %}1 hari lalu{% else %}{{ h.days_since_last_tx }} hari lalu{% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;max-width:220px;color:var(--text-muted);">{{ h.risk_hint }}</td>
           <td>
             <a href="{{ url_for('superadmin.view_tenant', id=h.tenant.id) }}" class="btn btn-outline btn-sm">Detail</a>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:40px;">Tidak ada data</td></tr>
+        <tr><td colspan="8" class="text-muted" style="text-align:center;padding:40px;">Tidak ada data</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<style>
+.sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+</style>
+<script>
+(function() {
+  var input = document.getElementById('search-tenant');
+  var table = document.getElementById('tenant-health-table');
+  if (!input || !table) return;
+  input.addEventListener('input', function() {
+    var q = (input.value || '').trim().toLowerCase();
+    var rows = table.querySelectorAll('tbody tr.tenant-health-row');
+    rows.forEach(function(tr) {
+      var hay = tr.getAttribute('data-search-text') || '';
+      tr.style.display = (!q || hay.indexOf(q) !== -1) ? '' : 'none';
+    });
+  });
+})();
+</script>
 {% endblock %}
