@@ -3884,8 +3884,10 @@ body.pos-full-view .pos-layout {
 .login-bg {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 30% 40%, rgba(108,99,255,0.15) 0%, transparent 50%),
-              radial-gradient(ellipse at 70% 60%, rgba(0,212,170,0.08) 0%, transparent 50%);
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(108, 99, 255, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 45% at 85% 75%, rgba(0, 212, 170, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(108, 99, 255, 0.06) 0%, transparent 45%);
 }
 
 .login-card {
@@ -3923,8 +3925,116 @@ body.pos-full-view .pos-layout {
   50% { transform: translateY(-6px); }
 }
 
-.login-logo h1 { font-size: 22px; font-weight: 800; color: var(--text-light); }
-.login-logo p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.login-logo h1 {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-light);
+  letter-spacing: -0.02em;
+}
+.login-tagline {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.45;
+  max-width: 280px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.login-nav-top {
+  margin-top: 14px;
+  font-size: 13px;
+}
+.login-nav-top a {
+  color: var(--primary-light);
+  text-decoration: none;
+  font-weight: 500;
+}
+.login-nav-top a:hover,
+.login-nav-top a:focus-visible {
+  text-decoration: underline;
+}
+.login-nav-sep {
+  color: var(--text-muted);
+  margin: 0 6px;
+}
+.login-skip {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.login-skip:focus {
+  left: 12px;
+  top: 12px;
+  width: auto;
+  height: auto;
+  padding: 10px 14px;
+  z-index: 10;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-light);
+  font-size: 13px;
+  overflow: visible;
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.login-alerts {
+  margin-bottom: 20px;
+}
+.login-alerts .alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+.login-alert-icon {
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+.login-field-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+.login-submit-btn {
+  margin-top: 4px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.login-footer {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.login-footer-lead {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+.login-footer-cta {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--secondary);
+  text-decoration: none;
+  padding: 8px 4px;
+}
+.login-footer-cta:hover,
+.login-footer-cta:focus-visible {
+  text-decoration: underline;
+  color: var(--secondary);
+}
+.login-footer-meta {
+  margin: 16px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
 
 .password-input-wrap {
   position: relative;
@@ -3975,68 +4085,6 @@ body.pos-full-view .pos-layout {
 
 .btn-spinner-hidden {
   display: none !important;
-}
-
-.demo-accounts {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
-}
-
-.demo-title {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.demo-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.demo-btn {
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: var(--transition);
-  border: 1px solid transparent;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.demo-btn:hover,
-.demo-btn:focus-visible {
-  transform: translateY(-1px);
-  filter: brightness(1.06);
-}
-
-.demo-btn-superadmin {
-  background: rgba(108,99,255,0.1);
-  border-color: rgba(108,99,255,0.2);
-  color: var(--primary-light);
-}
-
-.demo-btn-admin {
-  background: rgba(0,212,170,0.08);
-  border-color: rgba(0,212,170,0.15);
-  color: var(--secondary);
-}
-
-.demo-btn-cashier {
-  background: rgba(255,165,2,0.08);
-  border-color: rgba(255,165,2,0.15);
-  color: var(--warning);
-}
-
-.demo-cred {
-  color: var(--text-muted);
-  font-weight: 500;
 }
 
 /* ===== HAMBURGER ===== */
@@ -4481,11 +4529,6 @@ body.pos-full-view .pos-layout {
     border-radius: 16px;
     font-size: 24px;
   }
-  .demo-btn {
-    padding: 11px 12px;
-    font-size: 12px;
-    min-height: 44px;
-  }
   .filter-bar-inline {
     flex-direction: column;
     align-items: stretch;
@@ -4607,14 +4650,6 @@ body.pos-full-view .pos-layout {
   .login-card {
     padding: 18px 14px 16px;
     border-radius: 16px;
-  }
-  .demo-btn {
-    font-size: 11.5px;
-    line-height: 1.45;
-  }
-  .demo-cred {
-    display: block;
-    margin-top: 2px;
   }
   .stats-grid { grid-template-columns: 1fr; }
   .stats-grid.report-sales-stats { grid-template-columns: 1fr; }

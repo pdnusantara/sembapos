@@ -183,3 +183,42 @@ def utc_naive_bounds_for_local_date_range(
     start_utc, _ = utc_naive_bounds_for_local_date(d_start, tz_id)
     _, end_utc = utc_naive_bounds_for_local_date(d_end, tz_id)
     return start_utc, end_utc
+
+
+def lead_period_utc_bounds(period: str | None, tz_id: str) -> dict | None:
+    """
+    Filter pendaftar lead (created_at UTC-naive) per periode kalender di tz_id.
+
+    Mengembalikan None jika tanpa filter, atau dict dengan kunci gte (wajib) dan
+    lte (opsional) untuk rentang inklusif [gte, lte].
+    """
+    p = (period or 'all').strip().lower()
+    if p in ('', 'all'):
+        return None
+    zi = get_zoneinfo_required(tz_id)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    today_local = local_today_date(tz_id)
+
+    if p == 'today':
+        s, e = utc_naive_bounds_for_local_date(today_local, tz_id)
+        return {'gte': s, 'lte': e}
+    if p == 'yesterday':
+        d = today_local - timedelta(days=1)
+        s, e = utc_naive_bounds_for_local_date(d, tz_id)
+        return {'gte': s, 'lte': e}
+    if p == 'week':
+        monday = today_local - timedelta(days=today_local.weekday())
+        s, _ = utc_naive_bounds_for_local_date(monday, tz_id)
+        return {'gte': s, 'lte': now_utc}
+    if p == 'month':
+        s, _ = utc_naive_bounds_for_local_month(today_local.year, today_local.month, tz_id)
+        return {'gte': s, 'lte': now_utc}
+    if p == 'year':
+        start_local = datetime(today_local.year, 1, 1, 0, 0, 0, 0, tzinfo=zi)
+        s = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+        return {'gte': s, 'lte': now_utc}
+    if p == 'last7':
+        return {'gte': now_utc - timedelta(days=7), 'lte': now_utc}
+    if p == 'last30':
+        return {'gte': now_utc - timedelta(days=30), 'lte': now_utc}
+    return None

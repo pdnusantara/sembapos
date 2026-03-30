@@ -4,83 +4,81 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f0f1a">
-  <title>Login — Kasir Sembako</title>
+  <meta name="description" content="Masuk ke SembaPOS — kasir cloud multi-tenant untuk toko sembako dan retail Indonesia.">
+  <title>Masuk — SembaPOS</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
 </head>
 <body>
+<a href="#login-main" class="login-skip">Langsung ke formulir masuk</a>
 <div class="login-page">
-  <div class="login-bg"></div>
-  <div class="login-card">
-    <div class="login-logo">
-      <div class="logo-circle">🏪</div>
-      <h1>Kasir Sembako</h1>
-      <p>Sistem Point of Sale Multi-Tenant</p>
-      <p style="margin-top:10px;font-size:13px;"><a href="{{ url_for('landing.index') }}" style="color:var(--primary-light);">← Beranda</a></p>
-    </div>
+  <div class="login-bg" aria-hidden="true"></div>
+  <div class="login-card" id="login-main" role="main">
+    <header class="login-logo">
+      <div class="logo-circle" aria-hidden="true">🏪</div>
+      <h1>SembaPOS</h1>
+      <p class="login-tagline">Kasir cloud · multi-cabang · aman per tenant</p>
+      <nav class="login-nav-top" aria-label="Tautan cepat">
+        <a href="{{ url_for('landing.index') }}">Beranda</a>
+        <span class="login-nav-sep" aria-hidden="true">·</span>
+        <a href="{{ url_for('landing.tutorial') }}">Tutorial</a>
+      </nav>
+    </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
+        <div class="login-alerts" role="alert">
         {% for category, message in messages %}
           <div class="alert alert-{{ 'danger' if category == 'error' else category }}">
-            <span>{{ '✅' if category == 'success' else '❌' }}</span>
+            <span class="login-alert-icon" aria-hidden="true">{{ '✅' if category == 'success' else ('❌' if category in ['danger','error'] else ('⚠️' if category == 'warning' else 'ℹ️')) }}</span>
             <span>{{ message }}</span>
           </div>
         {% endfor %}
+        </div>
       {% endif %}
     {% endwith %}
 
-    <form method="POST" action="{{ url_for('auth.login') }}" id="loginForm">
+    <form method="POST" action="{{ url_for('auth.login') }}" id="loginForm" autocomplete="on" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div class="form-group">
-        <label class="form-label">Username</label>
-        <input type="text" name="username" class="form-control" placeholder="Masukkan username" autocomplete="username" required autofocus>
+        <label class="form-label" for="login-username">Username</label>
+        <input type="text" name="username" id="login-username" class="form-control" placeholder="Username akun Anda" autocomplete="username" required autofocus inputmode="text" spellcheck="false">
       </div>
       <div class="form-group">
-        <label class="form-label">Password</label>
+        <label class="form-label" for="passwordInput">Password</label>
         <div class="password-input-wrap">
-          <input type="password" name="password" id="passwordInput" class="form-control" placeholder="Masukkan password" autocomplete="current-password" required>
-          <button type="button" onclick="togglePass()" class="password-toggle" id="passToggle" aria-label="Tampilkan atau sembunyikan password">👁️</button>
+          <input type="password" name="password" id="passwordInput" class="form-control" placeholder="Password" autocomplete="current-password" required aria-describedby="pass-hint">
+          <button type="button" onclick="togglePass()" class="password-toggle" id="passToggle" aria-label="Tampilkan password" aria-pressed="false">👁️</button>
         </div>
+        <p id="pass-hint" class="login-field-hint">Pastikan Caps Lock tidak aktif jika password huruf kecil.</p>
       </div>
       <div class="form-group remember-wrap">
-        <input type="checkbox" name="remember" id="remember" class="remember-check">
-        <label for="remember" class="remember-label">Ingat saya</label>
+        <input type="checkbox" name="remember" id="remember" class="remember-check" value="y">
+        <label for="remember" class="remember-label">Ingat saya di perangkat ini</label>
       </div>
-      <button type="submit" class="btn btn-primary btn-block btn-lg" id="submitBtn">
-        <span id="btnText">🔐 Masuk</span>
-        <span id="btnSpinner" class="spinner btn-spinner-hidden"></span>
+      <button type="submit" class="btn btn-primary btn-block btn-lg login-submit-btn" id="submitBtn">
+        <span id="btnText">Masuk</span>
+        <span id="btnSpinner" class="spinner btn-spinner-hidden" aria-hidden="true"></span>
       </button>
     </form>
 
-    <div class="demo-accounts">
-      <p class="demo-title">Akun Demo</p>
-      <div class="demo-list">
-        <button onclick="fillLogin('superadmin','admin123')" class="demo-btn demo-btn-superadmin">
-          🔑 Super Admin &mdash; <span class="demo-cred">superadmin / admin123</span>
-        </button>
-        <button onclick="fillLogin('admin_toko_makmur','admin123')" class="demo-btn demo-btn-admin">
-          🛡️ Admin Toko &mdash; <span class="demo-cred">admin_toko_makmur / admin123</span>
-        </button>
-        <button onclick="fillLogin('kasir_makmur','kasir123')" class="demo-btn demo-btn-cashier">
-          💼 Kasir &mdash; <span class="demo-cred">kasir_makmur / kasir123</span>
-        </button>
-      </div>
-    </div>
+    <footer class="login-footer">
+      <p class="login-footer-lead">Belum punya akun toko?</p>
+      <a href="{{ url_for('landing.trial_register') }}" class="login-footer-cta">Daftar trial gratis 30 hari</a>
+      <p class="login-footer-meta">&copy; {{ utc_now().year }} SembaPOS</p>
+    </footer>
   </div>
 </div>
 
 <script>
-function fillLogin(user, pass) {
-  document.querySelector('[name=username]').value = user;
-  document.getElementById('passwordInput').value = pass;
-}
-
 function togglePass() {
   const inp = document.getElementById('passwordInput');
   const btn = document.getElementById('passToggle');
-  if(inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
-  else { inp.type = 'password'; btn.textContent = '👁️'; }
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.textContent = show ? '🙈' : '👁️';
+  btn.setAttribute('aria-label', show ? 'Sembunyikan password' : 'Tampilkan password');
+  btn.setAttribute('aria-pressed', show ? 'true' : 'false');
 }
 
 document.getElementById('loginForm').addEventListener('submit', function() {

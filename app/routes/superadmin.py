@@ -30,7 +30,13 @@ from sqlalchemy.orm import selectinload, joinedload
 from werkzeug.utils import secure_filename
 
 from .. import db
-from ..timezones import INDONESIA_TIMEZONE_CHOICES, normalize_timezone_id
+from ..timezones import (
+    INDONESIA_TIMEZONE_CHOICES,
+    normalize_timezone_id,
+    lead_period_utc_bounds,
+    resolve_effective_timezone_id,
+    timezone_short_label,
+)
 from ..models import (
     Tenant,
     User,
@@ -2072,6 +2078,34 @@ LEAD_STATUSES = [
     ('rejected', 'Ditolak'),
 ]
 
+LEAD_PERIODS = [
+    ('all', 'Semua waktu'),
+    ('today', 'Hari ini'),
+    ('yesterday', 'Kemarin'),
+    ('week', 'Minggu ini'),
+    ('month', 'Bulan ini'),
+    ('year', 'Tahun ini'),
+    ('last7', '7 hari terakhir'),
+    ('last30', '30 hari terakhir'),
+]
+
+
+def _leads_apply_period(query, period: str, tz_id: str):
+    b = lead_period_utc_bounds(period, tz_id)
+    if not b:
+        return query
+    query = query.filter(LeadCapture.created_at >= b['gte'])
+    if 'lte' in b:
+        query = query.filter(LeadCapture.created_at <= b['lte'])
+    return query
+
+
+def _redirect_leads_back():
+    ref = request.referrer
+    if ref and ref.startswith(request.host_url):
+        return redirect(ref)
+    return redirect(url_for('superadmin.leads_index'))
+
 
 @superadmin_bp.route('/leads')
 @login_required
@@ -2080,32 +2114,119 @@ def leads_index():
     page = max(1, int(request.args.get('page', 1) or 1))
     status_filter = request.args.get('status', '').strip()
     q = (request.args.get('q') or '').strip()
+    period_filter = (request.args.get('period') or 'all').strip().lower()
+    valid_periods = {p for p, _ in LEAD_PERIODS}
+    if period_filter not in valid_periods:
+        period_filter = 'all'
 
-    query = LeadCapture.query
-    if status_filter:
-        query = query.filter_by(status=status_filter)
-    if q:
-        like = f'%{q}%'
-        query = query.filter(
-            or_(
-                LeadCapture.nama.ilike(like),
-                LeadCapture.no_wa.ilike(like),
-                LeadCapture.jenis_usaha.ilike(like),
+    tz_id = resolve_effective_timezone_id(current_user)
+
+    def _base_leads_query():
+        qq = LeadCapture.query
+        if status_filter:
+            qq = qq.filter_by(status=status_filter)
+        if q:
+            like = f'%{q}%'
+            qq = qq.filter(
+                or_(
+                    LeadCapture.nama.ilike(like),
+                    LeadCapture.no_wa.ilike(like),
+                    LeadCapture.jenis_usaha.ilike(like),
+                )
             )
-        )
-    query = query.order_by(LeadCapture.created_at.desc())
+        qq = _leads_apply_period(qq, period_filter, tz_id)
+        return qq
+
+    query = _base_leads_query().order_by(LeadCapture.created_at.desc())
     total = query.count()
     total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
     if page > total_pages:
         page = total_pages
     leads = query.offset((page - 1) * PER_PAGE).limit(PER_PAGE).all()
 
+    def _count_status(st: str):
+        qq = LeadCapture.query.filter_by(status=st)
+        if q:
+            like = f'%{q}%'
+            qq = qq.filter(
+                or_(
+                    LeadCapture.nama.ilike(like),
+                    LeadCapture.no_wa.ilike(like),
+                    LeadCapture.jenis_usaha.ilike(like),
+                )
+            )
+        qq = _leads_apply_period(qq, period_filter, tz_id)
+        return qq.count()
+
     stats = {
-        'new': LeadCapture.query.filter_by(status='new').count(),
-        'contacted': LeadCapture.query.filter_by(status='contacted').count(),
-        'converted': LeadCapture.query.filter_by(status='converted').count(),
-        'rejected': LeadCapture.query.filter_by(status='rejected').count(),
+        'new': _count_status('new'),
+        'contacted': _count_status('contacted'),
+        'converted': _count_status('converted'),
+        'rejected': _count_status('rejected'),
     }
+
+    period_counts = {}
+    for pkey, _ in LEAD_PERIODS:
+        qq = LeadCapture.query
+        qq = _leads_apply_period(qq, pkey, tz_id)
+        period_counts[pkey] = qq.count()
+
+    def _leads_url(
+        period=None,
+        status=None,
+        page_num=None,
+        drop_status=False,
+    ):
+        """Bangun URL /superadmin/leads dengan filter periode + status + q + halaman."""
+        args = {}
+        if q:
+            args['q'] = q
+        pf = period_filter if period is None else period
+        if pf and pf != 'all':
+            args['period'] = pf
+        if not drop_status:
+            st = status if status is not None else status_filter
+            if st:
+                args['status'] = st
+        pn = page if page_num is None else page_num
+        if pn is not None and pn > 1:
+            args['page'] = pn
+        return url_for('superadmin.leads_index', **args)
+
+    def _leads_url_period(pcode: str):
+        return _leads_url(period=pcode)
+
+    lead_period_links = []
+    for pcode, plabel in LEAD_PERIODS:
+        lead_period_links.append(
+            {
+                'code': pcode,
+                'label': plabel,
+                'count': period_counts[pcode],
+                'url': _leads_url_period(pcode),
+                'active': period_filter == pcode,
+            }
+        )
+
+    lead_status_links = []
+    for code, label in LEAD_STATUSES:
+        lead_status_links.append(
+            {
+                'code': code,
+                'label': label,
+                'url': _leads_url(status=code),
+                'active': status_filter == code,
+            }
+        )
+
+    leads_url_clear_status = _leads_url(drop_status=True) if status_filter else None
+
+    leads_pagination = None
+    if total_pages > 1:
+        leads_pagination = {
+            'prev': _leads_url(page_num=page - 1) if page > 1 else None,
+            'next': _leads_url(page_num=page + 1) if page < total_pages else None,
+        }
 
     return render_template(
         'superadmin/leads_index.html',
@@ -2117,6 +2238,12 @@ def leads_index():
         status_filter=status_filter,
         lead_statuses=LEAD_STATUSES,
         stats=stats,
+        period_filter=period_filter,
+        lead_period_links=lead_period_links,
+        lead_status_links=lead_status_links,
+        leads_tz_short=timezone_short_label(tz_id),
+        leads_pagination=leads_pagination,
+        leads_url_clear_status=leads_url_clear_status,
     )
 
 
@@ -2135,7 +2262,7 @@ def lead_update_status(id):
     _log_sa('lead_status_change', detail=f'lead_id={id} status={new_status}')
     db.session.commit()
     flash('Status lead diperbarui.', 'success')
-    return redirect(url_for('superadmin.leads_index'))
+    return _redirect_leads_back()
 
 
 @superadmin_bp.route('/leads/<int:id>/convert', methods=['POST'])
@@ -2145,7 +2272,7 @@ def lead_convert(id):
     lead = LeadCapture.query.get_or_404(id)
     if lead.trial_tenant_id:
         flash('Lead sudah pernah dikonversi.', 'warning')
-        return redirect(url_for('superadmin.leads_index'))
+        return _redirect_leads_back()
     flash(
         f'Silakan buat tenant baru. Data lead: {lead.nama} / {lead.jenis_usaha or "-"}',
         'info',
@@ -2162,7 +2289,7 @@ def lead_delete(id):
     _log_sa('lead_delete', detail=f'lead_id={id} nama={lead.nama}')
     db.session.commit()
     flash('Lead dihapus.', 'success')
-    return redirect(url_for('superadmin.leads_index'))
+    return _redirect_leads_back()
 
 
 # ─────────────────────────────────────────────────────────────
