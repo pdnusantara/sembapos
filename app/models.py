@@ -331,6 +331,7 @@ class TransactionItem(db.Model):
     nama_produk = db.Column(db.String(150), nullable=False)  # snapshot nama produk
     harga = db.Column(db.Float, nullable=False)
     qty = db.Column(db.Float, nullable=False)
+    diskon = db.Column(db.Float, nullable=False, default=0)  # potongan rupiah per baris (POS)
     subtotal = db.Column(db.Float, nullable=False)
     hpp_snapshot = db.Column(db.Float, nullable=True)   # unit cost saat transaksi
     modal_snapshot = db.Column(db.Float, nullable=True)  # total modal baris saat transaksi
@@ -721,6 +722,34 @@ class MemberTier(db.Model):
 
     def __repr__(self):
         return f'<MemberTier {self.tenant_id}:{self.kode}>'
+
+
+class PosLinePromoRule(db.Model):
+    """Promo otomatis per baris di kasir: diskon nominal/persen untuk produk atau kategori, terjadwal."""
+    __tablename__ = 'pos_line_promo_rules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=False)
+    nama = db.Column(db.String(120), nullable=False)
+    scope = db.Column(db.String(20), nullable=False)  # product | category
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('product_categories.id'), nullable=True)
+    discount_type = db.Column(db.String(20), nullable=False, default='percent')  # percent | fixed
+    discount_value = db.Column(db.Float, nullable=False, default=0)
+    max_discount = db.Column(db.Float, nullable=True)
+    min_qty = db.Column(db.Float, nullable=False, default=1)
+    priority = db.Column(db.Integer, nullable=False, default=0)
+    start_at = db.Column(db.DateTime, nullable=False)
+    end_at = db.Column(db.DateTime, nullable=False)
+    aktif = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    tenant = db.relationship('Tenant', backref='pos_line_promo_rules', lazy=True)
+    product = db.relationship('Product', foreign_keys=[product_id], lazy=True)
+    category = db.relationship('ProductCategory', foreign_keys=[category_id], lazy=True)
+
+    def __repr__(self):
+        return f'<PosLinePromoRule {self.tenant_id}:{self.nama}>'
 
 
 class Voucher(db.Model):

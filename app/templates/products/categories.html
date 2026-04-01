@@ -9,7 +9,7 @@
     <div class="table-wrapper">
       <table class="table">
         <thead>
-          <tr><th>Nama Kategori</th><th>Jumlah Produk</th>{% if current_user.is_admin %}<th>Aksi</th>{% endif %}</tr>
+          <tr><th>Nama Kategori</th><th>Jumlah Produk</th>{% if current_user.is_admin %}<th class="th-actions">Aksi</th>{% endif %}</tr>
         </thead>
         <tbody>
           {% for cat in categories %}
@@ -17,11 +17,14 @@
             <td style="font-weight:600;">📦 {{ cat.nama }}</td>
             <td><span class="badge badge-primary">{{ cat.products|length }} produk</span></td>
             {% if current_user.is_admin %}
-            <td>
-              <form method="POST" action="{{ url_for('products.delete_category', id=cat.id) }}" onsubmit="return confirm('Hapus kategori ini?');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-outline btn-sm" style="color:var(--danger);" {{ 'disabled' if cat.products }}>🗑️</button>
-              </form>
+            <td class="td-actions">
+              <div class="row-actions" role="group" aria-label="Aksi kategori">
+                <a href="{{ url_for('products.edit_category', id=cat.id) }}" class="btn btn-outline btn-sm" title="Edit kategori">✏️ Edit</a>
+                <form method="POST" action="{{ url_for('products.delete_category', id=cat.id) }}" class="row-actions__form" onsubmit="return confirm('Hapus kategori ini?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <button type="submit" class="btn btn-outline btn-sm row-actions__del" style="color:var(--danger);" title="Hapus" {{ 'disabled' if cat.products }}>🗑️</button>
+                </form>
+              </div>
             </td>
             {% endif %}
           </tr>

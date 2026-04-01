@@ -89,6 +89,49 @@ from ..permissions import (
 
 superadmin_bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
 
+SIMPLE_ANIMAL_PASSWORD_WORDS = (
+    'kucing', 'kelinci', 'beruang', 'harimau', 'gajah', 'zebra', 'panda',
+    'koala', 'rusa', 'serigala', 'elang', 'lumba', 'paus', 'kuda', 'merpati',
+    'kancil', 'komodo', 'badak', 'rubah', 'lebah',
+)
+
+
+def _generate_simple_animal_password():
+    """
+    Password sederhana namun tetap unik: <hewan><2digit>.
+    Contoh: kucing42, beruang07
+    """
+    return f"{secrets.choice(SIMPLE_ANIMAL_PASSWORD_WORDS)}{secrets.randbelow(100):02d}"
+
+
+def _username_from_store_name(store_name: str, max_len: int = 50) -> str:
+    """
+    Buat username dari nama toko:
+      - normalisasi jadi [a-z0-9_]
+      - panjang 3-50
+      - pastikan unik (jika bentrok, tambahkan suffix _01, _02, ...)
+    """
+    raw = (store_name or '').strip().lower()
+    base = re.sub(r'[^a-z0-9]+', '_', raw)
+    base = re.sub(r'_+', '_', base).strip('_')
+    if not base:
+        base = 'toko'
+    if len(base) < 3:
+        base = (base + f'{secrets.randbelow(100):02d}')[:max_len]
+    if len(base) > max_len:
+        base = base[:max_len]
+
+    candidate = base
+    counter = 1
+    while User.query.filter_by(username=candidate).first():
+        suffix = f'_{counter:02d}'
+        candidate = (base[: max_len - len(suffix)] + suffix)[:max_len]
+        counter += 1
+        if counter > 999:
+            # fallback: tetap return sesuatu, walau sangat jarang terjadi
+            return candidate
+    return candidate
+
 UNLIMITED_THRESHOLD = 9000
 PER_PAGE = 20
 PAKET_KODE_RE = re.compile(r'^[a-z0-9_]{2,30}$')
@@ -962,7 +1005,7 @@ def add_tenant():
         db.session.add(branch)
         db.session.flush()
 
-        admin_username = 'admin_' + kode.lower()
+        admin_username = _username_from_store_name(tenant.nama)
         admin = User(
             tenant_id=tenant.id,
             branch_id=branch.id,
@@ -970,7 +1013,7 @@ def add_tenant():
             username=admin_username,
             role='admin',
         )
-        default_pw = 'admin123'
+        default_pw = _generate_simple_animal_password()
         admin.set_password(default_pw)
         db.session.add(admin)
         _record_plan_history(
@@ -1135,8 +1178,7 @@ def reset_tenant_user_password(id):
     new_pw = (request.form.get('new_password') or '').strip()
     gen = request.form.get('generate_random')
     if gen:
-        alphabet = string.ascii_letters + string.digits
-        new_pw = ''.join(secrets.choice(alphabet) for _ in range(12))
+        new_pw = _generate_simple_animal_password()
     if len(new_pw) < 6:
         flash('Password minimal 6 karakter atau pilih generate.', 'danger')
         return redirect(url_for('superadmin.view_tenant', id=id))

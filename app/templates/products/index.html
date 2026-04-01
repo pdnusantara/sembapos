@@ -70,7 +70,7 @@
   </div>
 </div>
 
-<div class="card">
+<div class="card products-index-card">
   <div class="table-wrapper admin-table-responsive products-table-responsive">
     <table class="table table-responsive-min">
       <thead>
@@ -142,19 +142,51 @@
             </span>
           </td>
           {% if current_user.is_admin %}
-          <td data-label="Aksi">
-            <div class="product-actions products-row-actions">
-              <a href="{{ url_for('products.edit', id=p.id) }}" class="btn btn-outline btn-sm" title="Edit">✏️</a>
-              <a href="{{ url_for('products.stock_history', id=p.id) }}" class="btn btn-outline btn-sm" title="Riwayat">📜</a>
-              <a href="{{ url_for('products.price_history', id=p.id) }}" class="btn btn-outline btn-sm" title="Audit harga/min stok">🧾</a>
-              <form method="POST" action="{{ url_for('products.duplicate', id=p.id) }}" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button type="submit" class="btn btn-outline btn-sm" title="Duplikat">📋</button>
-              </form>
-              <form method="POST" action="{{ url_for('products.delete', id=p.id) }}" onsubmit="return confirm('Nonaktifkan produk ini?');" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button class="btn btn-outline btn-sm" style="color:var(--danger);" title="Nonaktifkan">🗑️</button>
-              </form>
+          <td data-label="Aksi" class="td-actions td-actions--product">
+            <div class="product-actions-bar">
+              <div class="product-actions-bar__inner">
+                <a href="{{ url_for('products.edit', id=p.id) }}" class="btn btn-primary btn-sm product-actions-bar__edit" title="Ubah data produk">✏️ Edit</a>
+                <details class="product-actions-menu">
+                  <summary class="btn btn-outline btn-sm product-actions-menu__trigger" title="Menu lainnya" aria-label="Menu aksi lainnya">
+                    <span class="product-actions-menu__trigger-text">Lainnya</span><span class="product-actions-menu__trigger-ico" aria-hidden="true">▾</span>
+                  </summary>
+                  <div class="product-actions-menu__panel" role="menu">
+                    <a class="product-actions-menu__link" role="menuitem" href="{{ url_for('products.stock_history', id=p.id) }}">📜 Riwayat stok</a>
+                    <a class="product-actions-menu__link" role="menuitem" href="{{ url_for('products.price_history', id=p.id) }}">🧾 Riwayat harga &amp; min. stok</a>
+                    <form method="POST" action="{{ url_for('products.duplicate', id=p.id) }}" class="product-actions-menu__form">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                      <button type="submit" class="btn btn-sm product-actions-menu__btn" role="menuitem">📋 Duplikat produk</button>
+                    </form>
+                    <div class="product-actions-menu__sep" role="separator"></div>
+                    {% if p.aktif %}
+                    <form method="POST"
+                          action="{{ url_for('products.delete', id=p.id) }}"
+                          class="product-actions-menu__form"
+                          onsubmit="return confirm('Produk akan DINONAKTIFKAN (tidak muncul di kasir). Data penjualan lama tetap aman. Aktifkan lagi lewat menu ini atau Edit. Lanjutkan?');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                      <input type="hidden" name="next" value="{{ request.full_path }}"/>
+                      <button type="submit" class="btn btn-sm product-actions-menu__btn product-actions-menu__btn--warn" role="menuitem">⏸️ Nonaktifkan</button>
+                    </form>
+                    {% else %}
+                    <form method="POST" action="{{ url_for('products.activate', id=p.id) }}" class="product-actions-menu__form">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                      <input type="hidden" name="next" value="{{ request.full_path }}"/>
+                      <button type="submit" class="btn btn-sm product-actions-menu__btn product-actions-menu__btn--ok" role="menuitem">▶️ Aktifkan kembali</button>
+                    </form>
+                    {% if p.id in destroyable_ids %}
+                    <form method="POST"
+                          action="{{ url_for('products.destroy', id=p.id) }}"
+                          class="product-actions-menu__form"
+                          onsubmit="return confirm('PERHATIAN: Produk akan DIHAPUS PERMANEN dari database (termasuk stok &amp; riwayat mutasi internal). Hanya untuk produk tanpa riwayat penjualan/PO/opname. Yakin?');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                      <input type="hidden" name="next" value="{{ request.full_path }}"/>
+                      <button type="submit" class="btn btn-sm product-actions-menu__btn product-actions-menu__btn--danger" role="menuitem">🗑️ Hapus permanen</button>
+                    </form>
+                    {% endif %}
+                    {% endif %}
+                  </div>
+                </details>
+              </div>
             </div>
           </td>
           {% endif %}
@@ -202,14 +234,34 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const search = document.getElementById('productSearchInput');
-  if (!search) return;
-  const shouldFocus = {{ (focus == 'search')|tojson }};
-  if (shouldFocus) {
-    setTimeout(() => {
-      search.focus();
-      search.select();
-    }, 80);
+  if (search) {
+    const shouldFocus = {{ (focus == 'search')|tojson }};
+    if (shouldFocus) {
+      setTimeout(() => {
+        search.focus();
+        search.select();
+      }, 80);
+    }
   }
+
+  const menus = document.querySelectorAll('.product-actions-menu');
+  menus.forEach(function(m) {
+    m.addEventListener('toggle', function() {
+      if (m.open) {
+        menus.forEach(function(x) {
+          if (x !== m) x.removeAttribute('open');
+        });
+      }
+    });
+  });
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.product-actions-menu')) return;
+    menus.forEach(function(m) { m.removeAttribute('open'); });
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    menus.forEach(function(m) { m.removeAttribute('open'); });
+  });
 });
 </script>
 {% endblock %}

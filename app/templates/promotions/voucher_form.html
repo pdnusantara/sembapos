@@ -20,8 +20,8 @@
         <div class="form-group"><label class="form-label">Nilai diskon</label><input class="form-control" type="number" step="0.01" name="discount_value" value="{{ voucher.discount_value if voucher else 0 }}"></div>
         <div class="form-group"><label class="form-label">Maks diskon (opsional)</label><input class="form-control" type="number" step="0.01" name="max_discount" value="{{ voucher.max_discount if voucher and voucher.max_discount else '' }}"></div>
         <div class="form-group"><label class="form-label">Min belanja</label><input class="form-control" type="number" step="0.01" name="min_spend" value="{{ voucher.min_spend if voucher else 0 }}"></div>
-        <div class="form-group"><label class="form-label">Mulai</label><input class="form-control" type="datetime-local" name="start_at" value="{{ voucher.start_at|local_dt('%Y-%m-%dT%H:%M') if voucher else '' }}" required></div>
-        <div class="form-group"><label class="form-label">Berakhir</label><input class="form-control" type="datetime-local" name="end_at" value="{{ voucher.end_at|local_dt('%Y-%m-%dT%H:%M') if voucher else '' }}" required></div>
+        <div class="form-group"><label class="form-label">Mulai</label><input class="form-control" type="datetime-local" name="start_at" value="{{ voucher.start_at|local_dt('%Y-%m-%dT%H:%M') if voucher else (default_start_at or '') }}" required></div>
+        <div class="form-group"><label class="form-label">Berakhir</label><input class="form-control" type="datetime-local" name="end_at" value="{{ voucher.end_at|local_dt('%Y-%m-%dT%H:%M') if voucher else (default_end_at or '') }}" required></div>
         <div class="form-group"><label class="form-label">Kuota global (opsional)</label><input class="form-control" type="number" name="max_usage_global" value="{{ voucher.max_usage_global if voucher and voucher.max_usage_global else '' }}"></div>
         <div class="form-group"><label class="form-label">Kuota per member (opsional)</label><input class="form-control" type="number" name="max_usage_per_member" value="{{ voucher.max_usage_per_member if voucher and voucher.max_usage_per_member else '' }}"></div>
       </div>

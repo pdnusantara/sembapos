@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from .. import db
 from ..models import (
     Member,
@@ -248,6 +249,9 @@ def delete_tier(id):
 @login_required
 def vouchers():
     tenant_id = current_user.tenant_id
+    if not tenant_id:
+        flash('Voucher hanya tersedia untuk akun tenant.', 'warning')
+        return redirect(url_for('dashboard.index'))
     if current_user.role not in ('superadmin', 'admin'):
         flash('Hanya admin yang dapat mengelola voucher.', 'danger')
         return redirect(url_for('members.index'))
@@ -260,35 +264,111 @@ def vouchers():
 @login_required
 def voucher_form(id=None):
     tenant_id = current_user.tenant_id
+    if not tenant_id:
+        flash('Voucher hanya tersedia untuk akun tenant.', 'warning')
+        return redirect(url_for('dashboard.index'))
     if current_user.role not in ('superadmin', 'admin'):
         flash('Hanya admin yang dapat mengelola voucher.', 'danger')
         return redirect(url_for('members.index'))
     voucher = Voucher.query.filter_by(id=id, tenant_id=tenant_id).first() if id else None
     categories = ProductCategory.query.filter_by(tenant_id=tenant_id).order_by(ProductCategory.nama).all()
+    tenant_row = Tenant.query.get(tenant_id)
+    tz_id = normalize_timezone_id(getattr(tenant_row, 'timezone', None)) if tenant_row else None
+    zi = get_zoneinfo_required(tz_id)
+
+    def _default_voucher_datetimes():
+        now_local = datetime.now(zi).replace(second=0, microsecond=0)
+        end_local = (now_local + timedelta(days=30)).replace(second=0, microsecond=0)
+        return (
+            now_local.strftime('%Y-%m-%dT%H:%M'),
+            end_local.strftime('%Y-%m-%dT%H:%M'),
+        )
+
+    default_start_at, default_end_at = _default_voucher_datetimes()
+
+    def _render_form(voucher_obj, selected_scope_obj):
+        return render_template(
+            'promotions/voucher_form.html',
+            voucher=voucher_obj,
+            categories=categories,
+            selected_scope=selected_scope_obj,
+            default_start_at=default_start_at,
+            default_end_at=default_end_at,
+        )
 
     if request.method == 'POST':
+        def _parse_float(name, default=0.0, allow_none=False):
+            raw = (request.form.get(name) or '').strip()
+            if raw == '':
+                return None if allow_none else float(default)
+            try:
+                return float(raw.replace(',', '.'))
+            except ValueError:
+                raise ValueError(f'Nilai {name} tidak valid.')
+
+        def _parse_int(name, allow_none=False):
+            raw = (request.form.get(name) or '').strip()
+            if raw == '':
+                return None if allow_none else 0
+            try:
+                return int(raw)
+            except ValueError:
+                raise ValueError(f'Nilai {name} tidak valid.')
+
         code = (request.form.get('kode') or '').strip().upper()
+        if len(code) < 3:
+            flash('Kode voucher minimal 3 karakter.', 'danger')
+            return _render_form(voucher, set())
+        nama_voucher = (request.form.get('nama') or '').strip()
+        if len(nama_voucher) < 3:
+            flash('Nama voucher minimal 3 karakter.', 'danger')
+            return _render_form(voucher, set())
+
         if not voucher:
             voucher = Voucher(tenant_id=tenant_id, kode=code, created_by=current_user.id)
             db.session.add(voucher)
         voucher.kode = code
-        voucher.nama = (request.form.get('nama') or '').strip()
+        voucher.nama = nama_voucher
         voucher.deskripsi = (request.form.get('deskripsi') or '').strip()
         voucher.discount_type = (request.form.get('discount_type') or 'fixed').strip()
-        voucher.discount_value = max(0, float(request.form.get('discount_value') or 0))
-        voucher.max_discount = float(request.form.get('max_discount') or 0) or None
-        voucher.min_spend = max(0, float(request.form.get('min_spend') or 0))
-        tenant_row = Tenant.query.get(tenant_id)
-        tz_id = normalize_timezone_id(getattr(tenant_row, 'timezone', None)) if tenant_row else None
-        zi = get_zoneinfo_required(tz_id)
-        start_naive = datetime.strptime(request.form.get('start_at'), '%Y-%m-%dT%H:%M')
-        end_naive = datetime.strptime(request.form.get('end_at'), '%Y-%m-%dT%H:%M')
+        try:
+            voucher.discount_value = max(0, _parse_float('discount_value', default=0))
+            voucher.max_discount = _parse_float('max_discount', allow_none=True)
+            voucher.min_spend = max(0, _parse_float('min_spend', default=0))
+            voucher.max_usage_global = _parse_int('max_usage_global', allow_none=True)
+            voucher.max_usage_per_member = _parse_int('max_usage_per_member', allow_none=True)
+        except ValueError as e:
+            flash(str(e), 'danger')
+            return _render_form(voucher, set())
+        if voucher.discount_type == 'percent' and voucher.discount_value > 100:
+            flash('Diskon persen maksimal 100.', 'danger')
+            return _render_form(voucher, set())
+        if voucher.max_usage_global is not None and voucher.max_usage_global < 0:
+            flash('Kuota global tidak boleh negatif.', 'danger')
+            return _render_form(voucher, set())
+        if voucher.max_usage_per_member is not None and voucher.max_usage_per_member < 0:
+            flash('Kuota per member tidak boleh negatif.', 'danger')
+            return _render_form(voucher, set())
+        start_raw = (request.form.get('start_at') or '').strip()
+        end_raw = (request.form.get('end_at') or '').strip()
+        try:
+            start_naive = datetime.strptime(start_raw, '%Y-%m-%dT%H:%M')
+            end_naive = datetime.strptime(end_raw, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            flash('Format tanggal mulai/berakhir tidak valid.', 'danger')
+            return _render_form(voucher, set())
+        if end_naive <= start_naive:
+            flash('Tanggal berakhir harus lebih besar dari tanggal mulai.', 'danger')
+            return _render_form(voucher, set())
         voucher.start_at = start_naive.replace(tzinfo=zi).astimezone(dt_timezone.utc).replace(tzinfo=None)
         voucher.end_at = end_naive.replace(tzinfo=zi).astimezone(dt_timezone.utc).replace(tzinfo=None)
-        voucher.max_usage_global = int(request.form.get('max_usage_global') or 0) or None
-        voucher.max_usage_per_member = int(request.form.get('max_usage_per_member') or 0) or None
         voucher.active = 'active' in request.form
-        db.session.flush()
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            flash('Kode voucher sudah digunakan. Gunakan kode lain.', 'danger')
+            return redirect(url_for('members.voucher_form', id=id) if id else url_for('members.voucher_form'))
 
         VoucherCategoryScope.query.filter_by(voucher_id=voucher.id).delete()
         selected = request.form.getlist('category_ids')
@@ -304,7 +384,7 @@ def voucher_form(id=None):
         return redirect(url_for('members.vouchers'))
 
     selected_scope = {x.category_id for x in voucher.category_scopes} if voucher else set()
-    return render_template('promotions/voucher_form.html', voucher=voucher, categories=categories, selected_scope=selected_scope)
+    return _render_form(voucher, selected_scope)
 
 
 @members_bp.route('/vouchers/<int:id>/delete', methods=['POST'])

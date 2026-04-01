@@ -41,7 +41,11 @@ landing_bp = Blueprint('landing', __name__)
 # Samakan ambang "tak terbatas" dengan superadmin (paket_index).
 UNLIMITED_THRESHOLD = 9000
 
-_TRIAL_PW_ALPHABET = string.ascii_letters + string.digits
+SIMPLE_ANIMAL_PASSWORD_WORDS = (
+    'kucing', 'kelinci', 'beruang', 'harimau', 'gajah', 'zebra', 'panda',
+    'koala', 'rusa', 'serigala', 'elang', 'lumba', 'paus', 'kuda', 'merpati',
+    'kancil', 'komodo', 'badak', 'rubah', 'lebah',
+)
 
 # Dropdown jenis usaha (nilai disimpan ke lead / konsisten)
 TRIAL_JENIS_USAHA_CHOICES = (
@@ -111,8 +115,37 @@ def _generate_trial_kode():
     raise RuntimeError('tidak dapat membuat kode trial unik')
 
 
-def _generate_trial_password(length=8):
-    return ''.join(secrets.choice(_TRIAL_PW_ALPHABET) for _ in range(length))
+def _generate_trial_password():
+    # Format sederhana agar mudah dibacakan: <hewan><2digit>
+    return f"{secrets.choice(SIMPLE_ANIMAL_PASSWORD_WORDS)}{secrets.randbelow(100):02d}"
+
+
+def _username_from_store_name(store_name: str, max_len: int = 50) -> str:
+    """
+    Buat username dari nama toko:
+      - normalisasi jadi [a-z0-9_]
+      - panjang 3-50
+      - unik: jika bentrok, tambahkan suffix _01, _02, ...
+    """
+    raw = (store_name or '').strip().lower()
+    base = re.sub(r'[^a-z0-9]+', '_', raw)
+    base = re.sub(r'_+', '_', base).strip('_')
+    if not base:
+        base = 'toko'
+    if len(base) < 3:
+        base = (base + f'{secrets.randbelow(100):02d}')[:max_len]
+    if len(base) > max_len:
+        base = base[:max_len]
+
+    candidate = base
+    counter = 1
+    while User.query.filter_by(username=candidate).first():
+        suffix = f'_{counter:02d}'
+        candidate = (base[: max_len - len(suffix)] + suffix)[:max_len]
+        counter += 1
+        if counter > 999:
+            return candidate
+    return candidate
 
 
 def _system_actor_user_id():
@@ -309,10 +342,7 @@ def trial_register():
     trial_end = now + timedelta(days=30)
     trial_end_eod = datetime.combine(trial_end.date(), time(23, 59, 59))
 
-    admin_username = 'admin_' + kode.lower()
-    if User.query.filter_by(username=admin_username).first():
-        flash('Terjadi bentrok username. Silakan coba lagi.', 'danger')
-        return redirect(url_for('landing.trial_register'))
+    admin_username = _username_from_store_name(nama_toko)
 
     plain_password = _generate_trial_password()
 

@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}Promo baris kasir{% endblock %}
+{% block page_title %}🏷️ Promo baris kasir (otomatis){% endblock %}
+{% block page_sub %}Diskon per produk/kategori mengisi sendiri di keranjang saat periode aktif{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:var(--bg-soft-2);">
+  <div style="font-weight:700;margin-bottom:8px;font-size:14px;">Cara kerja singkat</div>
+  <ul style="margin:0;padding-left:1.25rem;font-size:13px;line-height:1.55;color:var(--text-muted);">
+    <li>Promo <strong>aktif</strong> dan dalam <strong>periode</strong> akan mengisi <strong>minimal</strong> diskon baris di POS; kasir boleh menambah potongan di atasnya.</li>
+    <li>Jika beberapa aturan cocok untuk satu baris, yang memberi <strong>diskon rupiah terbesar</strong> dipakai.</li>
+    <li>Scope <strong>satu produk</strong> lebih spesifik daripada kategori — gunakan untuk pengecualian di dalam kategori.</li>
+    <li>Baris dengan qty di bawah <strong>minimal qty</strong> tidak mendapat promo tersebut.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <div class="card-title">Aturan promo</div>
+    <a href="{{ url_for('products.line_promo_new') }}" class="btn btn-primary btn-sm">+ Buat promo</a>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Nama</th>
+          <th>Scope</th>
+          <th>Diskon</th>
+          <th>Min qty</th>
+          <th>Periode (lokal)</th>
+          <th>Jadwal</th>
+          <th>Status</th>
+          <th class="th-actions">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rules %}
+        <tr>
+          <td style="font-weight:600;">{{ r.nama }}</td>
+          <td>
+            {% if r.scope == 'product' and r.product %}
+              <span class="badge badge-secondary" style="font-weight:600;">Produk</span><br>
+              <span style="font-size:12px;">{{ r.product.nama }}</span>
+            {% elif r.scope == 'category' and r.category %}
+              <span class="badge badge-info" style="font-weight:600;">Kategori</span><br>
+              <span style="font-size:12px;">{{ r.category.nama }}</span>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td>
+            {% if r.discount_type == 'percent' %}
+              {% set dv = r.discount_value %}
+              {% if dv == dv|int %}
+                {{ dv|int }}%
+              {% else %}
+                {{ dv }}%
+              {% endif %}
+              {% if r.max_discount %}<br><span style="font-size:11px;color:var(--text-muted);">maks Rp {{ "{:,.0f}".format(r.max_discount).replace(",",".") }}</span>{% endif %}
+            {% else %}
+              Rp {{ "{:,.0f}".format(r.discount_value).replace(",",".") }}
+            {% endif %}
+          </td>
+          <td>{{ r.min_qty }}</td>
+          <td style="font-size:12px;white-space:nowrap;">{{ r.start_at|local_dt }}<br>→ {{ r.end_at|local_dt }}</td>
+          <td style="font-size:12px;">
+            {% if not r.aktif %}
+              <span class="badge badge-secondary">Nonaktif</span>
+            {% elif r.end_at < now_utc %}
+              <span class="badge badge-warning" title="Periode lewat; nonaktifkan atau perpanjang">Sudah berakhir</span>
+            {% elif r.start_at > now_utc %}
+              <span class="badge badge-info">Belum mulai</span>
+            {% else %}
+              <span class="badge badge-success">Sedang berlaku</span>
+            {% endif %}
+          </td>
+          <td>{% if r.aktif %}<span class="badge badge-success">Aktif</span>{% else %}<span class="badge badge-secondary">Mati</span>{% endif %}</td>
+          <td class="td-actions">
+            <div class="row-actions">
+              <a href="{{ url_for('products.line_promo_edit', id=r.id) }}" class="btn btn-outline btn-sm">✏️ Edit</a>
+              <form method="POST" action="{{ url_for('products.line_promo_delete', id=r.id) }}" class="row-actions__form" onsubmit="return confirm('Hapus promo ini?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm row-actions__del" style="color:var(--danger);">🗑️</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">Belum ada aturan. Buat promo untuk mengisi diskon baris otomatis di POS.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

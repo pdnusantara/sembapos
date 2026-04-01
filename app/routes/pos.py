@@ -19,14 +19,13 @@ from ..models import (
 from ..shifts_util import get_open_shift
 from ..loyalty_service import ensure_default_tiers, evaluate_member_tier, member_tier_discount_pct
 from ..promo_service import validate_voucher, promo_payload_json
+from ..line_promo_service import (
+    best_auto_line_discount_rupiah,
+    enforce_line_promo_floor,
+    line_promo_rules_for_pos_client,
+)
 from ..fifo_costing import consume_fifo_cost
 from ..doc_numbers import generate_nomor_transaksi
-from ..timezones import (
-    format_utc_naive_as_local,
-    local_today_date,
-    resolve_effective_timezone_id,
-    utc_naive_bounds_for_local_date,
-)
 
 pos_bp = Blueprint('pos', __name__, url_prefix='/pos')
 
@@ -42,10 +41,18 @@ def _price_for_qty(product, qty):
     return float(picked.get('harga', product.harga_jual or 0)), picked.get('label', 'ecer')
 
 
-def _discount_decision_payload(*, diskon_manual=0.0, diskon_member=0.0, promo_discount=0.0, voucher_code=None):
+def _discount_decision_payload(
+    *,
+    diskon_manual=0.0,
+    diskon_member=0.0,
+    promo_discount=0.0,
+    voucher_code=None,
+    diskon_per_baris=0.0,
+):
     manual = float(diskon_manual or 0)
     member = float(diskon_member or 0)
     voucher = float(promo_discount or 0)
+    line_disc = float(diskon_per_baris or 0)
     winner = 'none'
     reason = 'Tidak ada promo aktif.'
     if voucher > member and voucher > 0:
@@ -64,6 +71,7 @@ def _discount_decision_payload(*, diskon_manual=0.0, diskon_member=0.0, promo_di
             'voucher_discount': voucher,
             'member_discount': member,
             'manual_discount': manual,
+            'line_discount': line_disc,
             'voucher_code': (voucher_code or '').strip().upper() or None,
         },
     }
@@ -109,6 +117,7 @@ def index():
     ensure_default_tiers(tenant_id)
 
     can_override_price = current_user.role in ('superadmin', 'admin')
+    line_promo_rules_json = line_promo_rules_for_pos_client(tenant_id)
 
     return render_template(
         'pos.html',
@@ -118,6 +127,7 @@ def index():
         etalases=etalases,
         members=members,
         can_override_price=can_override_price,
+        line_promo_rules_json=line_promo_rules_json,
     )
 
 
@@ -169,80 +179,6 @@ def get_members():
         'poin': m.poin,
         'diskon_persen': m.diskon_persen or 0,
     } for m in members])
-
-
-@pos_bp.route('/recent-transactions')
-@login_required
-def recent_transactions():
-    tenant_id = current_user.tenant_id
-    branch_id = current_user.branch_id
-    if not branch_id:
-        b = Branch.query.filter_by(tenant_id=tenant_id, aktif=True).first()
-        branch_id = b.id if b else None
-    if not branch_id:
-        return jsonify([])
-
-    tz_id = resolve_effective_timezone_id(current_user)
-    local_d = local_today_date(tz_id)
-    day_start, day_end = utc_naive_bounds_for_local_date(local_d, tz_id)
-    rows = (
-        Transaction.query.filter(
-            Transaction.tenant_id == tenant_id,
-            Transaction.branch_id == branch_id,
-            Transaction.created_at.between(day_start, day_end),
-        )
-        .order_by(Transaction.created_at.desc())
-        .limit(12)
-        .all()
-    )
-    status_reason = {
-        'draft': 'Transaksi masih draft, belum bisa diproses retur/tukar.',
-        'pending': 'Transaksi belum selesai, selesaikan dulu untuk bisa retur/tukar.',
-        'batal': 'Transaksi dibatalkan sehingga tidak bisa diproses retur/tukar.',
-    }
-    return jsonify([{
-        'id': t.id,
-        'nomor': t.nomor,
-        'total': t.total,
-        'created_at': format_utc_naive_as_local(t.created_at, tz_id, '%H:%M'),
-        'status': t.status,
-        'can_return': t.status == 'selesai',
-        'return_block_reason': '' if t.status == 'selesai' else status_reason.get(
-            t.status,
-            f"Status transaksi '{t.status}' belum bisa diproses retur/tukar.",
-        ),
-        'return_url': url_for(
-            'returns.create_from_transaction',
-            tid=t.id,
-            back_to=url_for('pos.index', focus='search'),
-        ),
-    } for t in rows])
-
-
-@pos_bp.route('/transaction/<int:tid>/items')
-@login_required
-def transaction_items(tid):
-    tenant_id = current_user.tenant_id
-    trx = Transaction.query.filter_by(id=tid, tenant_id=tenant_id).first_or_404()
-    out = []
-    for ti in trx.items:
-        p = Product.query.filter_by(id=ti.product_id, tenant_id=tenant_id, aktif=True).first()
-        if not p or p.stok <= 0:
-            continue
-        out.append({
-            'id': p.id,
-            'nama': p.nama,
-            'harga': p.harga_jual,
-            'harga_ecer': p.harga_jual,
-            'min_qty_grosir_1': p.min_qty_grosir_1,
-            'harga_jual_grosir_1': p.harga_jual_grosir_1,
-            'min_qty_grosir_2': p.min_qty_grosir_2,
-            'harga_jual_grosir_2': p.harga_jual_grosir_2,
-            'stok': p.stok,
-            'satuan': p.satuan,
-            'qty': ti.qty,
-        })
-    return jsonify(out)
 
 
 @pos_bp.route('/checkout', methods=['POST'])
@@ -329,12 +265,25 @@ def checkout():
             harga = h
 
         line_sub = harga * qty
+        try:
+            line_diskon = max(0.0, float(raw.get('line_diskon', 0) or 0))
+        except (TypeError, ValueError):
+            line_diskon = 0.0
+        if line_diskon > line_sub:
+            line_diskon = line_sub
+        auto_min = best_auto_line_discount_rupiah(
+            tenant_id, product, qty, line_sub, now=datetime.utcnow(),
+        )
+        line_diskon = enforce_line_promo_floor(line_diskon, auto_min, line_sub)
+        line_net = line_sub - line_diskon
         subtotal += line_sub
         resolved.append({
             'product': product,
             'qty': qty,
             'harga': harga,
             'line_sub': line_sub,
+            'line_diskon': line_diskon,
+            'line_net': line_net,
             'price_mode': price_mode,
         })
 
@@ -347,6 +296,9 @@ def checkout():
         except (TypeError, ValueError):
             pass
 
+    sum_line_diskon = sum(float(r.get('line_diskon') or 0) for r in resolved)
+    subtotal_net = sum(float(r.get('line_net') or 0) for r in resolved)
+
     diskon_member = 0.0
     tier_discount_pct = 0.0
     if member:
@@ -355,7 +307,7 @@ def checkout():
         explicit_member_pct = float(member.diskon_persen or 0)
         best_pct = max(tier_discount_pct, explicit_member_pct)
         if best_pct > 0:
-            diskon_member = subtotal * (best_pct / 100.0)
+            diskon_member = subtotal_net * (best_pct / 100.0)
 
     promo_discount = 0.0
     promo_payload = None
@@ -370,13 +322,13 @@ def checkout():
             p = row['product']
             item_scope.append({
                 'category_id': int(p.category_id or 0),
-                'line_sub': float(row['line_sub'] or 0),
+                'line_sub': float(row['line_net'] or 0),
             })
         vv = validate_voucher(
             tenant_id=tenant_id,
             voucher_code=voucher_code,
             member_id=(member.id if member else None),
-            subtotal=subtotal,
+            subtotal=subtotal_net,
             items=item_scope,
         )
         if not vv.get('ok'):
@@ -391,10 +343,10 @@ def checkout():
 
     # Non-stacking safeguard: pick best between member benefit and voucher.
     if promo_discount > diskon_member:
-        total_diskon = diskon_manual + promo_discount
+        total_diskon = sum_line_diskon + diskon_manual + promo_discount
     else:
         promo_discount = 0.0
-        total_diskon = diskon_manual + diskon_member
+        total_diskon = sum_line_diskon + diskon_manual + diskon_member
         if diskon_member > 0:
             chosen_promo_type = 'tier_percent'
             chosen_promo_name = member.tier.nama if member and member.tier else 'member_discount'
@@ -410,6 +362,7 @@ def checkout():
         diskon_member=diskon_member,
         promo_discount=promo_discount,
         voucher_code=chosen_promo_code,
+        diskon_per_baris=sum_line_diskon,
     )
     total = subtotal - total_diskon
     if total < 0:
@@ -508,6 +461,8 @@ def checkout():
         product = row['product']
         qty = row['qty']
         harga = row['harga']
+        line_diskon = float(row.get('line_diskon') or 0)
+        line_net = float(row.get('line_net') or (harga * qty - line_diskon))
 
         locked_product = (
             Product.query.filter_by(id=product.id, tenant_id=tenant_id)
@@ -529,7 +484,8 @@ def checkout():
             nama_produk=product.nama,
             harga=harga,
             qty=qty,
-            subtotal=harga * qty,
+            diskon=line_diskon,
+            subtotal=line_net,
         )
         db.session.add(trx_item)
         db.session.flush()
@@ -620,6 +576,7 @@ def checkout():
         'diskon_member': diskon_member,
         'promo_discount': promo_discount,
         'diskon_manual': diskon_manual,
+        'diskon_per_baris': sum_line_diskon,
         'payments': payment_components,
         'discount_decision': discount_decision,
     })
@@ -632,6 +589,7 @@ def validate_voucher_api():
     code = (request.args.get('code') or '').strip().upper()
     subtotal = float(request.args.get('subtotal') or 0)
     manual_discount = float(request.args.get('manual_discount') or 0)
+    line_discount = float(request.args.get('line_discount') or 0)
     member_id_raw = request.args.get('member_id')
     try:
         member_id = int(member_id_raw) if member_id_raw else None
@@ -663,6 +621,7 @@ def validate_voucher_api():
                 diskon_member=member_discount,
                 promo_discount=0,
                 voucher_code=code,
+                diskon_per_baris=line_discount,
             ),
         })
     voucher_discount = float(vv.get('discount') or 0)
@@ -677,5 +636,6 @@ def validate_voucher_api():
             diskon_member=member_discount,
             promo_discount=chosen_voucher_discount,
             voucher_code=vv['voucher'].kode,
+            diskon_per_baris=line_discount,
         ),
     })

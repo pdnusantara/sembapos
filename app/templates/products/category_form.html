@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Edit kategori produk{% endblock %}
+{% block page_title %}✏️ Edit kategori{% endblock %}
+{% block page_sub %}{{ category.nama }}{% endblock %}
+
+{% block content %}
+<div class="card form-card-narrow">
+  <form method="POST" action="{{ url_for('products.edit_category', id=category.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="form-group">
+      <label class="form-label">Nama kategori *</label>
+      <input type="text" name="nama" class="form-control" required maxlength="100" value="{{ category.nama }}" placeholder="Contoh: Beras & Gula">
+    </div>
+    <div class="form-actions-row">
+      <button type="submit" class="btn btn-primary">Simpan</button>
+      <a href="{{ url_for('products.categories') }}" class="btn btn-outline">Batal</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

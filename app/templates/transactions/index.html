@@ -154,11 +154,18 @@
               <td class="tx2-total">
                 {% set ret_sum_row = (t.sales_returns|map(attribute='total_retur')|sum) if t.sales_returns else 0 %}
                 {% set net_row = [0, (t.total or 0) - ret_sum_row]|max %}
-                <div><span class="text-muted" style="font-size:11px;">Nota</span> <strong>Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</strong></div>
-                {% if t.sales_returns and ret_sum_row > 0 %}
-                <div style="font-size:12px;margin-top:4px;color:var(--text-muted);">Retur −Rp {{ "{:,.0f}".format(ret_sum_row).replace(",",".") }}</div>
-                <div style="font-size:13px;font-weight:700;color:var(--primary-light, #a5b4fc);">Net Rp {{ "{:,.0f}".format(net_row).replace(",",".") }}</div>
-                {% endif %}
+                <div class="tx2-amount-line">
+                  <span class="tx2-amount-label">Nota</span>
+                  <strong class="tx2-amount-value">Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</strong>
+                </div>
+                <div class="tx2-amount-line tx2-amount-line--retur{% if not (t.sales_returns and ret_sum_row > 0) %} is-empty{% endif %}">
+                  <span class="tx2-amount-label">Retur</span>
+                  <span class="tx2-amount-value">−Rp {{ "{:,.0f}".format(ret_sum_row).replace(",",".") }}</span>
+                </div>
+                <div class="tx2-amount-line tx2-amount-line--net">
+                  <span class="tx2-amount-label">Neto</span>
+                  <strong class="tx2-amount-value">Rp {{ "{:,.0f}".format(net_row).replace(",",".") }}</strong>
+                </div>
               </td>
               <td>
                 {% if t.sales_returns %}
@@ -205,10 +212,18 @@
             <div class="tx2-mobile-total">
               {% set ret_sum_row = (t.sales_returns|map(attribute='total_retur')|sum) if t.sales_returns else 0 %}
               {% set net_row = [0, (t.total or 0) - ret_sum_row]|max %}
-              <div>Nota Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</div>
-              {% if t.sales_returns and ret_sum_row > 0 %}
-              <div style="font-size:12px;font-weight:600;color:var(--primary-light, #a5b4fc);">Net Rp {{ "{:,.0f}".format(net_row).replace(",",".") }}</div>
-              {% endif %}
+              <div class="tx2-amount-line">
+                <span class="tx2-amount-label">Nota</span>
+                <strong class="tx2-amount-value">Rp {{ "{:,.0f}".format(t.total).replace(",",".") }}</strong>
+              </div>
+              <div class="tx2-amount-line tx2-amount-line--retur{% if not (t.sales_returns and ret_sum_row > 0) %} is-empty{% endif %}">
+                <span class="tx2-amount-label">Retur</span>
+                <span class="tx2-amount-value">−Rp {{ "{:,.0f}".format(ret_sum_row).replace(",",".") }}</span>
+              </div>
+              <div class="tx2-amount-line tx2-amount-line--net">
+                <span class="tx2-amount-label">Neto</span>
+                <strong class="tx2-amount-value">Rp {{ "{:,.0f}".format(net_row).replace(",",".") }}</strong>
+              </div>
             </div>
           </div>
           <div class="tx2-mobile-meta">

@@ -30,7 +30,10 @@
   .admin-users-modal {
     transition: opacity .2s ease;
   }
-  @media (max-width: 640px) {
+  .admin-users-modal .modal-footer-mobile {
+    display: none;
+  }
+  @media (max-width: 900px) {
     .admin-users-add-cta.is-sticky {
       top: 64px;
       right: 10px;
@@ -40,7 +43,45 @@
       width: 100%;
     }
     .admin-users-modal .modal {
-      width: min(94vw, 420px) !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      border-radius: 0;
+      height: 100dvh;
+      max-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .admin-users-modal .admin-users-add-form {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+    }
+    .admin-users-modal .modal-body-mobile {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      padding: 16px 18px 16px;
+    }
+    .admin-users-modal .modal-footer-mobile {
+      display: flex;
+      position: sticky;
+      bottom: 0;
+      padding: 10px 16px;
+      gap: 10px;
+      background: rgba(15,23,42,0.9);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(148,163,184,0.4);
+      z-index: 10;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+    }
+    .admin-users-modal .modal-footer-mobile .btn {
+      flex: 1;
+    }
+    .admin-users-modal .admin-users-save-top {
+      display: none;
     }
   }
 </style>
@@ -178,12 +219,16 @@
 
 <div class="modal-overlay admin-users-modal" id="addUserModal" onclick="if(event.target===this){closeAddUserModal();}">
   <div class="modal" style="max-width:560px;width:min(94vw,560px);padding:0;overflow:hidden;" onclick="event.stopPropagation()">
-    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--border);">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--border);gap:10px;">
       <div class="card-title">➕ Tambah Pengguna</div>
-      <button type="button" class="btn btn-outline btn-sm" onclick="closeAddUserModal()">Tutup</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button type="button" class="btn btn-primary btn-sm admin-users-save-top" onclick="submitAddUserForm()">💾 Simpan</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeAddUserModal()">Tutup</button>
+      </div>
     </div>
-    <form method="POST" action="{{ url_for('admin.add_user') }}" class="admin-users-add-form" style="padding:16px 18px;">
+    <form method="POST" action="{{ url_for('admin.add_user') }}" class="admin-users-add-form" id="addUserForm">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div class="modal-body-mobile">
       <div class="form-group">
         <label class="form-label">Nama lengkap *</label>
         <input type="text" name="nama" class="form-control" required placeholder="Nama pengguna" minlength="2">
@@ -244,7 +289,11 @@
         sync();
       })();
       </script>
-      <button type="submit" class="btn btn-primary btn-block">💾 Tambah pengguna</button>
+      </div>
+      <div class="modal-footer-mobile">
+        <button type="button" class="btn btn-outline" onclick="closeAddUserModal()">Batal</button>
+        <button type="submit" class="btn btn-primary">💾 Tambah pengguna</button>
+      </div>
     </form>
   </div>
 </div>
@@ -254,9 +303,21 @@ function openAddUserModal() {
   const modal = document.getElementById('addUserModal');
   if (!modal) return;
   modal.classList.add('active');
+  document.body.style.overflow = 'hidden';
   const firstInput = modal.querySelector('input[name="nama"]');
   if (firstInput) {
     setTimeout(() => firstInput.focus(), 60);
+  }
+}
+
+function submitAddUserForm() {
+  const form = document.getElementById('addUserForm');
+  if (form) {
+    if (typeof form.requestSubmit === 'function') {
+      form.requestSubmit();
+    } else {
+      form.submit();
+    }
   }
 }
 
@@ -264,6 +325,7 @@ function closeAddUserModal() {
   const modal = document.getElementById('addUserModal');
   if (!modal) return;
   modal.classList.remove('active');
+  document.body.style.overflow = '';
 }
 
 document.addEventListener('keydown', function(e){

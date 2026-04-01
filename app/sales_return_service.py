@@ -96,7 +96,12 @@ def process_sales_return(
             raise ValueError(
                 f'Qty retur "{ti.nama_produk}" melebihi yang bisa diretur (tersisa {avail}).',
             )
-        sub = float(ti.harga) * qty
+        # Proporsional dari net baris (harga×qty − diskon baris), aman untuk retur parsial
+        line_full = float(ti.subtotal or 0)
+        if line_full <= 0 and float(ti.qty or 0) > 0:
+            line_full = float(ti.harga) * float(ti.qty)
+        unit_net = line_full / float(ti.qty) if float(ti.qty or 0) > 0 else float(ti.harga or 0)
+        sub = unit_net * qty
         total_retur += sub
         resolved_lines.append({
             'ti': ti,

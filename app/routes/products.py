@@ -3,27 +3,36 @@ import io
 import os
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone as dt_timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, current_app, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import or_, func, nullslast
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from .. import db
 from ..models import (
+    Tenant,
     Product,
     ProductCategory,
+    PosLinePromoRule,
     Etalase,
     StockMovement,
     Supplier,
     ProductAuditLog,
     InventoryCostLayer,
+    InventoryCostLayerUsage,
     StockOpnameSession,
     StockOpnameItem,
     StockOpnameApprovalLog,
+    TransactionItem,
+    SalesReturnItem,
+    SalesReturn,
+    PurchaseOrderItem,
+    PurchaseOrder,
 )
 from ..fifo_costing import create_cost_layer, consume_fifo_stock_out
-from ..timezones import local_today_date, resolve_effective_timezone_id
+from ..timezones import local_today_date, resolve_effective_timezone_id, get_zoneinfo_required, normalize_timezone_id
 
 products_bp = Blueprint('products', __name__, url_prefix='/products')
 
@@ -35,8 +44,89 @@ def require_admin():
     return True
 
 
+def _safe_products_redirect(next_raw):
+    """Redirect internal ke /products/* setelah POST (hindari open redirect)."""
+    if not next_raw or not isinstance(next_raw, str):
+        return None
+    s = next_raw.strip()
+    if not s.startswith('/products') or s.startswith('//') or '://' in s[:20]:
+        return None
+    return s
+
+
+def _redirect_after_product_action():
+    n = _safe_products_redirect(request.form.get('next'))
+    return redirect(n) if n else redirect(url_for('products.index'))
+
+
+def _ineligible_product_ids_for_permanent_delete(tenant_id, product_ids):
+    """Produk yang punya riwayat penjualan/PO/opname tidak boleh dihapus permanen."""
+    if not product_ids:
+        return set()
+    pids = list(product_ids)
+    blocked = set()
+    q_ti = (
+        db.session.query(TransactionItem.product_id)
+        .join(Product, Product.id == TransactionItem.product_id)
+        .filter(Product.tenant_id == tenant_id, TransactionItem.product_id.in_(pids))
+        .distinct()
+    )
+    blocked |= {r[0] for r in q_ti.all()}
+    q_sr = (
+        db.session.query(SalesReturnItem.product_id)
+        .join(SalesReturn, SalesReturn.id == SalesReturnItem.return_id)
+        .filter(SalesReturn.tenant_id == tenant_id, SalesReturnItem.product_id.in_(pids))
+        .distinct()
+    )
+    blocked |= {r[0] for r in q_sr.all()}
+    q_po = (
+        db.session.query(PurchaseOrderItem.product_id)
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.po_id)
+        .filter(PurchaseOrder.tenant_id == tenant_id, PurchaseOrderItem.product_id.in_(pids))
+        .distinct()
+    )
+    blocked |= {r[0] for r in q_po.all()}
+    q_op = (
+        db.session.query(StockOpnameItem.product_id)
+        .join(StockOpnameSession, StockOpnameSession.id == StockOpnameItem.session_id)
+        .filter(StockOpnameSession.tenant_id == tenant_id, StockOpnameItem.product_id.in_(pids))
+        .distinct()
+    )
+    blocked |= {r[0] for r in q_op.all()}
+    return blocked
+
+
+def _product_eligible_for_permanent_delete(tenant_id, product_id):
+    return product_id not in _ineligible_product_ids_for_permanent_delete(tenant_id, [product_id])
+
+
+def _permanent_delete_product_record(product):
+    """
+    Hapus data produk dari DB. Hanya dipanggil setelah cek eligibility.
+    Menghapus lapisan biaya, mutasi stok, log audit, file gambar, lalu baris produk.
+    """
+    pid = product.id
+    layer_ids = [x.id for x in InventoryCostLayer.query.filter_by(product_id=pid).all()]
+    if layer_ids:
+        InventoryCostLayerUsage.query.filter(InventoryCostLayerUsage.layer_id.in_(layer_ids)).delete(
+            synchronize_session=False,
+        )
+    InventoryCostLayer.query.filter_by(product_id=pid).delete(synchronize_session=False)
+    StockMovement.query.filter_by(product_id=pid).delete(synchronize_session=False)
+    ProductAuditLog.query.filter_by(product_id=pid).delete(synchronize_session=False)
+    _delete_image_file(product.gambar)
+    db.session.delete(product)
+
+
 def _etalases_for_tenant(tenant_id):
     return Etalase.query.filter_by(tenant_id=tenant_id).order_by(Etalase.nama).all()
+
+
+def _product_category_name_exists(tenant_id, nama, exclude_id=None):
+    q = ProductCategory.query.filter_by(tenant_id=tenant_id, nama=nama)
+    if exclude_id is not None:
+        q = q.filter(ProductCategory.id != exclude_id)
+    return q.first() is not None
 
 
 def _etalase_id_from_post(tenant_id):
@@ -452,6 +542,13 @@ def index():
     etalases = _etalases_for_tenant(tenant_id)
     stats = _tenant_stats(tenant_id)
 
+    if current_user.role in ('superadmin', 'admin'):
+        page_ids = [p.id for p in products.items]
+        blocked_destroy = _ineligible_product_ids_for_permanent_delete(tenant_id, page_ids)
+        destroyable_ids = set(page_ids) - blocked_destroy
+    else:
+        destroyable_ids = set()
+
     return render_template(
         'products/index.html',
         products=products,
@@ -465,6 +562,7 @@ def index():
         sort=sort,
         focus=focus,
         stats=stats,
+        destroyable_ids=destroyable_ids,
     )
 
 
@@ -988,6 +1086,51 @@ def duplicate(id):
     return redirect(url_for('products.edit', id=copy.id))
 
 
+@products_bp.route('/activate/<int:id>', methods=['POST'])
+@login_required
+def activate(id):
+    if not require_admin():
+        return redirect(url_for('products.index'))
+    tenant_id = current_user.tenant_id
+    product = Product.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    product.aktif = True
+    _log_product_audit(
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        product_id=product.id,
+        action='product_reactivated',
+        detail='Diaktifkan kembali dari daftar produk.',
+    )
+    db.session.commit()
+    flash(f'Produk "{product.nama}" diaktifkan kembali.', 'success')
+    return _redirect_after_product_action()
+
+
+@products_bp.route('/destroy/<int:id>', methods=['POST'])
+@login_required
+def destroy(id):
+    if not require_admin():
+        return redirect(url_for('products.index'))
+    tenant_id = current_user.tenant_id
+    product = Product.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    if not _product_eligible_for_permanent_delete(tenant_id, product.id):
+        flash(
+            'Produk ini tidak bisa dihapus permanen karena sudah terhubung ke penjualan, retur, '
+            'pembelian/pemesanan, atau stok opname.',
+            'danger',
+        )
+        return _redirect_after_product_action()
+    nama = product.nama
+    try:
+        _permanent_delete_product_record(product)
+        db.session.commit()
+        flash(f'Produk "{nama}" dihapus permanen dari database.', 'success')
+    except IntegrityError:
+        db.session.rollback()
+        flash('Gagal menghapus produk: data masih terhubung ke transaksi lain.', 'danger')
+    return _redirect_after_product_action()
+
+
 @products_bp.route('/delete/<int:id>', methods=['POST'])
 @login_required
 def delete(id):
@@ -996,9 +1139,16 @@ def delete(id):
     tenant_id = current_user.tenant_id
     product = Product.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
     product.aktif = False
+    _log_product_audit(
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        product_id=product.id,
+        action='product_deactivated',
+        detail='Dinonaktifkan dari daftar produk (tetap ada di database).',
+    )
     db.session.commit()
-    flash(f'Produk "{product.nama}" dinonaktifkan.', 'warning')
-    return redirect(url_for('products.index'))
+    flash(f'Produk "{product.nama}" dinonaktifkan (tidak tampil di kasir).', 'warning')
+    return _redirect_after_product_action()
 
 
 @products_bp.route('/stock-in/<int:id>', methods=['GET', 'POST'])
@@ -1459,12 +1609,40 @@ def add_category():
         return redirect(url_for('products.categories'))
     tenant_id = current_user.tenant_id
     nama = request.form.get('nama', '').strip()
-    if nama:
-        cat = ProductCategory(tenant_id=tenant_id, nama=nama)
-        db.session.add(cat)
-        db.session.commit()
-        flash(f'Kategori "{nama}" berhasil ditambahkan!', 'success')
+    if not nama:
+        return redirect(url_for('products.categories'))
+    if _product_category_name_exists(tenant_id, nama):
+        flash('Kategori dengan nama tersebut sudah ada.', 'warning')
+        return redirect(url_for('products.categories'))
+    cat = ProductCategory(tenant_id=tenant_id, nama=nama[:100])
+    db.session.add(cat)
+    db.session.commit()
+    flash(f'Kategori "{nama}" berhasil ditambahkan!', 'success')
     return redirect(url_for('products.categories'))
+
+
+@products_bp.route('/categories/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_category(id):
+    if not require_admin():
+        return redirect(url_for('products.categories'))
+    tenant_id = current_user.tenant_id
+    cat = ProductCategory.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+
+    if request.method == 'POST':
+        nama = (request.form.get('nama') or '').strip()
+        if not nama:
+            flash('Nama kategori wajib diisi.', 'danger')
+            return redirect(url_for('products.edit_category', id=id))
+        if _product_category_name_exists(tenant_id, nama, exclude_id=cat.id):
+            flash('Kategori dengan nama tersebut sudah ada.', 'warning')
+            return redirect(url_for('products.edit_category', id=id))
+        cat.nama = nama[:100]
+        db.session.commit()
+        flash('Kategori diperbarui.', 'success')
+        return redirect(url_for('products.categories'))
+
+    return render_template('products/category_form.html', category=cat)
 
 
 @products_bp.route('/categories/delete/<int:id>', methods=['POST'])
@@ -1478,3 +1656,262 @@ def delete_category(id):
     db.session.commit()
     flash('Kategori dihapus.', 'warning')
     return redirect(url_for('products.categories'))
+
+
+def _line_promo_tzinfo(tenant_id):
+    t = Tenant.query.get(tenant_id)
+    tz_id = normalize_timezone_id(getattr(t, 'timezone', None)) if t else None
+    return get_zoneinfo_required(tz_id)
+
+
+def _line_promo_default_datetimes(zi):
+    now_local = datetime.now(zi).replace(second=0, microsecond=0)
+    end_local = (now_local + timedelta(days=14)).replace(second=0, microsecond=0)
+    return (
+        now_local.strftime('%Y-%m-%dT%H:%M'),
+        end_local.strftime('%Y-%m-%dT%H:%M'),
+    )
+
+
+@products_bp.route('/line-promo')
+@login_required
+def line_promo_index():
+    if not require_admin():
+        return redirect(url_for('dashboard.index'))
+    tenant_id = current_user.tenant_id
+    rules = (
+        PosLinePromoRule.query.filter_by(tenant_id=tenant_id)
+        .options(joinedload(PosLinePromoRule.product), joinedload(PosLinePromoRule.category))
+        .order_by(
+            PosLinePromoRule.aktif.desc(),
+            PosLinePromoRule.end_at.asc(),
+            PosLinePromoRule.id.desc(),
+        )
+        .all()
+    )
+    return render_template('products/line_promo_index.html', rules=rules, now_utc=datetime.utcnow())
+
+
+@products_bp.route('/line-promo/new', methods=['GET', 'POST'])
+@login_required
+def line_promo_new():
+    if not require_admin():
+        return redirect(url_for('dashboard.index'))
+    tenant_id = current_user.tenant_id
+    zi = _line_promo_tzinfo(tenant_id)
+    default_start, default_end = _line_promo_default_datetimes(zi)
+    products_list = Product.query.filter_by(tenant_id=tenant_id, aktif=True).order_by(Product.nama).all()
+    categories = ProductCategory.query.filter_by(tenant_id=tenant_id).order_by(ProductCategory.nama).all()
+
+    if request.method == 'POST':
+        nama = (request.form.get('nama') or '').strip()
+        scope = (request.form.get('scope') or 'product').strip().lower()
+        if scope not in ('product', 'category'):
+            scope = 'product'
+        try:
+            discount_value = max(0.0, float((request.form.get('discount_value') or '0').replace(',', '.')))
+        except ValueError:
+            flash('Nilai diskon tidak valid.', 'danger')
+            return redirect(url_for('products.line_promo_new'))
+        md_raw = (request.form.get('max_discount') or '').strip()
+        max_discount = None
+        if md_raw:
+            try:
+                max_discount = max(0.0, float(md_raw.replace(',', '.')))
+            except ValueError:
+                flash('Maks diskon tidak valid.', 'danger')
+                return redirect(url_for('products.line_promo_new'))
+        try:
+            min_qty = max(0.01, float((request.form.get('min_qty') or '1').replace(',', '.')))
+        except ValueError:
+            flash('Min. qty tidak valid.', 'danger')
+            return redirect(url_for('products.line_promo_new'))
+        try:
+            priority = int((request.form.get('priority') or '0').strip() or '0')
+        except ValueError:
+            priority = 0
+        dtype = (request.form.get('discount_type') or 'percent').strip().lower()
+        if dtype not in ('percent', 'fixed'):
+            dtype = 'percent'
+        if dtype == 'percent' and discount_value > 100:
+            flash('Diskon persen maksimal 100.', 'danger')
+            return redirect(url_for('products.line_promo_new'))
+
+        pid = None
+        cid = None
+        if scope == 'product':
+            try:
+                pid = int(request.form.get('product_id') or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            if not pid or not Product.query.filter_by(id=pid, tenant_id=tenant_id).first():
+                flash('Pilih produk untuk scope produk.', 'danger')
+                return redirect(url_for('products.line_promo_new'))
+        else:
+            try:
+                cid = int(request.form.get('category_id') or 0)
+            except (TypeError, ValueError):
+                cid = 0
+            if not cid or not ProductCategory.query.filter_by(id=cid, tenant_id=tenant_id).first():
+                flash('Pilih kategori.', 'danger')
+                return redirect(url_for('products.line_promo_new'))
+
+        start_raw = (request.form.get('start_at') or '').strip()
+        end_raw = (request.form.get('end_at') or '').strip()
+        try:
+            start_naive = datetime.strptime(start_raw, '%Y-%m-%dT%H:%M')
+            end_naive = datetime.strptime(end_raw, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            flash('Format tanggal mulai/berakhir tidak valid.', 'danger')
+            return redirect(url_for('products.line_promo_new'))
+        if end_naive <= start_naive:
+            flash('Tanggal berakhir harus setelah tanggal mulai.', 'danger')
+            return redirect(url_for('products.line_promo_new'))
+        start_at = start_naive.replace(tzinfo=zi).astimezone(dt_timezone.utc).replace(tzinfo=None)
+        end_at = end_naive.replace(tzinfo=zi).astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+        row = PosLinePromoRule(
+            tenant_id=tenant_id,
+            nama=nama[:120] or 'Promo baris',
+            scope=scope,
+            product_id=pid,
+            category_id=cid,
+            discount_type=dtype,
+            discount_value=discount_value,
+            max_discount=max_discount,
+            min_qty=min_qty,
+            priority=priority,
+            start_at=start_at,
+            end_at=end_at,
+            aktif='aktif' in request.form,
+        )
+        db.session.add(row)
+        db.session.commit()
+        flash('Promo baris kasir disimpan.', 'success')
+        return redirect(url_for('products.line_promo_index'))
+
+    return render_template(
+        'products/line_promo_form.html',
+        rule=None,
+        products_list=products_list,
+        categories=categories,
+        default_start_at=default_start,
+        default_end_at=default_end,
+    )
+
+
+@products_bp.route('/line-promo/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def line_promo_edit(id):
+    if not require_admin():
+        return redirect(url_for('dashboard.index'))
+    tenant_id = current_user.tenant_id
+    row = PosLinePromoRule.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    zi = _line_promo_tzinfo(tenant_id)
+    products_list = Product.query.filter_by(tenant_id=tenant_id, aktif=True).order_by(Product.nama).all()
+    categories = ProductCategory.query.filter_by(tenant_id=tenant_id).order_by(ProductCategory.nama).all()
+
+    if request.method == 'POST':
+        nama = (request.form.get('nama') or '').strip()
+        scope = (request.form.get('scope') or row.scope).strip().lower()
+        if scope not in ('product', 'category'):
+            scope = row.scope
+        try:
+            discount_value = max(0.0, float((request.form.get('discount_value') or '0').replace(',', '.')))
+        except ValueError:
+            flash('Nilai diskon tidak valid.', 'danger')
+            return redirect(url_for('products.line_promo_edit', id=id))
+        md_raw = (request.form.get('max_discount') or '').strip()
+        max_discount = None
+        if md_raw:
+            try:
+                max_discount = max(0.0, float(md_raw.replace(',', '.')))
+            except ValueError:
+                flash('Maks diskon tidak valid.', 'danger')
+                return redirect(url_for('products.line_promo_edit', id=id))
+        try:
+            min_qty = max(0.01, float((request.form.get('min_qty') or '1').replace(',', '.')))
+        except ValueError:
+            flash('Min. qty tidak valid.', 'danger')
+            return redirect(url_for('products.line_promo_edit', id=id))
+        try:
+            priority = int((request.form.get('priority') or '0').strip() or '0')
+        except ValueError:
+            priority = 0
+        dtype = (request.form.get('discount_type') or 'percent').strip().lower()
+        if dtype not in ('percent', 'fixed'):
+            dtype = 'percent'
+        if dtype == 'percent' and discount_value > 100:
+            flash('Diskon persen maksimal 100.', 'danger')
+            return redirect(url_for('products.line_promo_edit', id=id))
+
+        pid = None
+        cid = None
+        if scope == 'product':
+            try:
+                pid = int(request.form.get('product_id') or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            if not pid or not Product.query.filter_by(id=pid, tenant_id=tenant_id).first():
+                flash('Pilih produk untuk scope produk.', 'danger')
+                return redirect(url_for('products.line_promo_edit', id=id))
+        else:
+            try:
+                cid = int(request.form.get('category_id') or 0)
+            except (TypeError, ValueError):
+                cid = 0
+            if not cid or not ProductCategory.query.filter_by(id=cid, tenant_id=tenant_id).first():
+                flash('Pilih kategori.', 'danger')
+                return redirect(url_for('products.line_promo_edit', id=id))
+
+        start_raw = (request.form.get('start_at') or '').strip()
+        end_raw = (request.form.get('end_at') or '').strip()
+        try:
+            start_naive = datetime.strptime(start_raw, '%Y-%m-%dT%H:%M')
+            end_naive = datetime.strptime(end_raw, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            flash('Format tanggal mulai/berakhir tidak valid.', 'danger')
+            return redirect(url_for('products.line_promo_edit', id=id))
+        if end_naive <= start_naive:
+            flash('Tanggal berakhir harus setelah tanggal mulai.', 'danger')
+            return redirect(url_for('products.line_promo_edit', id=id))
+        start_at = start_naive.replace(tzinfo=zi).astimezone(dt_timezone.utc).replace(tzinfo=None)
+        end_at = end_naive.replace(tzinfo=zi).astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+        row.nama = nama[:120] or row.nama
+        row.scope = scope
+        row.product_id = pid
+        row.category_id = cid
+        row.discount_type = dtype
+        row.discount_value = discount_value
+        row.max_discount = max_discount
+        row.min_qty = min_qty
+        row.priority = priority
+        row.start_at = start_at
+        row.end_at = end_at
+        row.aktif = 'aktif' in request.form
+        db.session.commit()
+        flash('Promo baris diperbarui.', 'success')
+        return redirect(url_for('products.line_promo_index'))
+
+    return render_template(
+        'products/line_promo_form.html',
+        rule=row,
+        products_list=products_list,
+        categories=categories,
+        default_start_at=None,
+        default_end_at=None,
+    )
+
+
+@products_bp.route('/line-promo/<int:id>/delete', methods=['POST'])
+@login_required
+def line_promo_delete(id):
+    if not require_admin():
+        return redirect(url_for('dashboard.index'))
+    tenant_id = current_user.tenant_id
+    row = PosLinePromoRule.query.filter_by(id=id, tenant_id=tenant_id).first_or_404()
+    db.session.delete(row)
+    db.session.commit()
+    flash('Promo baris dihapus.', 'warning')
+    return redirect(url_for('products.line_promo_index'))
