@@ -10,7 +10,8 @@ import subprocess
 from io import StringIO
 from urllib.parse import parse_qs, unquote, urlparse, urlunparse
 from functools import wraps
-from datetime import datetime, timedelta, time
+from datetime import date, datetime, timedelta, time, timezone
+from zoneinfo import ZoneInfo
 
 from flask import (
     Blueprint,
@@ -79,6 +80,11 @@ from ..models import (
     MarketplaceOrderStatusHistory,
     MARKETPLACE_ORDER_STATUSES,
     MARKETPLACE_ORDER_STATUS_LABELS,
+    Affiliate,
+    TenantAffiliateAttribution,
+    AffiliateCommission,
+    AffiliateClick,
+    AffiliateApplication,
 )
 from ..permissions import (
     PERMISSION_MODULES,
@@ -1412,6 +1418,14 @@ def view_tenant(id):
     onboarding_done = sum(1 for s in onboarding_steps if s['done'])
     onboarding_pct = int(100 * onboarding_done / len(onboarding_steps)) if onboarding_steps else 0
 
+    affiliate_attr = (
+        TenantAffiliateAttribution.query.options(
+            joinedload(TenantAffiliateAttribution.affiliate),
+        )
+        .filter_by(tenant_id=id)
+        .first()
+    )
+
     return render_template(
         'superadmin/view_tenant.html',
         tenant=tenant,
@@ -1437,6 +1451,7 @@ def view_tenant(id):
         onboarding_steps=onboarding_steps,
         onboarding_done=onboarding_done,
         onboarding_pct=onboarding_pct,
+        affiliate_attr=affiliate_attr,
     )
 
 
@@ -2631,7 +2646,11 @@ def leads_index():
         qq = _leads_apply_period(qq, period_filter, tz_id)
         return qq
 
-    query = _base_leads_query().order_by(LeadCapture.created_at.desc())
+    query = (
+        _base_leads_query()
+        .options(selectinload(LeadCapture.affiliate))
+        .order_by(LeadCapture.created_at.desc())
+    )
     total = query.count()
     total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
     if page > total_pages:
@@ -3234,8 +3253,15 @@ def billing_pay(id):
     inv.status = 'paid'
     inv.tanggal_bayar = datetime.utcnow()
     inv.metode_bayar = request.form.get('metode_bayar', 'transfer').strip()
+    from ..affiliate_service import record_commission_for_paid_invoice
+
+    comm_row = record_commission_for_paid_invoice(inv)
     _log_sa('invoice_paid', inv.tenant_id, detail=f'nomor={inv.nomor}')
     db.session.commit()
+    if comm_row:
+        from ..affiliate_service import notify_commission_created
+
+        notify_commission_created(comm_row.id)
     flash(f'Invoice {inv.nomor} ditandai lunas.', 'success')
     return _redirect_billing_back()
 
@@ -3759,3 +3785,609 @@ def announcement_delete(id):
     db.session.commit()
     flash('Pengumuman dihapus.', 'success')
     return redirect(url_for('superadmin.announcements_index'))
+
+
+# ─────────────────────────────────────────────────────────────
+# AFFILIATE PROGRAM
+# ─────────────────────────────────────────────────────────────
+
+AFFILIATE_PER_PAGE = 25
+
+
+def _affiliate_campaign_end_jakarta_to_utc_naive(d: date) -> datetime:
+    z = ZoneInfo('Asia/Jakarta')
+    local_end = datetime.combine(d, time(23, 59, 59), tzinfo=z)
+    return local_end.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _affiliate_campaign_utc_naive_to_jakarta_date_str(dt) -> str:
+    if not dt:
+        return ''
+    u = dt.replace(tzinfo=timezone.utc)
+    return u.astimezone(ZoneInfo('Asia/Jakarta')).strftime('%Y-%m-%d')
+
+
+@superadmin_bp.route('/affiliate')
+@login_required
+@superadmin_required
+def affiliate_dashboard():
+    from ..affiliate_service import load_affiliate_settings
+
+    settings = load_affiliate_settings()
+    df = (request.args.get('date_from') or request.args.get('from') or '').strip()
+    dto = (request.args.get('date_to') or request.args.get('to') or '').strip()
+
+    def _date_filter_comm(q):
+        if df:
+            try:
+                d0 = datetime.strptime(df[:10], '%Y-%m-%d')
+                q = q.filter(AffiliateCommission.created_at >= d0)
+            except ValueError:
+                pass
+        if dto:
+            try:
+                d1 = datetime.strptime(dto[:10], '%Y-%m-%d')
+                q = q.filter(AffiliateCommission.created_at <= datetime.combine(d1.date(), time(23, 59, 59)))
+            except ValueError:
+                pass
+        return q
+
+    n_aff_active = Affiliate.query.filter_by(aktif=True).count()
+    n_conversions = TenantAffiliateAttribution.query.count()
+    sum_pending = (
+        _date_filter_comm(
+            db.session.query(func.coalesce(func.sum(AffiliateCommission.commission_amount), 0))
+        )
+        .filter(AffiliateCommission.status.in_(('menunggu', 'disetujui')))
+        .scalar()
+        or 0
+    )
+    sum_paid = (
+        _date_filter_comm(
+            db.session.query(func.coalesce(func.sum(AffiliateCommission.commission_amount), 0))
+        )
+        .filter(AffiliateCommission.status == 'dibayar')
+        .scalar()
+        or 0
+    )
+    recent = (
+        _date_filter_comm(AffiliateCommission.query)
+        .options(
+            joinedload(AffiliateCommission.affiliate),
+            joinedload(AffiliateCommission.tenant),
+            joinedload(AffiliateCommission.invoice),
+        )
+        .order_by(AffiliateCommission.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    clicks_start = datetime.utcnow() - timedelta(days=30)
+    n_clicks_30d = AffiliateClick.query.filter(AffiliateClick.created_at >= clicks_start).count()
+
+    lookback_days = int(settings.get('abuse_wa_lookback_days') or 7)
+    from_dt = datetime.utcnow() - timedelta(days=lookback_days)
+    abuse_q = (
+        db.session.query(LeadCapture.no_wa).filter(
+            LeadCapture.affiliate_id.isnot(None),
+            LeadCapture.created_at >= from_dt,
+        )
+        .group_by(LeadCapture.no_wa)
+        .having(func.count(func.distinct(LeadCapture.affiliate_id)) > 1)
+    )
+    abuse_wa_count = abuse_q.count()
+
+    return render_template(
+        'superadmin/affiliate_dashboard.html',
+        settings=settings,
+        n_aff_active=n_aff_active,
+        n_conversions=n_conversions,
+        sum_pending=float(sum_pending),
+        sum_paid=float(sum_paid),
+        recent=recent,
+        date_from=df,
+        date_to=dto,
+        n_clicks_30d=n_clicks_30d,
+        abuse_wa_count=abuse_wa_count,
+        abuse_lookback_days=lookback_days,
+    )
+
+
+@superadmin_bp.route('/affiliate/partners', methods=['GET', 'POST'])
+@login_required
+@superadmin_required
+def affiliate_partners():
+    from ..affiliate_service import create_external_affiliate_user
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or '').strip()
+        if action == 'add_external':
+            from ..routes.admin import validate_username
+
+            nama = (request.form.get('nama_tampilan') or '').strip()
+            username = (request.form.get('username') or '').strip()
+            password = request.form.get('password') or ''
+            password2 = request.form.get('password2') or ''
+            email = (request.form.get('email') or '').strip()
+            telepon = (request.form.get('telepon') or '').strip()
+            if not nama or not username:
+                flash('Nama dan username wajib diisi.', 'danger')
+                return redirect(url_for('superadmin.affiliate_partners'))
+            u_ok, u_err = validate_username(username)
+            if u_err:
+                flash(u_err, 'danger')
+                return redirect(url_for('superadmin.affiliate_partners'))
+            username = u_ok
+            if len(password) < 8:
+                flash('Password minimal 8 karakter.', 'danger')
+                return redirect(url_for('superadmin.affiliate_partners'))
+            if password != password2:
+                flash('Konfirmasi password tidak sama.', 'danger')
+                return redirect(url_for('superadmin.affiliate_partners'))
+            aff, err = create_external_affiliate_user(
+                nama, username, password, email=email or None, telepon=telepon or None
+            )
+            if err:
+                flash(err, 'danger')
+                return redirect(url_for('superadmin.affiliate_partners'))
+            _log_sa('affiliate_external_create', detail=f'affiliate_id={aff.id} kode={aff.kode}')
+            db.session.commit()
+            flash(f'Afiliasi eksternal dibuat. Kode: {aff.kode}', 'success')
+            return redirect(url_for('superadmin.affiliate_partners'))
+
+    jenis_f = (request.args.get('jenis') or '').strip()
+    q = (request.args.get('q') or '').strip()
+    page = max(1, request.args.get('page', 1, type=int))
+    query = Affiliate.query.options(
+        joinedload(Affiliate.tenant),
+        joinedload(Affiliate.user),
+    )
+    if jenis_f in (Affiliate.JENIS_TENANT, Affiliate.JENIS_EKSTERNAL):
+        query = query.filter_by(jenis=jenis_f)
+    if q:
+        like = f'%{q}%'
+        query = query.filter(
+            or_(
+                Affiliate.kode.ilike(like),
+                Affiliate.nama_tampilan.ilike(like),
+                Affiliate.email.ilike(like),
+            )
+        )
+    total = query.count()
+    partners = (
+        query.order_by(Affiliate.created_at.desc())
+        .offset((page - 1) * AFFILIATE_PER_PAGE)
+        .limit(AFFILIATE_PER_PAGE)
+        .all()
+    )
+    total_pages = max(1, (total + AFFILIATE_PER_PAGE - 1) // AFFILIATE_PER_PAGE)
+    return render_template(
+        'superadmin/affiliate_partners.html',
+        partners=partners,
+        page=page,
+        total=total,
+        total_pages=total_pages,
+        jenis_f=jenis_f,
+        q=q,
+    )
+
+
+@superadmin_bp.route('/affiliate/partners/<int:id>/toggle', methods=['POST'])
+@login_required
+@superadmin_required
+def affiliate_partner_toggle(id):
+    aff = Affiliate.query.get_or_404(id)
+    aff.aktif = not aff.aktif
+    _log_sa('affiliate_toggle', detail=f'id={id} kode={aff.kode} aktif={aff.aktif}')
+    db.session.commit()
+    flash(f'Affiliate {aff.kode} {"diaktifkan" if aff.aktif else "dinonaktifkan"}.', 'success')
+    return redirect(url_for('superadmin.affiliate_partners'))
+
+
+@superadmin_bp.route('/affiliate/partners/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+@superadmin_required
+def affiliate_partner_edit(id):
+    aff = (
+        Affiliate.query.options(joinedload(Affiliate.tenant), joinedload(Affiliate.user))
+        .filter_by(id=id)
+        .first_or_404()
+    )
+    if request.method == 'POST':
+        nama = (request.form.get('nama_tampilan') or '').strip()[:120]
+        email = (request.form.get('email') or '').strip()[:120]
+        telepon = (request.form.get('telepon') or '').strip()[:30]
+        catatan = (request.form.get('catatan') or '').strip()
+        if not nama:
+            flash('Nama tampilan wajib diisi.', 'danger')
+            return redirect(url_for('superadmin.affiliate_partner_edit', id=id))
+        aff.nama_tampilan = nama
+        aff.email = email or None
+        aff.telepon = telepon or None
+        aff.catatan = catatan[:5000] if catatan else None
+        mode = (request.form.get('campaign_mode') or '').strip()
+        if mode == 'unlimited':
+            aff.campaign_expires_at = None
+        else:
+            raw_date = (request.form.get('campaign_expires_date') or '').strip()[:10]
+            if not raw_date:
+                flash('Pilih tanggal akhir kampanye, atau pilih "Tanpa batas".', 'danger')
+                return redirect(url_for('superadmin.affiliate_partner_edit', id=id))
+            try:
+                d = datetime.strptime(raw_date, '%Y-%m-%d').date()
+                aff.campaign_expires_at = _affiliate_campaign_end_jakarta_to_utc_naive(d)
+            except ValueError:
+                flash('Tanggal akhir kampanye tidak valid.', 'danger')
+                return redirect(url_for('superadmin.affiliate_partner_edit', id=id))
+        _log_sa('affiliate_partner_edit', detail=f'id={id} kode={aff.kode}')
+        db.session.commit()
+        flash('Data partner afiliasi disimpan.', 'success')
+        return redirect(url_for('superadmin.affiliate_partners'))
+
+    campaign_date = _affiliate_campaign_utc_naive_to_jakarta_date_str(aff.campaign_expires_at)
+    return render_template(
+        'superadmin/affiliate_partner_edit.html',
+        aff=aff,
+        campaign_date=campaign_date,
+    )
+
+
+@superadmin_bp.route('/affiliate/commissions')
+@login_required
+@superadmin_required
+def affiliate_commissions():
+    status_f = (request.args.get('status') or '').strip()
+    q = (request.args.get('q') or '').strip()
+    df = (request.args.get('date_from') or request.args.get('from') or '').strip()
+    dto = (request.args.get('date_to') or request.args.get('to') or '').strip()
+    page = max(1, request.args.get('page', 1, type=int))
+    affiliate_id_f = request.args.get('affiliate_id', type=int)
+    aff_filter = Affiliate.query.get(affiliate_id_f) if affiliate_id_f else None
+    if affiliate_id_f and not aff_filter:
+        affiliate_id_f = None
+    query = AffiliateCommission.query.options(
+        joinedload(AffiliateCommission.affiliate),
+        joinedload(AffiliateCommission.tenant),
+        joinedload(AffiliateCommission.invoice),
+    )
+    if affiliate_id_f:
+        query = query.filter(AffiliateCommission.affiliate_id == affiliate_id_f)
+    if status_f in ('menunggu', 'disetujui', 'dibayar', 'dibatalkan'):
+        query = query.filter(AffiliateCommission.status == status_f)
+    if df:
+        try:
+            d0 = datetime.strptime(df[:10], '%Y-%m-%d')
+            query = query.filter(AffiliateCommission.created_at >= d0)
+        except ValueError:
+            pass
+    if dto:
+        try:
+            d1 = datetime.strptime(dto[:10], '%Y-%m-%d')
+            query = query.filter(AffiliateCommission.created_at <= datetime.combine(d1.date(), time(23, 59, 59)))
+        except ValueError:
+            pass
+    if q:
+        like = f'%{q}%'
+        query = (
+            query.join(Tenant, Tenant.id == AffiliateCommission.tenant_id)
+            .outerjoin(TenantInvoice, TenantInvoice.id == AffiliateCommission.tenant_invoice_id)
+            .filter(
+                or_(
+                    Tenant.nama.ilike(like),
+                    Tenant.kode.ilike(like),
+                    TenantInvoice.nomor.ilike(like),
+                )
+            )
+        )
+    total = query.count()
+    rows = (
+        query.order_by(AffiliateCommission.created_at.desc())
+        .offset((page - 1) * AFFILIATE_PER_PAGE)
+        .limit(AFFILIATE_PER_PAGE)
+        .all()
+    )
+    total_pages = max(1, (total + AFFILIATE_PER_PAGE - 1) // AFFILIATE_PER_PAGE)
+    return render_template(
+        'superadmin/affiliate_commissions.html',
+        rows=rows,
+        page=page,
+        total=total,
+        total_pages=total_pages,
+        status_f=status_f,
+        q=q,
+        date_from=df,
+        date_to=dto,
+        affiliate_id_f=affiliate_id_f,
+        aff_filter=aff_filter,
+    )
+
+
+@superadmin_bp.route('/affiliate/commissions/export')
+@login_required
+@superadmin_required
+def affiliate_commissions_export():
+    import csv
+    from io import StringIO
+
+    from flask import Response
+
+    query = AffiliateCommission.query.options(
+        joinedload(AffiliateCommission.affiliate),
+        joinedload(AffiliateCommission.tenant),
+        joinedload(AffiliateCommission.invoice),
+    ).order_by(AffiliateCommission.created_at.desc())
+    df = (request.args.get('date_from') or request.args.get('from') or '').strip()
+    dto = (request.args.get('date_to') or request.args.get('to') or '').strip()
+    st = (request.args.get('status') or '').strip()
+    q_export = (request.args.get('q') or '').strip()
+    aff_export = request.args.get('affiliate_id', type=int)
+    if aff_export and Affiliate.query.get(aff_export):
+        query = query.filter(AffiliateCommission.affiliate_id == aff_export)
+    if st in ('menunggu', 'disetujui', 'dibayar', 'dibatalkan'):
+        query = query.filter(AffiliateCommission.status == st)
+    if df:
+        try:
+            d0 = datetime.strptime(df[:10], '%Y-%m-%d')
+            query = query.filter(AffiliateCommission.created_at >= d0)
+        except ValueError:
+            pass
+    if dto:
+        try:
+            d1 = datetime.strptime(dto[:10], '%Y-%m-%d')
+            query = query.filter(AffiliateCommission.created_at <= datetime.combine(d1.date(), time(23, 59, 59)))
+        except ValueError:
+            pass
+    if q_export:
+        like = f'%{q_export}%'
+        query = (
+            query.join(Tenant, Tenant.id == AffiliateCommission.tenant_id)
+            .outerjoin(TenantInvoice, TenantInvoice.id == AffiliateCommission.tenant_invoice_id)
+            .filter(
+                or_(
+                    Tenant.nama.ilike(like),
+                    Tenant.kode.ilike(like),
+                    TenantInvoice.nomor.ilike(like),
+                )
+            )
+        )
+    rows = query.limit(5000).all()
+    buf = StringIO()
+    w = csv.writer(buf)
+    w.writerow(
+        [
+            'id',
+            'created_at',
+            'affiliate_kode',
+            'tenant',
+            'invoice',
+            'base',
+            'pct',
+            'amount',
+            'status',
+            'approved_at',
+            'paid_at',
+            'payout_metode',
+            'payout_referensi',
+        ]
+    )
+    for r in rows:
+        w.writerow(
+            [
+                r.id,
+                r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '',
+                r.affiliate.kode if r.affiliate else '',
+                r.tenant.nama if r.tenant else '',
+                r.invoice.nomor if r.invoice else '',
+                r.base_amount,
+                r.commission_pct,
+                r.commission_amount,
+                r.status,
+                r.approved_at.strftime('%Y-%m-%d %H:%M') if r.approved_at else '',
+                r.paid_at.strftime('%Y-%m-%d %H:%M') if r.paid_at else '',
+                r.payout_metode or '',
+                (r.payout_referensi or '').replace('\n', ' ')[:500],
+            ]
+        )
+    out = buf.getvalue()
+    return Response(
+        out,
+        mimetype='text/csv; charset=utf-8',
+        headers={'Content-Disposition': 'attachment; filename=affiliate_commissions.csv'},
+    )
+
+
+@superadmin_bp.route('/affiliate/partners/export')
+@login_required
+@superadmin_required
+def affiliate_partners_export():
+    import csv
+    from io import StringIO
+
+    from flask import Response
+
+    partners = (
+        Affiliate.query.options(joinedload(Affiliate.tenant), joinedload(Affiliate.user))
+        .order_by(Affiliate.created_at.desc())
+        .all()
+    )
+    buf = StringIO()
+    w = csv.writer(buf)
+    w.writerow(['id', 'kode', 'jenis', 'nama', 'email', 'telepon', 'aktif', 'campaign_expires_at', 'tenant', 'username'])
+    for p in partners:
+        w.writerow(
+            [
+                p.id,
+                p.kode,
+                p.jenis,
+                p.nama_tampilan,
+                p.email or '',
+                p.telepon or '',
+                '1' if p.aktif else '0',
+                p.campaign_expires_at.strftime('%Y-%m-%d') if p.campaign_expires_at else '',
+                p.tenant.nama if p.tenant else '',
+                p.user.username if p.user else '',
+            ]
+        )
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv; charset=utf-8',
+        headers={'Content-Disposition': 'attachment; filename=affiliate_partners.csv'},
+    )
+
+
+@superadmin_bp.route('/affiliate/applications')
+@login_required
+@superadmin_required
+def affiliate_applications():
+    apps = (
+        AffiliateApplication.query.options(joinedload(AffiliateApplication.reviewer))
+        .order_by(AffiliateApplication.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return render_template('superadmin/affiliate_applications.html', applications=apps)
+
+
+@superadmin_bp.route('/affiliate/applications/<int:id>/approve', methods=['POST'])
+@login_required
+@superadmin_required
+def affiliate_application_approve(id):
+    from ..affiliate_service import create_external_affiliate_user_hashed
+
+    app_row = AffiliateApplication.query.get_or_404(id)
+    if app_row.status != 'pending':
+        flash('Lamaran sudah diproses.', 'warning')
+        return redirect(url_for('superadmin.affiliate_applications'))
+    aff, err = create_external_affiliate_user_hashed(
+        app_row.nama,
+        app_row.username,
+        app_row.password_hash,
+        email=app_row.email,
+        telepon=app_row.telepon,
+    )
+    if err:
+        flash(err, 'danger')
+        return redirect(url_for('superadmin.affiliate_applications'))
+    app_row.status = 'approved'
+    app_row.reviewed_at = datetime.utcnow()
+    app_row.reviewer_user_id = current_user.id
+    app_row.created_affiliate_id = aff.id
+    _log_sa('affiliate_application_approve', detail=f'application_id={id} affiliate_id={aff.id}')
+    db.session.commit()
+    flash('Lamaran disetujui; akun afiliasi aktif.', 'success')
+    return redirect(url_for('superadmin.affiliate_applications'))
+
+
+@superadmin_bp.route('/affiliate/applications/<int:id>/reject', methods=['POST'])
+@login_required
+@superadmin_required
+def affiliate_application_reject(id):
+    app_row = AffiliateApplication.query.get_or_404(id)
+    if app_row.status != 'pending':
+        flash('Lamaran sudah diproses.', 'warning')
+        return redirect(url_for('superadmin.affiliate_applications'))
+    app_row.status = 'rejected'
+    app_row.reviewed_at = datetime.utcnow()
+    app_row.reviewer_user_id = current_user.id
+    app_row.catatan_admin = (request.form.get('catatan') or '').strip()[:2000]
+    _log_sa('affiliate_application_reject', detail=f'application_id={id}')
+    db.session.commit()
+    flash('Lamaran ditolak.', 'success')
+    return redirect(url_for('superadmin.affiliate_applications'))
+
+
+@superadmin_bp.route('/affiliate/commissions/<int:id>/pay', methods=['POST'])
+@login_required
+@superadmin_required
+def affiliate_commission_mark_paid(id):
+    row = AffiliateCommission.query.get_or_404(id)
+    if row.status == 'dibayar':
+        flash('Komisi ini sudah ditandai dibayar.', 'info')
+        return redirect(url_for('superadmin.affiliate_commissions'))
+    if row.status == 'dibatalkan':
+        flash('Komisi dibatalkan; tidak bisa ditandai dibayar.', 'warning')
+        return redirect(url_for('superadmin.affiliate_commissions'))
+    if row.status != 'disetujui':
+        flash('Hanya komisi berstatus disetujui yang bisa ditandai dibayar.', 'warning')
+        return redirect(url_for('superadmin.affiliate_commissions'))
+    row.status = 'dibayar'
+    row.paid_at = datetime.utcnow()
+    row.payout_metode = (request.form.get('payout_metode') or 'transfer').strip()[:40] or 'transfer'
+    row.payout_referensi = (request.form.get('payout_referensi') or '').strip() or None
+    catatan = (request.form.get('catatan') or '').strip()
+    if catatan:
+        row.catatan = (row.catatan or '') + '\n' + catatan if row.catatan else catatan
+    _log_sa('affiliate_commission_paid', row.tenant_id, detail=f'commission_id={id} affiliate_id={row.affiliate_id}')
+    db.session.commit()
+    flash('Komisi ditandai dibayar.', 'success')
+    return redirect(url_for('superadmin.affiliate_commissions'))
+
+
+@superadmin_bp.route('/affiliate/commissions/<int:id>/approve', methods=['POST'])
+@login_required
+@superadmin_required
+def affiliate_commission_approve(id):
+    row = AffiliateCommission.query.get_or_404(id)
+    if row.status != 'menunggu':
+        flash('Hanya status menunggu yang bisa disetujui.', 'info')
+        return redirect(url_for('superadmin.affiliate_commissions'))
+    row.status = 'disetujui'
+    row.approved_at = datetime.utcnow()
+    _log_sa('affiliate_commission_approve', row.tenant_id, detail=f'commission_id={id}')
+    db.session.commit()
+    flash('Komisi disetujui (siap dibayar).', 'success')
+    return redirect(url_for('superadmin.affiliate_commissions'))
+
+
+@superadmin_bp.route('/affiliate/settings', methods=['GET', 'POST'])
+@login_required
+@superadmin_required
+def affiliate_settings():
+    from ..affiliate_service import load_affiliate_settings, save_affiliate_settings
+
+    if request.method == 'POST':
+        try:
+            pct_tenant = float(request.form.get('pct_tenant') or 0)
+            pct_eksternal = float(request.form.get('pct_eksternal') or 0)
+            min_payout = float(request.form.get('min_payout') or 0)
+        except (TypeError, ValueError):
+            flash('Persentase / minimum payout harus angka.', 'danger')
+            return redirect(url_for('superadmin.affiliate_settings'))
+        program_enabled = request.form.get('program_enabled') == '1'
+        catatan_platform = (request.form.get('catatan_platform') or '').strip()
+        require_commission_approval = request.form.get('require_commission_approval') == '1'
+        webhook_url = (request.form.get('webhook_url') or '').strip()
+        prev = load_affiliate_settings()
+        webhook_secret_in = (request.form.get('webhook_secret') or '').strip()
+        webhook_secret = webhook_secret_in if webhook_secret_in else (prev.get('webhook_secret') or '')
+        try:
+            trial_rate_per_hour = int(float(request.form.get('trial_rate_per_hour') or 30))
+            affiliate_form_rate_per_hour = int(float(request.form.get('affiliate_form_rate_per_hour') or 15))
+            abuse_wa_lookback_days = int(float(request.form.get('abuse_wa_lookback_days') or 7))
+        except (TypeError, ValueError):
+            flash('Nilai rate limit / abuse harus angka bulat.', 'danger')
+            return redirect(url_for('superadmin.affiliate_settings'))
+        terms_affiliate_text = (request.form.get('terms_affiliate_text') or '').strip()
+        terms_application_text = (request.form.get('terms_application_text') or '').strip()
+        save_affiliate_settings(
+            {
+                'pct_tenant': max(0.0, min(100.0, pct_tenant)),
+                'pct_eksternal': max(0.0, min(100.0, pct_eksternal)),
+                'min_payout': max(0.0, min_payout),
+                'program_enabled': program_enabled,
+                'catatan_platform': catatan_platform[:2000],
+                'require_commission_approval': require_commission_approval,
+                'webhook_url': webhook_url[:500],
+                'webhook_secret': webhook_secret[:200],
+                'trial_rate_per_hour': max(1, min(500, trial_rate_per_hour)),
+                'affiliate_form_rate_per_hour': max(1, min(200, affiliate_form_rate_per_hour)),
+                'abuse_wa_lookback_days': max(1, min(90, abuse_wa_lookback_days)),
+                'terms_affiliate_text': terms_affiliate_text[:8000],
+                'terms_application_text': terms_application_text[:8000],
+            }
+        )
+        _log_sa('affiliate_settings_update')
+        db.session.commit()
+        flash('Pengaturan afiliasi disimpan.', 'success')
+        return redirect(url_for('superadmin.affiliate_settings'))
+    settings = load_affiliate_settings()
+    return render_template('superadmin/affiliate_settings.html', settings=settings)

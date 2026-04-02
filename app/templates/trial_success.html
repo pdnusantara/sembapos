@@ -6,6 +6,11 @@
   <meta name="theme-color" content="#0f0f1a">
   <meta name="robots" content="noindex,follow">
   <title>Akun trial siap — SembaPOS</title>
+  {% if affiliate_app %}
+  <script>
+  (function(){try{var s=localStorage.getItem('app-theme');var p=s||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',p);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+  </script>
+  {% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
   {% set favicon_static_path = platform_logo or none %}
   {% include 'includes/favicon.html' %}
@@ -15,20 +20,31 @@
     .cred-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; }
   </style>
 </head>
-<body>
+<body class="{% if affiliate_app %}aff-app-body{% endif %}">
+{% if affiliate_app %}
+{% set aff_app_page_title = 'Akun trial siap' %}
+<div class="aff-app aff-app--trial">
+{% include 'affiliate/_app_shell_start.html' %}
+  {% if trial_success_mode == 'affiliate_portal' %}
+  <p class="aff-trial-success-lead">Tenant trial ini <strong>akun terpisah</strong> dari afiliasi Anda. Simpan kredensial di bawah — halaman ini tidak ditampilkan lagi.</p>
+  {% endif %}
+{% else %}
 <div class="login-page">
   <div class="login-bg"></div>
   <div class="login-card" style="max-width:480px;">
     <div class="login-logo">
       <div class="logo-circle">✅</div>
       <h1>Akun trial siap dipakai</h1>
-      {% if current_user.is_authenticated %}
+      {% if trial_success_mode == 'admin_affiliate' %}
+      <p style="color:var(--text-muted);font-size:13px;line-height:1.5;margin-bottom:8px;">Anda masih masuk sebagai <strong>admin toko Anda saat ini</strong>. Tenant trial di bawah adalah akun <strong>terpisah</strong>. Gunakan tombol hijau untuk langsung membuka dashboard tenant baru (sekali ketuk), atau salin kredensial untuk masuk manual nanti.</p>
+      {% elif current_user.is_authenticated %}
       <p style="color:var(--success);font-size:13px;font-weight:600;margin-bottom:8px;">Anda sudah masuk ke akun ini — klik tombol di bawah untuk membuka dashboard (tanpa ketik password lagi).</p>
       {% else %}
       <p style="color:var(--warning);font-size:13px;font-weight:600;margin-bottom:8px;">Login otomatis tidak tersedia — gunakan username &amp; password di bawah di halaman masuk.</p>
       {% endif %}
       <p style="color:var(--warning);font-size:13px;font-weight:600;">Simpan username &amp; password untuk login lain kali. Halaman ini tidak ditampilkan lagi.</p>
     </div>
+{% endif %}
 
     <div class="form-group">
       <div class="cred-label">Toko</div>
@@ -56,16 +72,30 @@
       Masa trial berlaku sampai: <strong style="color:var(--text-light);">{{ expired_label }}</strong>
     </p>
 
-    {% if current_user.is_authenticated %}
+    {% if trial_success_mode == 'admin_affiliate' %}
+    <a href="{{ url_for('admin.open_registered_trial_dashboard') }}" class="btn btn-primary btn-block btn-lg" style="margin-bottom:10px;">Buka dashboard tenant baru</a>
+    <a href="{{ url_for('admin.affiliate') }}" class="btn btn-outline btn-block" style="margin-bottom:10px;">Kembali ke program afiliasi</a>
+    <p style="text-align:center;font-size:12px;color:var(--text-muted);margin-bottom:8px;">Tetap di akun admin toko Anda: <a href="{{ url_for('dashboard.index') }}" style="color:var(--primary-light);">buka dashboard toko saya</a></p>
+    {% elif trial_success_mode == 'affiliate_portal' %}
+    <a href="{{ url_for('affiliate.dashboard') }}" class="btn btn-primary btn-block btn-lg" style="margin-bottom:10px;min-height:48px;">Kembali ke program afiliasi</a>
+    <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline btn-block" style="margin-bottom:10px;min-height:44px;">Buka dashboard</a>
+    {% elif current_user.is_authenticated %}
     <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary btn-block btn-lg" style="margin-bottom:10px;">Buka dashboard</a>
     {% else %}
     <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-block btn-lg" style="margin-bottom:10px;">Masuk ke SembaPOS</a>
     {% endif %}
+    {% if not affiliate_app %}
     <p style="text-align:center;font-size:13px;">
       <a href="{{ url_for('landing.index') }}" style="color:var(--primary-light);">← Beranda</a>
     </p>
+    {% endif %}
+
+{% if affiliate_app %}
+{% include 'affiliate/_app_shell_end.html' %}
+{% else %}
   </div>
 </div>
+{% endif %}
 <script>
 function copyText(id) {
   var el = document.getElementById(id);

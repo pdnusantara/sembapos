@@ -187,6 +187,11 @@ def register_module_guards():
                 return None
             if not current_user.is_authenticated:
                 return None
+            if getattr(current_user, 'role', None) == 'affiliate':
+                from flask import redirect, url_for, flash
+
+                flash('Akun afiliasi tidak mengakses modul ini.', 'warning')
+                return redirect(url_for('affiliate.dashboard'))
             if getattr(current_user, 'is_superadmin', False):
                 return None
             if getattr(current_user, 'tenant_id', None) is None:
@@ -218,6 +223,11 @@ def register_module_guards():
             return None
         if not current_user.is_authenticated:
             return None
+        if getattr(current_user, 'role', None) == 'affiliate':
+            from flask import redirect, url_for, flash
+
+            flash('Akun afiliasi tidak mengakses modul ini.', 'warning')
+            return redirect(url_for('affiliate.dashboard'))
         if getattr(current_user, 'is_superadmin', False):
             return None
         if getattr(current_user, 'tenant_id', None) is None:

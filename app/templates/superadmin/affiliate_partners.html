@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Partner afiliasi — Super Admin{% endblock %}
+{% block page_title %}Partner afiliasi{% endblock %}
+{% block page_sub %}Tenant &amp; eksternal{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.sa_dashboard'), false),
+  ('Afiliasi', url_for('superadmin.affiliate_dashboard'), false),
+  ('Partner', '', true),
+]) }}
+
+<details class="card sa-aff-partner-add-card">
+  <summary class="sa-aff-partner-add-card__summary">
+    <div>
+      <div class="card-title">Tambah afiliasi eksternal</div>
+      <div class="card-subtitle">Akun khusus dashboard <code>/affiliate</code> — bukan tenant.</div>
+    </div>
+    <span class="sa-aff-partner-add-card__chev" aria-hidden="true">▼</span>
+  </summary>
+  <div class="sa-aff-partner-add-card__body">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="action" value="add_external"/>
+      <div class="sa-aff-partner-form-grid">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Nama tampilan *</label>
+          <input type="text" name="nama_tampilan" class="form-control" required maxlength="120"/>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Username *</label>
+          <input type="text" name="username" class="form-control" required maxlength="50" autocomplete="off"/>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Password * (min 8)</label>
+          <input type="password" name="password" class="form-control" required minlength="8" autocomplete="new-password"/>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Ulangi password *</label>
+          <input type="password" name="password2" class="form-control" required minlength="8" autocomplete="new-password"/>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Email</label>
+          <input type="email" name="email" class="form-control" maxlength="120"/>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Telepon</label>
+          <input type="text" name="telepon" class="form-control" maxlength="30"/>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top:14px;">Buat partner</button>
+    </form>
+  </div>
+</details>
+
+<div class="card sa-affiliate-filter-card" style="margin-bottom:12px;">
+  <form method="get" action="{{ url_for('superadmin.affiliate_partners') }}" class="sa-affiliate-filter__form" aria-label="Filter partner">
+    <div class="form-group">
+      <label class="form-label" for="aff_part_jenis">Jenis</label>
+      <select id="aff_part_jenis" name="jenis" class="form-control">
+        <option value="">Semua</option>
+        <option value="tenant" {% if jenis_f == 'tenant' %}selected{% endif %}>tenant</option>
+        <option value="eksternal" {% if jenis_f == 'eksternal' %}selected{% endif %}>eksternal</option>
+      </select>
+    </div>
+    <div class="form-group sa-affiliate-filter__grow">
+      <label class="form-label" for="aff_part_q">Cari</label>
+      <input id="aff_part_q" type="search" name="q" value="{{ q }}" class="form-control" placeholder="Kode, nama, email…"/>
+    </div>
+    <div class="sa-affiliate-filter__actions sa-affiliate-filter__actions--push">
+      <button type="submit" class="btn btn-outline btn-sm">Terapkan</button>
+      <a href="{{ url_for('superadmin.affiliate_partners') }}" class="btn btn-outline btn-sm">Reset</a>
+      <a href="{{ url_for('superadmin.affiliate_partners_export') }}" class="btn btn-primary btn-sm">Export CSV</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Daftar partner ({{ total }})</div>
+    <div class="card-subtitle">Satu menu <strong>Aksi</strong> per baris — salin link, komisi, ubah, dll.</div>
+  </div>
+  <div class="table-wrapper" style="padding:0 16px 16px;">
+    <table class="table sa-aff-partners-table">
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Jenis</th>
+          <th>Nama</th>
+          <th>Tenant / user</th>
+          <th>Status</th>
+          <th style="width:1%;text-align:right;white-space:nowrap;">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in partners %}
+        {% set ref_url = request.url_root.rstrip('/') ~ url_for('landing.trial_register') ~ '?ref=' ~ (p.kode|urlencode) %}
+        {% if p.jenis == 'tenant' and p.tenant %}
+          {% set tenant_label = p.tenant.nama ~ ' (' ~ p.tenant.kode ~ ')' %}
+        {% elif p.jenis == 'eksternal' and p.user %}
+          {% set tenant_label = '@' ~ p.user.username %}
+        {% else %}
+          {% set tenant_label = '—' %}
+        {% endif %}
+        <tr>
+          <td><code>{{ p.kode }}</code></td>
+          <td><span class="sa-aff-partner-jenis">{{ p.jenis }}</span></td>
+          <td>{{ p.nama_tampilan or '—' }}</td>
+          <td><span class="sa-aff-partner-tenant" title="{{ tenant_label|e }}">{{ tenant_label }}</span></td>
+          <td>{% if p.aktif %}<span class="badge badge-success">Aktif</span>{% else %}<span class="badge badge-danger">Nonaktif</span>{% endif %}</td>
+          <td class="sa-aff-partner-actions">
+            <details class="sa-aff-action-menu">
+              <summary class="sa-aff-action-menu__trigger">Aksi <span aria-hidden="true">▾</span></summary>
+              <div class="sa-aff-action-menu__panel" role="menu">
+                <button type="button" class="sa-aff-action-menu__item" data-copy-ref="{{ ref_url }}" role="menuitem">Salin link referral</button>
+                <a href="{{ url_for('superadmin.affiliate_commissions', affiliate_id=p.id) }}" class="sa-aff-action-menu__item" role="menuitem">Lihat komisi</a>
+                <a href="{{ url_for('superadmin.affiliate_partner_edit', id=p.id) }}" class="sa-aff-action-menu__item" role="menuitem">Ubah data</a>
+                {% if p.jenis == 'tenant' and p.tenant_id %}
+                <a href="{{ url_for('superadmin.view_tenant', id=p.tenant_id) }}" class="sa-aff-action-menu__item" role="menuitem">Detail tenant</a>
+                {% endif %}
+                <div class="sa-aff-action-menu__sep" role="separator"></div>
+                <form method="POST" action="{{ url_for('superadmin.affiliate_partner_toggle', id=p.id) }}" class="sa-aff-action-menu__form" onsubmit="return confirm('Ubah status aktif partner ini?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <button type="submit" class="sa-aff-action-menu__item sa-aff-action-menu__item--danger" role="menuitem">{% if p.aktif %}Nonaktifkan{% else %}Aktifkan{% endif %}</button>
+                </form>
+              </div>
+            </details>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted">Belum ada partner.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if total_pages > 1 %}
+  <div style="padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    {% if page > 1 %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.affiliate_partners', page=page-1, jenis=jenis_f or none, q=q or none) }}">← Sebelumnya</a>
+    {% endif %}
+    <span class="text-muted">Halaman {{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.affiliate_partners', page=page+1, jenis=jenis_f or none, q=q or none) }}">Berikutnya →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+<script>
+(function() {
+  document.querySelectorAll('.sa-aff-action-menu').forEach(function(d) {
+    d.addEventListener('toggle', function() {
+      if (d.open) {
+        document.querySelectorAll('.sa-aff-action-menu').forEach(function(o) {
+          if (o !== d) o.open = false;
+        });
+      }
+    });
+  });
+  document.querySelectorAll('[data-copy-ref]').forEach(function(btn) {
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var u = btn.getAttribute('data-copy-ref');
+      if (!u) return;
+      var done = function() {
+        var t = btn.textContent;
+        btn.textContent = 'Disalin!';
+        setTimeout(function() { btn.textContent = t; }, 1400);
+        var det = btn.closest('details');
+        if (det) det.open = false;
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(u).then(done);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = u;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        done();
+      }
+    });
+  });
+  document.addEventListener('click', function(ev) {
+    if (!ev.target.closest('.sa-aff-action-menu')) {
+      document.querySelectorAll('.sa-aff-action-menu').forEach(function(d) { d.open = false; });
+    }
+  });
+})();
+</script>
+{% endblock %}

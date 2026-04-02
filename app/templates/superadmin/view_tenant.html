@@ -66,6 +66,19 @@
   </div>
 </section>
 
+{% if affiliate_attr and affiliate_attr.affiliate %}
+<div class="card mb-3">
+  <div class="card-header">
+    <div class="card-title">Afiliasi</div>
+    <div class="card-subtitle">Tenant ini masuk lewat program referral.</div>
+  </div>
+  <div style="padding:16px 18px;">
+    <p style="margin:0 0 8px;">Kode affiliate: <code>{{ affiliate_attr.affiliate.kode }}</code> · {{ affiliate_attr.affiliate.nama_tampilan or '—' }}</p>
+    <p class="text-muted" style="margin:0;font-size:13px;">Jenis: <strong>{{ affiliate_attr.affiliate.jenis }}</strong> · Sumber: {{ affiliate_attr.sumber }} · {{ affiliate_attr.attributed_at.strftime('%d/%m/%Y %H:%M') }} UTC</p>
+  </div>
+</div>
+{% endif %}
+
 {% if tenant.subscription %}
 <div class="card mb-3">
   <div class="card-header">

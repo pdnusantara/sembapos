@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+{% block title %}Program afiliasi — {{ tenant.nama }}{% endblock %}
+{% block page_title %}🔗 Program afiliasi{% endblock %}
+{% block page_sub %}Komisi berulang dari langganan tenant yang Anda undang{% endblock %}
+
+{% block content %}
+<div class="admin-affiliate-page">
+  {% if not settings.get('program_enabled') %}
+  <div class="alert alert-warning admin-affiliate-page__alert">Program afiliasi sedang dinonaktifkan oleh platform. Komisi baru tidak dihitung sampai diaktifkan kembali.</div>
+  {% endif %}
+
+  <header class="admin-aff-hero">
+    <div class="admin-aff-hero__inner">
+      <p class="admin-aff-hero__eyebrow">Program afiliasi tenant</p>
+      <h2 class="admin-aff-hero__title">Undang tenant baru, komisi mengalir tiap perpanjang langganan</h2>
+      <p class="admin-aff-hero__lead">Toko Anda mendapat <strong>{{ settings.get('pct_tenant', 0) }}%</strong> dari nilai invoice langganan setiap tenant yang teratribusi ke kode referral — tidak sekali, tapi setiap mereka membayar.</p>
+      <div class="admin-aff-hero__chips" role="group" aria-label="Ringkasan program">
+        <span class="admin-aff-chip">Komisi {{ settings.get('pct_tenant', 0) }}%</span>
+        <span class="admin-aff-chip admin-aff-chip--code" title="Kode referral"><span class="admin-aff-chip__lbl">Kode</span> <code>{{ profile.kode }}</code></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="admin-aff-grid-features">
+    <section class="admin-aff-feature-card" aria-labelledby="adm-aff-link-h">
+      <div class="admin-aff-feature-card__head">
+        <span class="admin-aff-feature-card__icon" aria-hidden="true">🔗</span>
+        <div>
+          <h2 id="adm-aff-link-h" class="admin-aff-feature-card__title">Link undangan</h2>
+          <p class="admin-aff-feature-card__hint">Bagikan ke calon tenant. Mereka memakai link ini saat daftar trial — atribusi otomatis ke kode Anda.</p>
+        </div>
+      </div>
+      <div class="sa-affiliate-ref-row admin-aff-ref-row">
+        <input type="text" readonly class="form-control admin-aff-ref-input" id="tenantRefLink" value="{{ referral_link }}" aria-label="Link referral">
+        <button type="button" class="btn btn-primary admin-aff-ref-row__btn" id="tenantRefCopyBtn">Salin link</button>
+      </div>
+    </section>
+
+    <section class="admin-aff-feature-card admin-aff-feature-card--accent" aria-labelledby="adm-aff-reg-h">
+      <div class="admin-aff-feature-card__head">
+        <span class="admin-aff-feature-card__icon" aria-hidden="true">📝</span>
+        <div>
+          <h2 id="adm-aff-reg-h" class="admin-aff-feature-card__title">Daftar tenant tanpa link</h2>
+          <p class="admin-aff-feature-card__hint">Formulir sama seperti trial publik — data tenant baru langsung terikat ke referral toko Anda.</p>
+        </div>
+      </div>
+      <a href="{{ url_for('admin.register_tenant_affiliate') }}" class="btn btn-primary admin-aff-cta-btn">Buka formulir daftar tenant</a>
+    </section>
+  </div>
+
+  <section class="admin-aff-summary" aria-labelledby="adm-aff-stats-h">
+    <div class="admin-aff-summary-head">
+      <h2 id="adm-aff-stats-h" class="admin-aff-summary-title">Ringkasan</h2>
+      <p class="admin-aff-summary-intro">Tenant = toko yang teratribusi ke referral Anda. Nominal komisi mengikuti status pencatatan di platform: menunggu persetujuan → disetujui (siap dibayar) → dibayar.</p>
+    </div>
+    <div class="admin-aff-summary-grid" role="list">
+      <article class="admin-aff-summary-card admin-aff-summary-card--tenant" role="listitem">
+        <span class="admin-aff-summary-card__ico" aria-hidden="true">🏪</span>
+        <div class="admin-aff-summary-card__body">
+          <div class="admin-aff-summary-card__val">{{ ref_count }}</div>
+          <div class="admin-aff-summary-card__lab">Tenant terundang</div>
+          <p class="admin-aff-summary-card__hint">Jumlah tenant dengan atribusi ke kode referral toko ini.</p>
+        </div>
+      </article>
+      <article class="admin-aff-summary-card admin-aff-summary-card--wait" role="listitem">
+        <span class="admin-aff-summary-card__ico" aria-hidden="true">📋</span>
+        <div class="admin-aff-summary-card__body">
+          <div class="admin-aff-summary-card__val admin-aff-summary-card__val--money">Rp {{ '{:,.0f}'.format(aff_comm_stats.sum_menunggu).replace(',', '.') }}</div>
+          <div class="admin-aff-summary-card__lab">Menunggu persetujuan</div>
+          <p class="admin-aff-summary-card__meta">{{ aff_comm_stats.n_menunggu }} entri · belum disetujui admin</p>
+        </div>
+      </article>
+      <article class="admin-aff-summary-card admin-aff-summary-card--ready" role="listitem">
+        <span class="admin-aff-summary-card__ico" aria-hidden="true">⏳</span>
+        <div class="admin-aff-summary-card__body">
+          <div class="admin-aff-summary-card__val admin-aff-summary-card__val--money">Rp {{ '{:,.0f}'.format(aff_comm_stats.sum_disetujui).replace(',', '.') }}</div>
+          <div class="admin-aff-summary-card__lab">Disetujui — belum cair</div>
+          <p class="admin-aff-summary-card__meta">{{ aff_comm_stats.n_disetujui }} entri · menunggu pembayaran dari platform</p>
+        </div>
+      </article>
+      <article class="admin-aff-summary-card admin-aff-summary-card--paid" role="listitem">
+        <span class="admin-aff-summary-card__ico" aria-hidden="true">✅</span>
+        <div class="admin-aff-summary-card__body">
+          <div class="admin-aff-summary-card__val admin-aff-summary-card__val--money">Rp {{ '{:,.0f}'.format(aff_comm_stats.sum_dibayar).replace(',', '.') }}</div>
+          <div class="admin-aff-summary-card__lab">Sudah dibayarkan</div>
+          <p class="admin-aff-summary-card__meta">{{ aff_comm_stats.n_dibayar }} entri · komisi telah cair</p>
+        </div>
+      </article>
+      <article class="admin-aff-summary-card admin-aff-summary-card--void{% if aff_comm_stats.n_batal == 0 %} admin-aff-summary-card--void-quiet{% endif %}" role="listitem">
+        <span class="admin-aff-summary-card__ico" aria-hidden="true">⛔</span>
+        <div class="admin-aff-summary-card__body">
+          <div class="admin-aff-summary-card__val admin-aff-summary-card__val--money">Rp {{ '{:,.0f}'.format(aff_comm_stats.sum_batal).replace(',', '.') }}</div>
+          <div class="admin-aff-summary-card__lab">Dibatalkan</div>
+          <p class="admin-aff-summary-card__meta">{{ aff_comm_stats.n_batal }} entri · tidak dihitung dalam total aktif</p>
+        </div>
+      </article>
+      <article class="admin-aff-summary-card admin-aff-summary-card--total" role="listitem">
+        <span class="admin-aff-summary-card__ico" aria-hidden="true">📊</span>
+        <div class="admin-aff-summary-card__body">
+          <div class="admin-aff-summary-card__val admin-aff-summary-card__val--money">Rp {{ '{:,.0f}'.format(aff_comm_stats.sum_non_batal).replace(',', '.') }}</div>
+          <div class="admin-aff-summary-card__lab">Total komisi aktif</div>
+          <p class="admin-aff-summary-card__meta">Jumlah nominal menunggu + disetujui + dibayar · {{ aff_comm_stats.n_menunggu + aff_comm_stats.n_disetujui + aff_comm_stats.n_dibayar }} entri aktif · {{ aff_comm_stats.n_total }} entri tercatat</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="admin-aff-comm-section" aria-labelledby="adm-aff-comm-h">
+    <div class="admin-aff-comm-header">
+      <div>
+        <h2 id="adm-aff-comm-h" class="admin-aff-comm-title">Riwayat komisi</h2>
+        <p class="admin-aff-comm-sub">Status mengikuti pembayaran invoice di platform (hingga 40 entri terbaru).</p>
+      </div>
+      {% if rows %}
+      <span class="admin-aff-comm-badge">{{ rows|length }} entri</span>
+      {% endif %}
+    </div>
+
+    <div class="admin-aff-comm-list">
+      <div class="admin-aff-comm-list-scroll">
+        {% if rows %}
+        <div class="admin-aff-comm-thead" aria-hidden="true">
+          <span>Tanggal</span>
+          <span>Invoice</span>
+          <span>Nilai</span>
+          <span>%</span>
+          <span>Komisi</span>
+          <span>Status</span>
+        </div>
+        {% endif %}
+        {% for r in rows %}
+        <article class="admin-aff-comm-card">
+          <div class="admin-aff-comm-cell admin-aff-comm-cell--muted" data-label="Tanggal">{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+          <div class="admin-aff-comm-cell" data-label="Invoice">{{ r.invoice.nomor if r.invoice else '—' }}</div>
+          <div class="admin-aff-comm-cell admin-aff-comm-cell--money" data-label="Nilai invoice">Rp {{ '{:,.0f}'.format(r.base_amount or 0).replace(',', '.') }}</div>
+          <div class="admin-aff-comm-cell admin-aff-comm-cell--pct" data-label="Persen">{{ r.commission_pct }}</div>
+          <div class="admin-aff-comm-cell admin-aff-comm-cell--money-strong" data-label="Komisi">Rp {{ '{:,.0f}'.format(r.commission_amount or 0).replace(',', '.') }}</div>
+          <div class="admin-aff-comm-cell" data-label="Status">
+            <span class="aff-tenant-badge badge {% if r.status == 'dibayar' %}badge-success{% elif r.status == 'dibatalkan' %}badge-danger{% else %}badge-warning{% endif %}">{{ r.status }}</span>
+          </div>
+        </article>
+        {% endfor %}
+        {% if not rows %}
+        <div class="admin-aff-empty">
+          <span class="admin-aff-empty__icon" aria-hidden="true">📋</span>
+          <p class="admin-aff-empty__title">Belum ada riwayat komisi</p>
+          <p class="admin-aff-empty__text">Bagikan link referral atau daftarkan tenant. Komisi muncul setelah invoice langganan terkait tercatat.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var inp = document.getElementById('tenantRefLink');
+  var btn = document.getElementById('tenantRefCopyBtn');
+  if (!inp || !btn) return;
+  var t;
+  var orig = btn.textContent;
+  btn.addEventListener('click', function () {
+    function ok() {
+      btn.textContent = '✓ Disalin';
+      if (typeof showToast === 'function') {
+        showToast('Link referral disalin ke papan klip.', 'success', 2200);
+      }
+      clearTimeout(t);
+      t = setTimeout(function () { btn.textContent = orig; }, 2600);
+    }
+    function fail() {
+      inp.select();
+      try { document.execCommand('copy'); ok(); } catch (e) {}
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(inp.value).then(ok).catch(fail);
+    } else {
+      fail();
+    }
+  });
+})();
+</script>
+{% endblock %}

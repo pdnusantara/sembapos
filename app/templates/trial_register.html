@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f0f1a">
   <meta name="robots" content="noindex,follow">
-  <title>Daftar trial gratis — SembaPOS</title>
+  <title>{{ wizard_title|default('Daftar trial gratis') }} — SembaPOS</title>
+  {% if affiliate_app %}
+  <script>
+  (function(){try{var s=localStorage.getItem('app-theme');var p=s||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',p);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+  </script>
+  {% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
   {% set favicon_static_path = platform_logo or none %}
   {% include 'includes/favicon.html' %}
@@ -22,17 +27,25 @@
     .trial-hint { font-size: 12px; color: var(--text-muted); margin-top: 8px; line-height: 1.45; }
   </style>
 </head>
-<body>
+<body class="{% if affiliate_app %}aff-app-body{% endif %}">
+{% if affiliate_app %}
+{% set aff_app_page_title = wizard_title|default('Daftar tenant') %}
+<div class="aff-app aff-app--trial">
+{% include 'affiliate/_app_shell_start.html' %}
+  <p class="aff-trial-back"><a href="{{ url_for('affiliate.dashboard') }}">← Kembali ke program afiliasi</a></p>
+  <p class="aff-trial-intro">{{ wizard_intro|default('Isi data calon tenant — trial 30 hari; komisi mengikuti aturan platform.') }}</p>
+{% else %}
 <div class="login-page">
   <div class="login-bg"></div>
   <div class="login-card" style="max-width: 440px;">
     <div class="login-logo">
       <div class="logo-circle">🎁</div>
-      <h1>Trial 30 hari</h1>
-      <p>Isi data bertahap — akun toko langsung aktif paket Basic.</p>
+      <h1>{{ wizard_title|default('Trial 30 hari') }}</h1>
+      <p>{{ wizard_intro|default('Isi data bertahap — akun toko langsung aktif paket Basic.') }}</p>
       <p style="margin-top:10px;font-size:13px;"><a href="{{ url_for('landing.index') }}" style="color:var(--primary-light);">← Beranda</a>
         &nbsp;·&nbsp; <a href="{{ url_for('auth.login') }}" style="color:var(--primary-light);">Sudah punya akun?</a></p>
     </div>
+{% endif %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -47,8 +60,11 @@
     <div class="trial-progress" id="trialProgressLabel">Langkah 1 dari 6</div>
     <div class="trial-progress-bar"><div class="trial-progress-fill" id="trialProgressFill" style="width:16.66%;"></div></div>
 
-    <form method="POST" action="{{ url_for('landing.trial_register') }}" id="trialForm" novalidate>
+    <form method="POST" action="{{ form_action or url_for('landing.trial_register') }}" id="trialForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      {% if show_aff_ref is not defined or show_aff_ref %}
+      <input type="hidden" name="aff_ref" value="{{ aff_ref or '' }}"/>
+      {% endif %}
       <input type="hidden" name="provinsi" id="in_provinsi" value="">
       <input type="hidden" name="kabupaten" id="in_kabupaten" value="">
       <input type="hidden" name="kecamatan" id="in_kecamatan" value="">
@@ -125,6 +141,15 @@
               <option value="">Pilih kecamatan terlebih dahulu</option>
             </select>
           </div>
+          {% if terms_affiliate_text %}
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label" style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:500;">
+              <input type="checkbox" name="terms_ok" value="1" required style="margin-top:4px;">
+              <span>Saya menyetujui syarat program afiliasi / pendaftaran.</span>
+            </label>
+            <div class="trial-hint" style="white-space:pre-wrap;margin-top:8px;">{{ terms_affiliate_text }}</div>
+          </div>
+          {% endif %}
           <p class="trial-hint">Dengan mendaftar, Anda menyetujui pembuatan akun uji coba. Satu nomor WhatsApp hanya untuk satu trial aktif.</p>
         </div>
       </div>
@@ -135,8 +160,12 @@
         <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit" style="display:none;flex:2;">Buat akun trial</button>
       </div>
     </form>
+{% if affiliate_app %}
+{% include 'affiliate/_app_shell_end.html' %}
+{% else %}
   </div>
 </div>
+{% endif %}
 <script>
 (function() {
   const totalSteps = 6;

@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Komisi afiliasi — Super Admin{% endblock %}
+{% block page_title %}Komisi afiliasi{% endblock %}
+{% block page_sub %}Dari invoice langganan lunas{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.sa_dashboard'), false),
+  ('Afiliasi', url_for('superadmin.affiliate_dashboard'), false),
+  ('Komisi', '', true),
+]) }}
+
+{% if aff_filter %}
+<div class="sa-aff-comm-filter-banner" role="status">
+  <span>Filter partner: <code>{{ aff_filter.kode }}</code>{% if aff_filter.nama_tampilan %} · {{ aff_filter.nama_tampilan }}{% endif %}</span>
+  <a href="{{ url_for('superadmin.affiliate_commissions') }}" class="btn btn-outline btn-sm">Hapus filter</a>
+</div>
+{% endif %}
+
+<div class="card sa-affiliate-filter-card" style="margin-bottom:12px;">
+  <form method="get" class="sa-affiliate-filter__form" aria-label="Filter komisi">
+    {% if affiliate_id_f %}
+    <input type="hidden" name="affiliate_id" value="{{ affiliate_id_f }}"/>
+    {% endif %}
+    <div class="form-group">
+      <label class="form-label" for="aff_comm_from">Dari tanggal</label>
+      <input type="date" id="aff_comm_from" name="date_from" class="form-control" value="{{ date_from or '' }}"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="aff_comm_to">Sampai</label>
+      <input type="date" id="aff_comm_to" name="date_to" class="form-control" value="{{ date_to or '' }}"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="aff_comm_status">Status</label>
+      <select id="aff_comm_status" name="status" class="form-control">
+        <option value="">Semua</option>
+        <option value="menunggu" {% if status_f == 'menunggu' %}selected{% endif %}>Menunggu</option>
+        <option value="disetujui" {% if status_f == 'disetujui' %}selected{% endif %}>Disetujui</option>
+        <option value="dibayar" {% if status_f == 'dibayar' %}selected{% endif %}>Dibayar</option>
+        <option value="dibatalkan" {% if status_f == 'dibatalkan' %}selected{% endif %}>Dibatalkan</option>
+      </select>
+    </div>
+    <div class="form-group sa-affiliate-filter__grow">
+      <label class="form-label" for="aff_comm_q">Cari tenant / invoice</label>
+      <input id="aff_comm_q" type="search" name="q" value="{{ q }}" class="form-control" placeholder="Nama tenant, kode, nomor invoice…"/>
+    </div>
+    <div class="sa-affiliate-filter__actions sa-affiliate-filter__actions--push">
+      <button type="submit" class="btn btn-outline btn-sm">Terapkan</button>
+      <a href="{{ url_for('superadmin.affiliate_commissions') }}" class="btn btn-outline btn-sm">Reset</a>
+      <a href="{{ url_for('superadmin.affiliate_commissions_export', date_from=date_from or none, date_to=date_to or none, status=status_f or none, q=q or none, affiliate_id=affiliate_id_f or none) }}" class="btn btn-primary btn-sm">Export CSV</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Daftar komisi ({{ total }})</div>
+    <div class="card-subtitle">Nominal rata kanan. Untuk status <strong>menunggu</strong> / <strong>disetujui</strong>, gunakan menu <strong>Aksi</strong>.</div>
+  </div>
+  <div class="table-wrapper" style="padding:0 16px 16px;">
+    <table class="table sa-aff-comm-table">
+      <thead>
+        <tr>
+          <th class="sa-col-date">Tanggal</th>
+          <th>Affiliate</th>
+          <th>Tenant</th>
+          <th>Invoice</th>
+          <th class="sa-col-num">Nilai basis</th>
+          <th class="sa-col-num">Komisi</th>
+          <th>Status</th>
+          <th class="sa-col-actions">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        {% set st = r.status %}
+        {% if st == 'menunggu' %}
+          {% set st_label = 'Menunggu' %}
+        {% elif st == 'disetujui' %}
+          {% set st_label = 'Disetujui' %}
+        {% elif st == 'dibayar' %}
+          {% set st_label = 'Dibayar' %}
+        {% elif st == 'dibatalkan' %}
+          {% set st_label = 'Dibatalkan' %}
+        {% else %}
+          {% set st_label = st %}
+        {% endif %}
+        {% set tenant_nama = r.tenant.nama if r.tenant else '—' %}
+        <tr>
+          <td class="sa-col-date">{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td class="sa-comm-aff-code"><code>{{ r.affiliate.kode if r.affiliate else '—' }}</code></td>
+          <td><span class="sa-comm-tenant" title="{{ tenant_nama|e }}">{{ tenant_nama }}</span></td>
+          <td class="sa-comm-inv">{{ r.invoice.nomor if r.invoice else '—' }}</td>
+          <td class="sa-col-num">Rp {{ '{:,.0f}'.format(r.base_amount or 0).replace(',', '.') }}</td>
+          <td class="sa-col-num"><strong>Rp {{ '{:,.0f}'.format(r.commission_amount or 0).replace(',', '.') }}</strong></td>
+          <td><span class="badge {% if st == 'dibayar' %}badge-success{% elif st == 'dibatalkan' %}badge-danger{% else %}badge-warning{% endif %}">{{ st_label }}</span></td>
+          <td class="sa-col-actions">
+            {% if st == 'menunggu' %}
+            <details class="sa-aff-action-menu">
+              <summary class="sa-aff-action-menu__trigger">Aksi <span aria-hidden="true">▾</span></summary>
+              <div class="sa-aff-action-menu__panel sa-aff-comm-action-panel" role="menu">
+                <form method="POST" action="{{ url_for('superadmin.affiliate_commission_approve', id=r.id) }}" class="sa-aff-action-menu__form" onsubmit="return confirm('Setujui komisi ini?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <p style="margin:0 0 8px;font-size:12px;color:var(--text-muted);line-height:1.4;">Menyetujui memindahkan status ke <strong>Disetujui</strong> (siap dibayar).</p>
+                  <button type="submit" class="btn btn-primary btn-sm" style="width:100%;">Setujui komisi</button>
+                </form>
+              </div>
+            </details>
+            {% elif st == 'disetujui' %}
+            <details class="sa-aff-action-menu">
+              <summary class="sa-aff-action-menu__trigger">Bayar <span aria-hidden="true">▾</span></summary>
+              <div class="sa-aff-action-menu__panel sa-aff-comm-action-panel" role="menu">
+                <form method="POST" action="{{ url_for('superadmin.affiliate_commission_mark_paid', id=r.id) }}" class="sa-aff-comm-pay-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <div class="form-group">
+                    <label class="form-label" for="pm-{{ r.id }}">Metode pembayaran</label>
+                    <input id="pm-{{ r.id }}" type="text" name="payout_metode" class="form-control" placeholder="Transfer, e-wallet…" value="transfer"/>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="pr-{{ r.id }}">No. referensi</label>
+                    <input id="pr-{{ r.id }}" type="text" name="payout_referensi" class="form-control" placeholder="No. ref / keterangan"/>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="pc-{{ r.id }}">Catatan internal</label>
+                    <input id="pc-{{ r.id }}" type="text" name="catatan" class="form-control" placeholder="Opsional"/>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-sm" style="width:100%;">Tandai dibayar</button>
+                </form>
+              </div>
+            </details>
+            {% elif st == 'dibayar' %}
+            <div class="sa-aff-comm-payout-note" title="{{ (r.payout_referensi or '')|e }}">
+              {% if r.payout_metode or r.payout_referensi %}
+              <strong>{{ r.payout_metode or '—' }}</strong>{% if r.payout_referensi %}<br><span style="opacity:0.9;">{{ r.payout_referensi[:48] }}{% if r.payout_referensi|length > 48 %}…{% endif %}</span>{% endif %}
+              {% else %}
+              —
+              {% endif %}
+            </div>
+            {% else %}
+            <span class="text-muted" style="font-size:13px;">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-muted" style="padding:24px;text-align:center;">Tidak ada data untuk filter ini.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if total_pages > 1 %}
+  <div style="padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    {% if page > 1 %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.affiliate_commissions', page=page-1, status=status_f or none, q=q or none, date_from=date_from or none, date_to=date_to or none, affiliate_id=affiliate_id_f or none) }}">← Sebelumnya</a>
+    {% endif %}
+    <span class="text-muted">Halaman {{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a class="btn btn-outline btn-sm" href="{{ url_for('superadmin.affiliate_commissions', page=page+1, status=status_f or none, q=q or none, date_from=date_from or none, date_to=date_to or none, affiliate_id=affiliate_id_f or none) }}">Berikutnya →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+<script>
+(function() {
+  document.querySelectorAll('.sa-aff-comm-table .sa-aff-action-menu').forEach(function(d) {
+    d.addEventListener('toggle', function() {
+      if (d.open) {
+        document.querySelectorAll('.sa-aff-comm-table .sa-aff-action-menu').forEach(function(o) {
+          if (o !== d) o.open = false;
+        });
+      }
+    });
+  });
+  document.addEventListener('click', function(ev) {
+    if (!ev.target.closest('.sa-aff-comm-table .sa-aff-action-menu')) {
+      document.querySelectorAll('.sa-aff-comm-table .sa-aff-action-menu').forEach(function(d) { d.open = false; });
+    }
+  });
+})();
+</script>
+{% endblock %}

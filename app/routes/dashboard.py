@@ -43,6 +43,8 @@ def _product_base_query():
 def index():
     if current_user.is_superadmin:
         return redirect(url_for('superadmin.sa_dashboard'))
+    if current_user.role == 'affiliate':
+        return redirect(url_for('affiliate.dashboard'))
 
     app_tz, tz_id = resolve_effective_zoneinfo(current_user)
     tenant_id = get_tenant_id()

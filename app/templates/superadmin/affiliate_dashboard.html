@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Afiliasi — Super Admin{% endblock %}
+{% block page_title %}🔗 Program afiliasi{% endblock %}
+{% block page_sub %}Ringkasan platform, partner, dan komisi{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([('Super Admin', url_for('superadmin.sa_dashboard'), false), ('Afiliasi', '', true)]) }}
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header sa-affiliate-toolbar">
+    <div>
+      <div class="card-title">Status program</div>
+      <div class="card-subtitle">{% if settings.get('program_enabled') %}Aktif — komisi dihitung saat invoice lunas{% else %}Nonaktif{% endif %}</div>
+    </div>
+    <div class="sa-affiliate-toolbar__nav">
+      <a href="{{ url_for('superadmin.affiliate_partners') }}" class="btn btn-outline btn-sm">Partner</a>
+      <a href="{{ url_for('superadmin.affiliate_commissions') }}" class="btn btn-outline btn-sm">Komisi</a>
+      <a href="{{ url_for('superadmin.affiliate_applications') }}" class="btn btn-outline btn-sm">Lamaran</a>
+      <a href="{{ url_for('superadmin.affiliate_settings') }}" class="btn btn-primary btn-sm">Pengaturan</a>
+    </div>
+  </div>
+  <div class="sa-affiliate-filter">
+    <form method="get" action="{{ url_for('superadmin.affiliate_dashboard') }}" class="sa-affiliate-filter__form" aria-label="Filter rentang komisi">
+      <div class="form-group">
+        <label class="form-label" for="aff_dash_from">Dari tanggal</label>
+        <input type="date" id="aff_dash_from" name="date_from" class="form-control" value="{{ date_from or '' }}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="aff_dash_to">Sampai</label>
+        <input type="date" id="aff_dash_to" name="date_to" class="form-control" value="{{ date_to or '' }}"/>
+      </div>
+      <div class="sa-affiliate-filter__actions sa-affiliate-filter__actions--push">
+        <button type="submit" class="btn btn-outline btn-sm">Filter komisi</button>
+        <a href="{{ url_for('superadmin.affiliate_dashboard') }}" class="btn btn-outline btn-sm">Reset</a>
+      </div>
+    </form>
+  </div>
+  <div class="sa-affiliate-stats">
+    <div class="sa-affiliate-stat">
+      <div class="sa-affiliate-stat__label">Partner aktif</div>
+      <div class="sa-affiliate-stat__value">{{ n_aff_active }}</div>
+    </div>
+    <div class="sa-affiliate-stat">
+      <div class="sa-affiliate-stat__label">Tenant teratribusi (total)</div>
+      <div class="sa-affiliate-stat__value">{{ n_conversions }}</div>
+    </div>
+    <div class="sa-affiliate-stat">
+      <div class="sa-affiliate-stat__label">Komisi belum dibayar (est.)</div>
+      <div class="sa-affiliate-stat__value">Rp {{ '{:,.0f}'.format(sum_pending).replace(',', '.') }}</div>
+    </div>
+    <div class="sa-affiliate-stat">
+      <div class="sa-affiliate-stat__label">Sudah dibayarkan</div>
+      <div class="sa-affiliate-stat__value">Rp {{ '{:,.0f}'.format(sum_paid).replace(',', '.') }}</div>
+    </div>
+    <div class="sa-affiliate-stat">
+      <div class="sa-affiliate-stat__label">Klik ref (30 hari)</div>
+      <div class="sa-affiliate-stat__value">{{ n_clicks_30d }}</div>
+    </div>
+    <div class="sa-affiliate-stat">
+      <div class="sa-affiliate-stat__label">WA curiga ({{ abuse_lookback_days }} h)</div>
+      <div class="sa-affiliate-stat__value">{{ abuse_wa_count }}</div>
+      <div class="sa-affiliate-stat__hint">Nomor sama, affiliate beda</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Komisi terbaru</div>
+    <div class="card-subtitle">20 entri terakhir sesuai filter tanggal di atas</div>
+  </div>
+  <div class="table-wrapper" style="padding:0 16px 16px;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Affiliate</th>
+          <th>Tenant</th>
+          <th>Invoice</th>
+          <th>Komisi</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recent %}
+        <tr>
+          <td class="text-muted" style="white-space:nowrap;">{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td><code>{{ r.affiliate.kode if r.affiliate else '—' }}</code></td>
+          <td>{{ r.tenant.nama if r.tenant else '—' }}</td>
+          <td>{{ r.invoice.nomor if r.invoice else '—' }}</td>
+          <td>Rp {{ '{:,.0f}'.format(r.commission_amount or 0).replace(',', '.') }}</td>
+          <td><span class="badge {% if r.status == 'dibayar' %}badge-success{% elif r.status == 'dibatalkan' %}badge-danger{% else %}badge-warning{% endif %}">{{ r.status }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted">Belum ada data komisi.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

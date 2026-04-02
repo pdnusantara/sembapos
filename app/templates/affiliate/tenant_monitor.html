@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0f1a">
+  <meta name="robots" content="noindex">
+  <title>Monitoring tenant — {{ platform_display_name }}</title>
+  <script>
+  (function(){try{var s=localStorage.getItem('app-theme');var p=s||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',p);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
+  {% set favicon_static_path = platform_logo or none %}
+  {% include 'includes/favicon.html' %}
+</head>
+<body class="aff-app-body">
+{% set aff_app_page_title = 'Monitoring tenant' %}
+{% include 'affiliate/_app_shell_start.html' %}
+
+    <div class="aff-tenant-shell">
+      <p class="aff-tenant-lead" style="margin-top:0;">Pantau toko yang terhubung dengan kode referral Anda: status langganan, pembayaran invoice, dan komisi kumulatif (ringkas).</p>
+      <div class="aff-tenant-code-pill" aria-label="Kode referral" style="margin-bottom:16px;">Ref: {{ profile.kode }}</div>
+
+      {% if not settings.get('program_enabled') %}
+      <div class="alert alert-warning" style="margin-bottom:16px;border-radius:12px;">Program afiliasi sedang dinonaktifkan oleh administrator.</div>
+      {% endif %}
+
+      <section aria-labelledby="aff-stats-heading">
+        <h2 id="aff-stats-heading" class="visually-hidden">Ringkasan angka</h2>
+        <div class="aff-tenant-stats-scroll" role="list">
+          <div class="aff-tenant-stat-pill" role="listitem">
+            <div class="aff-tenant-stat-pill__val">{{ stats.n_total }}</div>
+            <div class="aff-tenant-stat-pill__lab">Total tenant</div>
+          </div>
+          <div class="aff-tenant-stat-pill" role="listitem">
+            <div class="aff-tenant-stat-pill__val">{{ stats.n_langganan_aktif }}</div>
+            <div class="aff-tenant-stat-pill__lab">Langganan aktif / tanpa tgl. habis</div>
+          </div>
+          <div class="aff-tenant-stat-pill" role="listitem">
+            <div class="aff-tenant-stat-pill__val">{{ stats.n_grace }}</div>
+            <div class="aff-tenant-stat-pill__lab">Masa tenggang</div>
+          </div>
+          <div class="aff-tenant-stat-pill" role="listitem">
+            <div class="aff-tenant-stat-pill__val">{{ stats.n_kedaluwarsa }}</div>
+            <div class="aff-tenant-stat-pill__lab">Berakhir / dibatasi</div>
+          </div>
+          <div class="aff-tenant-stat-pill" role="listitem">
+            <div class="aff-tenant-stat-pill__val">{{ stats.n_tenant_nonaktif }}</div>
+            <div class="aff-tenant-stat-pill__lab">Nonaktif (platform)</div>
+          </div>
+          <div class="aff-tenant-stat-pill" role="listitem">
+            <div class="aff-tenant-stat-pill__val">{{ stats.n_pernah_bayar }}</div>
+            <div class="aff-tenant-stat-pill__lab">Pernah bayar invoice</div>
+          </div>
+          <div class="aff-tenant-stat-pill" role="listitem">
+            <div class="aff-tenant-stat-pill__val">{{ stats.n_belum_pernah_bayar }}</div>
+            <div class="aff-tenant-stat-pill__lab">Belum invoice lunas</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="aff-tenant-filter-card" aria-labelledby="aff-filter-heading">
+        <h2 id="aff-filter-heading" class="aff-tenant-filter-title">Saring daftar</h2>
+        <form method="get" action="{{ url_for('affiliate.tenant_monitor') }}" class="aff-tenant-filter-grid">
+          <div class="form-group">
+            <label class="form-label" for="tm_status">Status tenant</label>
+            <select id="tm_status" name="status" class="form-control">
+              <option value="semua" {% if status_f == 'semua' %}selected{% endif %}>Semua tenant</option>
+              <option value="langganan_aktif" {% if status_f == 'langganan_aktif' %}selected{% endif %}>Langganan aktif</option>
+              <option value="grace" {% if status_f == 'grace' %}selected{% endif %}>Masa tenggang</option>
+              <option value="kedaluwarsa" {% if status_f == 'kedaluwarsa' %}selected{% endif %}>Berakhir / dibatasi</option>
+              <option value="pernah_bayar" {% if status_f == 'pernah_bayar' %}selected{% endif %}>Sudah pernah bayar</option>
+              <option value="belum_pernah_bayar" {% if status_f == 'belum_pernah_bayar' %}selected{% endif %}>Belum pernah lunas</option>
+              <option value="tenant_nonaktif" {% if status_f == 'tenant_nonaktif' %}selected{% endif %}>Tenant nonaktif</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tm_q">Cari nama atau kode</label>
+            <input id="tm_q" type="search" name="q" class="form-control" value="{{ q }}" placeholder="Contoh: TOKO01" autocomplete="off"/>
+          </div>
+          <div class="aff-tenant-filter-actions">
+            <button type="submit" class="btn btn-primary">Terapkan</button>
+            <a href="{{ url_for('affiliate.tenant_monitor') }}" class="btn btn-outline">Reset</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="aff-tenant-list-wrap" aria-labelledby="aff-list-heading">
+        <h2 id="aff-list-heading" class="aff-tenant-list-title">Daftar tenant ({{ total_filtered }})</h2>
+        <p class="aff-tenant-list-hint">Komisi = jumlah nominal komisi dari invoice langganan terkait Anda (semua status pencatatan komisi).</p>
+
+        <div class="aff-tenant-list">
+          <div class="aff-tenant-list-scroll">
+          {% if rows %}
+          <div class="aff-tenant-thead" aria-hidden="true">
+            <span>Toko</span>
+            <span>Paket</span>
+            <span>Atribusi</span>
+            <span>Langganan</span>
+            <span>Aktif</span>
+            <span>Lunas</span>
+            <span>Invoice</span>
+            <span>Komisi</span>
+          </div>
+          {% endif %}
+
+          {% for r in rows %}
+          {% set t = r.tenant %}
+          {% set inv_st = r.latest_invoice_status %}
+          {% if inv_st == 'paid' %}
+            {% set inv_lbl = 'Lunas' %}
+          {% elif inv_st == 'unpaid' %}
+            {% set inv_lbl = 'Belum lunas' %}
+          {% elif inv_st == 'overdue' %}
+            {% set inv_lbl = 'Jatuh tempo' %}
+          {% elif inv_st == 'cancelled' %}
+            {% set inv_lbl = 'Batal' %}
+          {% elif inv_st %}
+            {% set inv_lbl = inv_st %}
+          {% else %}
+            {% set inv_lbl = '—' %}
+          {% endif %}
+          <article class="aff-tenant-card">
+            <div class="aff-tenant-cell aff-tenant-cell--toko" data-label="Toko">
+              <code>{{ t.kode }}</code>
+              <div class="aff-tenant-name">{{ t.nama }}</div>
+            </div>
+            <div class="aff-tenant-cell" data-label="Paket">{{ r.paket_label }}</div>
+            <div class="aff-tenant-cell aff-tenant-cell--muted" data-label="Atribusi">
+              {{ r.attr.attributed_at.strftime('%d/%m/%Y') }}
+              <small>{{ r.attr.sumber }}</small>
+            </div>
+            <div class="aff-tenant-cell" data-label="Langganan">
+              {% if r.phase in ('active', 'none') %}
+              <span class="aff-tenant-badge badge badge-success">{{ r.phase_label }}</span>
+              {% elif r.phase == 'grace' %}
+              <span class="aff-tenant-badge badge badge-warning">{{ r.phase_label }}</span>
+              {% elif r.phase == 'enforced' %}
+              <span class="aff-tenant-badge badge badge-danger">{{ r.phase_label }}</span>
+              {% else %}
+              <span class="aff-tenant-badge badge badge-warning">{{ r.phase_label }}</span>
+              {% endif %}
+            </div>
+            <div class="aff-tenant-cell" data-label="Aktif?">
+              {% if t.aktif %}
+              <span class="aff-tenant-badge badge badge-success">Ya</span>
+              {% else %}
+              <span class="aff-tenant-badge badge badge-danger">Tidak</span>
+              {% endif %}
+            </div>
+            <div class="aff-tenant-cell aff-tenant-cell--num" data-label="Invoice lunas">{{ r.paid_count }}</div>
+            <div class="aff-tenant-cell aff-tenant-cell--muted" data-label="Invoice terbaru">{{ inv_lbl }}</div>
+            <div class="aff-tenant-cell aff-tenant-cell--money" data-label="Komisi (kumulatif)">Rp {{ '{:,.0f}'.format(r.total_commission).replace(',', '.') }}</div>
+          </article>
+          {% endfor %}
+          {% if not rows %}
+          <div class="aff-tenant-empty">Tidak ada tenant untuk filter ini. Ubah status atau kata kunci pencarian.</div>
+          {% endif %}
+          </div>
+        </div>
+
+        {% if total_pages > 1 %}
+        <nav class="aff-tenant-pager" aria-label="Halaman daftar">
+          {% if page > 1 %}
+          <a class="btn btn-outline" href="{{ url_for('affiliate.tenant_monitor', page=page-1, status=status_f, q=q or none) }}">Sebelumnya</a>
+          {% endif %}
+          <span class="aff-tenant-pager-meta">Halaman {{ page }} dari {{ total_pages }}</span>
+          {% if page < total_pages %}
+          <a class="btn btn-outline" href="{{ url_for('affiliate.tenant_monitor', page=page+1, status=status_f, q=q or none) }}">Berikutnya</a>
+          {% endif %}
+        </nav>
+        {% endif %}
+      </section>
+    </div>
+
+{% include 'affiliate/_app_shell_end.html' %}
+</body>
+</html>

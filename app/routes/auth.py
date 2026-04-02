@@ -11,6 +11,8 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
+        if current_user.role == 'affiliate':
+            return redirect(url_for('affiliate.dashboard'))
         return redirect(url_for('dashboard.index'))
 
     if request.method == 'POST':
@@ -43,6 +45,8 @@ def login():
 
             next_page = request.args.get('next')
             flash(f'Selamat datang, {user.nama}!', 'success')
+            if user.role == 'affiliate':
+                return redirect(next_page or url_for('affiliate.dashboard'))
             return redirect(next_page or url_for('dashboard.index'))
         else:
             flash('Username atau password salah, atau akun tidak aktif.', 'danger')

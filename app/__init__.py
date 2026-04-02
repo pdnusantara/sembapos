@@ -44,6 +44,7 @@ def create_app():
     from .routes.shifts import shifts_bp
     from .routes.returns import returns_bp
     from .routes.marketplace import marketplace_bp
+    from .routes.affiliate_portal import affiliate_bp
     from .permissions import register_module_guards
 
     register_module_guards()
@@ -66,6 +67,7 @@ def create_app():
     app.register_blueprint(shifts_bp)
     app.register_blueprint(returns_bp)
     app.register_blueprint(marketplace_bp)
+    app.register_blueprint(affiliate_bp)
 
     @app.context_processor
     def _inject_static_css_version():
@@ -188,6 +190,35 @@ def create_app():
                     'warning',
                 )
                 return redirect(url_for('dashboard.index'))
+
+    @app.before_request
+    def _affiliate_route_lock():
+        """User role affiliate hanya boleh auth + blueprint affiliate."""
+        from flask_login import current_user
+
+        ep = request.endpoint
+        if not ep or str(ep).startswith('static'):
+            return
+        if not current_user.is_authenticated:
+            return
+        if getattr(current_user, 'role', None) != 'affiliate':
+            return
+        if ep in ('auth.login', 'auth.logout'):
+            return
+        if ep in ('landing.affiliate_apply',):
+            return
+        # Form /affiliate/daftar-tenant memakai trial_register.html yang fetch API wilayah di landing.*
+        if ep in (
+            'landing.trial_wilayah_provinsi',
+            'landing.trial_wilayah_kabupaten',
+            'landing.trial_wilayah_kecamatan',
+            'landing.trial_wilayah_desa',
+        ):
+            return
+        if ep and str(ep).startswith('affiliate.'):
+            return
+        flash('Akun afiliasi hanya mengakses halaman program afiliasi.', 'warning')
+        return redirect(url_for('affiliate.dashboard'))
 
     @app.context_processor
     def _subscription_banner():

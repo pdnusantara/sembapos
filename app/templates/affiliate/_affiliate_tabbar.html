@@ -1,0 +1,18 @@
+{% set ep = request.endpoint or '' %}
+<nav class="aff-app-tabbar" aria-label="Menu utama afiliasi">
+  <a href="{{ url_for('affiliate.dashboard') }}" class="aff-app-tab{% if ep == 'affiliate.dashboard' %} aff-app-tab--active{% endif %}">
+    <span class="aff-app-tab__ico" aria-hidden="true">🏠</span>
+    <span class="aff-app-tab__lbl">Beranda</span>
+  </a>
+  <a href="{{ url_for('affiliate.tenant_monitor') }}" class="aff-app-tab{% if ep == 'affiliate.tenant_monitor' %} aff-app-tab--active{% endif %}">
+    <span class="aff-app-tab__ico" aria-hidden="true">🏪</span>
+    <span class="aff-app-tab__lbl">Tenant</span>
+  </a>
+  <form method="post" action="{{ url_for('auth.logout') }}" class="aff-app-tab-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <button type="submit" class="aff-app-tab aff-app-tab--btn" aria-label="Keluar dari akun">
+      <span class="aff-app-tab__ico" aria-hidden="true">⏻</span>
+      <span class="aff-app-tab__lbl">Keluar</span>
+    </button>
+  </form>
+</nav>

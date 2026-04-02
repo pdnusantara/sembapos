@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Pengaturan afiliasi — Super Admin{% endblock %}
+{% block page_title %}Pengaturan afiliasi{% endblock %}
+{% block page_sub %}Komisi, webhook, rate limit, dan teks syarat{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.sa_dashboard'), false),
+  ('Afiliasi', url_for('superadmin.affiliate_dashboard'), false),
+  ('Pengaturan', '', true),
+]) }}
+
+<form method="POST" style="max-width:720px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+      <div class="card-title">Kebijakan komisi</div>
+      <div class="card-subtitle">Persentase dari nominal invoice langganan saat ditandai lunas (berulang).</div>
+    </div>
+    <div style="padding:16px 18px;">
+      <div class="form-group">
+        <label class="form-checkbox" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" name="program_enabled" value="1" {% if settings.get('program_enabled') %}checked{% endif %}/>
+          <span>Program afiliasi aktif</span>
+        </label>
+      </div>
+      <div class="grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">% komisi (affiliate tenant)</label>
+          <input type="number" name="pct_tenant" class="form-control" step="0.01" min="0" max="100" value="{{ settings.get('pct_tenant', 5) }}"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">% komisi (affiliate eksternal)</label>
+          <input type="number" name="pct_eksternal" class="form-control" step="0.01" min="0" max="100" value="{{ settings.get('pct_eksternal', 10) }}"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Minimum payout (informasi / rencana)</label>
+        <input type="number" name="min_payout" class="form-control" step="1000" min="0" value="{{ settings.get('min_payout', 0) }}"/>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Belum memotong pembayaran otomatis; untuk dokumentasi kebijakan internal.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-checkbox" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" name="require_commission_approval" value="1" {% if settings.get('require_commission_approval') %}checked{% endif %}/>
+          <span>Perlu persetujuan manual sebelum komisi bisa dibayar (status awal: menunggu)</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Catatan platform (opsional)</label>
+        <textarea name="catatan_platform" class="form-control" rows="3" maxlength="2000">{{ settings.get('catatan_platform', '') }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+      <div class="card-title">Webhook &amp; rate limit</div>
+      <div class="card-subtitle">Notifikasi saat komisi dibuat; batasi spam pada formulir publik.</div>
+    </div>
+    <div style="padding:16px 18px;">
+      <div class="form-group">
+        <label class="form-label">Webhook URL (opsional)</label>
+        <input type="url" name="webhook_url" class="form-control" maxlength="500" placeholder="https://…" value="{{ settings.get('webhook_url', '') }}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Webhook secret (opsional)</label>
+        <input type="password" name="webhook_secret" class="form-control" maxlength="200" autocomplete="new-password" placeholder="{% if settings.get('webhook_secret') %}Kosongkan untuk mempertahankan secret yang ada{% else %}Header atau verifikasi HMAC{% endif %}"/>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">{% if settings.get('webhook_secret') %}Secret sudah tersimpan — isi hanya jika ingin mengganti.{% else %}Kosongkan jika tidak dipakai.{% endif %}</div>
+      </div>
+      <div class="grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Rate limit: daftar trial (req/jam per IP)</label>
+          <input type="number" name="trial_rate_per_hour" class="form-control" min="1" max="500" step="1" value="{{ settings.get('trial_rate_per_hour', 30) }}"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rate limit: form afiliasi / daftar tenant (req/jam per IP)</label>
+          <input type="number" name="affiliate_form_rate_per_hour" class="form-control" min="1" max="200" step="1" value="{{ settings.get('affiliate_form_rate_per_hour', 15) }}"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Heuristik WA curiga: hari ke belakang</label>
+        <input type="number" name="abuse_wa_lookback_days" class="form-control" min="1" max="90" step="1" value="{{ settings.get('abuse_wa_lookback_days', 7) }}"/>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Digunakan di dashboard Super Admin: hitung nomor WA yang muncul di lebih dari satu affiliate.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+      <div class="card-title">Teks syarat (opsional)</div>
+      <div class="card-subtitle">Ditampilkan di halaman lamaran afiliasi dan formulir terkait jika diisi.</div>
+    </div>
+    <div style="padding:16px 18px;">
+      <div class="form-group">
+        <label class="form-label">Syarat / ketentuan untuk program afiliasi (dashboard)</label>
+        <textarea name="terms_affiliate_text" class="form-control" rows="6" maxlength="8000" placeholder="Markdown atau teks biasa">{{ settings.get('terms_affiliate_text', '') }}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Syarat lamaran afiliasi publik (/daftar-afiliasi)</label>
+        <textarea name="terms_application_text" class="form-control" rows="6" maxlength="8000" placeholder="Tampil di halaman lamaran">{{ settings.get('terms_application_text', '') }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Simpan semua pengaturan</button>
+</form>
+{% endblock %}

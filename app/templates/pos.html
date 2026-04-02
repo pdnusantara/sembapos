@@ -175,6 +175,20 @@
     <span>Keranjang</span>
   </div>
 </div>
+
+<div class="pos-mobile-dock" id="posMobileDock" hidden aria-hidden="true">
+  <button type="button" class="pos-mobile-dock-main" onclick="setPosMobileTab('cart')">
+    <span class="pos-mobile-dock-label">Keranjang</span>
+    <span class="pos-mobile-dock-meta">
+      <span id="posMobileDockCount">0 item</span>
+      <span aria-hidden="true">•</span>
+      <strong id="posMobileDockTotal">Rp 0</strong>
+    </span>
+  </button>
+  <button type="button" class="btn btn-primary btn-sm pos-mobile-dock-pay" id="posMobileDockPay" onclick="openPayModal()">
+    Bayar
+  </button>
+</div>
 </div>
 
 

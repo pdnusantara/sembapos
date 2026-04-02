@@ -201,6 +201,9 @@
         <a href="{{ url_for('admin.settings') }}" class="nav-item {% if request.endpoint == 'admin.settings' %}active{% endif %}">
           <span class="nav-icon">⚙️</span> Pengaturan
         </a>
+        <a href="{{ url_for('admin.affiliate_program') }}" class="nav-item {% if request.endpoint == 'admin.affiliate_program' %}active{% endif %}">
+          <span class="nav-icon">🔗</span> Afiliasi
+        </a>
         {% else %}
         <a href="{{ url_for('superadmin.sa_dashboard') }}" class="nav-item {% if request.endpoint == 'superadmin.sa_dashboard' %}active{% endif %}">
           <span class="nav-icon">📊</span> Dashboard
@@ -219,6 +222,9 @@
         </a>
         <a href="{{ url_for('superadmin.leads_index') }}" class="nav-item {% if 'lead' in (request.endpoint or '') %}active{% endif %}">
           <span class="nav-icon">📩</span> Leads
+        </a>
+        <a href="{{ url_for('superadmin.affiliate_dashboard') }}" class="nav-item {% if 'affiliate' in (request.endpoint or '') %}active{% endif %}">
+          <span class="nav-icon">🔗</span> Afiliasi
         </a>
         <a href="{{ url_for('superadmin.announcements_index') }}" class="nav-item {% if 'announcement' in (request.endpoint or '') %}active{% endif %}">
           <span class="nav-icon">📢</span> Pengumuman

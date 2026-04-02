@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0f1a">
+  <meta name="robots" content="noindex">
+  <title>Program afiliasi — {{ platform_display_name }}</title>
+  <script>
+  (function(){try{var s=localStorage.getItem('app-theme');var p=s||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',p);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_css_v) }}">
+  {% set favicon_static_path = platform_logo or none %}
+  {% include 'includes/favicon.html' %}
+</head>
+<body class="aff-app-body">
+{% set aff_app_page_title = 'Program afiliasi' %}
+{% include 'affiliate/_app_shell_start.html' %}
+
+    <p class="aff-dash-welcome">Halo, <strong>{{ profile.nama_tampilan or current_user.nama }}</strong> — bagikan link undangan atau daftarkan tenant dari menu di bawah.</p>
+
+    {% if not settings.get('program_enabled') %}
+    <div class="alert alert-warning" style="margin-bottom:14px;border-radius:12px;">Program afiliasi sedang dinonaktifkan oleh administrator. Komisi baru tidak dihitung sampai diaktifkan kembali.</div>
+    {% endif %}
+
+    <div class="aff-dash-hero">
+      <p class="aff-dash-hero__pct">Komisi <strong>{{ settings.get('pct_eksternal', 0) }}%</strong> dari pembayaran langganan tenant yang Anda undang.</p>
+      <div class="aff-dash-hero__code" aria-label="Kode referral">Kode: {{ profile.kode }}</div>
+    </div>
+
+    <section class="aff-tenant-filter-card" style="margin-bottom:14px;" aria-labelledby="aff-dash-link-h">
+      <h2 id="aff-dash-link-h" class="aff-tenant-filter-title">Link referral</h2>
+      <p class="aff-tenant-list-hint">Salin tautan undangan trial — calon tenant memakai ini saat daftar.</p>
+      <div class="sa-affiliate-ref-row aff-dash-ref-row">
+        <input type="text" readonly class="form-control" id="refLink" value="{{ referral_link }}" aria-label="Link referral">
+        <button type="button" class="btn btn-primary" id="affDashCopyRef">Salin</button>
+      </div>
+    </section>
+
+    <section class="aff-tenant-filter-card" style="margin-bottom:14px;" aria-labelledby="aff-dash-reg-h">
+      <h2 id="aff-dash-reg-h" class="aff-tenant-filter-title">Daftarkan tenant</h2>
+      <p class="aff-tenant-list-hint">Tanpa link — formulir trial dengan atribusi ke kode Anda.</p>
+      <a href="{{ url_for('affiliate.register_tenant') }}" class="btn btn-primary btn-block" style="min-height:44px;">Buka formulir daftar tenant</a>
+    </section>
+
+    {% if tenant_stats is defined %}
+    <section class="aff-tenant-filter-card" style="margin-bottom:14px;" aria-labelledby="aff-dash-mon-h">
+      <h2 id="aff-dash-mon-h" class="aff-tenant-filter-title">Monitoring tenant</h2>
+      <p class="aff-tenant-list-hint">Ringkasan cepat — buka halaman Tenant untuk saring &amp; cari.</p>
+      <div class="aff-dash-monitoring-stats">
+        <div class="sa-affiliate-stat">
+          <div class="sa-affiliate-stat__label">Total</div>
+          <div class="sa-affiliate-stat__value">{{ tenant_stats.n_total }}</div>
+        </div>
+        <div class="sa-affiliate-stat">
+          <div class="sa-affiliate-stat__label">Aktif</div>
+          <div class="sa-affiliate-stat__value">{{ tenant_stats.n_langganan_aktif }}</div>
+        </div>
+        <div class="sa-affiliate-stat">
+          <div class="sa-affiliate-stat__label">Pernah bayar</div>
+          <div class="sa-affiliate-stat__value">{{ tenant_stats.n_pernah_bayar }}</div>
+        </div>
+      </div>
+      <a href="{{ url_for('affiliate.tenant_monitor') }}" class="btn btn-outline btn-block" style="min-height:44px;">Buka monitoring lengkap</a>
+    </section>
+    {% endif %}
+
+    <section class="aff-tenant-filter-card" style="margin-bottom:14px;" aria-labelledby="aff-dash-sum-h">
+      <h2 id="aff-dash-sum-h" class="aff-tenant-filter-title">Ringkasan komisi</h2>
+      <div class="sa-affiliate-stats" style="padding:0;">
+        <div class="sa-affiliate-stat">
+          <div class="sa-affiliate-stat__label">Disetujui + menunggu (nominal)</div>
+          <div class="sa-affiliate-stat__value" style="font-size:1rem;">Rp {{ '{:,.0f}'.format(total_disetujui).replace(',', '.') }}</div>
+        </div>
+        <div class="sa-affiliate-stat">
+          <div class="sa-affiliate-stat__label">Sudah dibayarkan</div>
+          <div class="sa-affiliate-stat__value" style="font-size:1rem;">Rp {{ '{:,.0f}'.format(total_dibayar).replace(',', '.') }}</div>
+        </div>
+        <div class="sa-affiliate-stat">
+          <div class="sa-affiliate-stat__label">Menunggu pembayaran</div>
+          <div class="sa-affiliate-stat__value" style="font-size:1rem;">Rp {{ '{:,.0f}'.format(menunggu_bayar).replace(',', '.') }}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="aff-tenant-list-wrap" aria-labelledby="aff-dash-comm-h">
+      <h2 id="aff-dash-comm-h" class="aff-tenant-list-title">Riwayat komisi</h2>
+      <p class="aff-tenant-list-hint">Hingga 50 entri terbaru.</p>
+      <div class="admin-aff-comm-list" style="margin-top:10px;">
+        <div class="admin-aff-comm-list-scroll">
+          {% if rows %}
+          <div class="admin-aff-comm-thead" aria-hidden="true">
+            <span>Tanggal</span>
+            <span>Invoice</span>
+            <span>Nilai</span>
+            <span>%</span>
+            <span>Komisi</span>
+            <span>Status</span>
+          </div>
+          {% endif %}
+          {% for r in rows %}
+          <article class="admin-aff-comm-card">
+            <div class="admin-aff-comm-cell admin-aff-comm-cell--muted" data-label="Tanggal">{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+            <div class="admin-aff-comm-cell" data-label="Invoice">{{ r.invoice.nomor if r.invoice else '—' }}</div>
+            <div class="admin-aff-comm-cell admin-aff-comm-cell--money" data-label="Basis">Rp {{ '{:,.0f}'.format(r.base_amount or 0).replace(',', '.') }}</div>
+            <div class="admin-aff-comm-cell admin-aff-comm-cell--pct" data-label="Persen">{{ r.commission_pct }}</div>
+            <div class="admin-aff-comm-cell admin-aff-comm-cell--money-strong" data-label="Komisi">Rp {{ '{:,.0f}'.format(r.commission_amount or 0).replace(',', '.') }}</div>
+            <div class="admin-aff-comm-cell" data-label="Status">
+              <span class="aff-tenant-badge badge {% if r.status == 'dibayar' %}badge-success{% elif r.status == 'dibatalkan' %}badge-danger{% else %}badge-warning{% endif %}">{{ r.status }}</span>
+            </div>
+          </article>
+          {% endfor %}
+          {% if not rows %}
+          <div class="admin-aff-empty">
+            <span class="admin-aff-empty__icon" aria-hidden="true">📋</span>
+            <p class="admin-aff-empty__title">Belum ada komisi</p>
+            <p class="admin-aff-empty__text">Bagikan link atau daftarkan tenant; komisi muncul setelah invoice tercatat.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+{% include 'affiliate/_app_shell_end.html' %}
+<script>
+(function(){
+  var btn = document.getElementById('affDashCopyRef');
+  var inp = document.getElementById('refLink');
+  if (!btn || !inp) return;
+  var t, orig = btn.textContent;
+  btn.addEventListener('click', function(){
+    function ok(){ btn.textContent = '✓'; clearTimeout(t); t = setTimeout(function(){ btn.textContent = orig; }, 2000); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(inp.value).then(ok).catch(function(){ inp.select(); try { document.execCommand('copy'); ok(); } catch(e){} });
+    } else { inp.select(); try { document.execCommand('copy'); ok(); } catch(e){} }
+  });
+})();
+</script>
+</body>
+</html>

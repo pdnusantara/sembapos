@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Lamaran afiliasi — Super Admin{% endblock %}
+{% block page_title %}Lamaran afiliasi{% endblock %}
+{% block page_sub %}Pendaftar dari halaman publik{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.sa_dashboard'), false),
+  ('Afiliasi', url_for('superadmin.affiliate_dashboard'), false),
+  ('Lamaran', '', true),
+]) }}
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Daftar lamaran</div>
+    <div class="card-subtitle">Setujui untuk membuat akun dashboard afiliasi eksternal.</div>
+  </div>
+  <div class="table-wrapper" style="padding:0 16px 16px;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Nama</th>
+          <th>Username</th>
+          <th>Email</th>
+          <th>WA</th>
+          <th>Status</th>
+          <th style="min-width:200px;">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in applications %}
+        <tr>
+          <td class="text-muted">{{ a.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ a.nama }}</td>
+          <td><code>{{ a.username }}</code></td>
+          <td>{{ a.email or '—' }}</td>
+          <td>{{ a.telepon or '—' }}</td>
+          <td><span class="badge {% if a.status == 'approved' %}badge-success{% elif a.status == 'rejected' %}badge-danger{% else %}badge-warning{% endif %}">{{ a.status }}</span></td>
+          <td>
+            {% if a.status == 'pending' %}
+            <div class="sa-affiliate-app-actions">
+              <form method="POST" action="{{ url_for('superadmin.affiliate_application_approve', id=a.id) }}" style="display:inline;" onsubmit="return confirm('Setujui dan buat akun?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-primary btn-sm">Setujui</button>
+              </form>
+              <form method="POST" action="{{ url_for('superadmin.affiliate_application_reject', id=a.id) }}" class="sa-affiliate-app-actions" style="display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="text" name="catatan" class="form-control" style="width:min(160px,100%);padding:6px 10px;font-size:12px;" placeholder="Alasan tolak"/>
+                <button type="submit" class="btn btn-outline btn-sm">Tolak</button>
+              </form>
+            </div>
+            {% else %}
+            —
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-muted">Belum ada lamaran.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

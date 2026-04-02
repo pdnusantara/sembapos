@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% import 'superadmin/_breadcrumbs.html' as bc %}
+{% block title %}Ubah partner — {{ aff.kode }}{% endblock %}
+{% block page_title %}Ubah partner afiliasi{% endblock %}
+{% block page_sub %}<code>{{ aff.kode }}</code> · {{ aff.jenis }}{% endblock %}
+
+{% block content %}
+{{ bc.sa_bc([
+  ('Super Admin', url_for('superadmin.sa_dashboard'), false),
+  ('Afiliasi', url_for('superadmin.affiliate_dashboard'), false),
+  ('Partner', url_for('superadmin.affiliate_partners'), false),
+  (aff.kode, '', true),
+]) }}
+
+<form method="POST" style="max-width:560px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+      <div class="card-title">Identitas</div>
+      <div class="card-subtitle">Kode referral tetap: <code>{{ aff.kode }}</code> (tidak dapat diubah).</div>
+    </div>
+    <div style="padding:16px 18px;">
+      <div class="form-group">
+        <label class="form-label">Jenis</label>
+        <input type="text" class="form-control" value="{{ aff.jenis }}" readonly style="opacity:0.85;">
+      </div>
+      {% if aff.jenis == 'tenant' and aff.tenant %}
+      <div class="form-group">
+        <label class="form-label">Tenant</label>
+        <p style="margin:0;"><a href="{{ url_for('superadmin.view_tenant', id=aff.tenant.id) }}">{{ aff.tenant.nama }}</a> (<code>{{ aff.tenant.kode }}</code>)</p>
+      </div>
+      {% elif aff.jenis == 'eksternal' and aff.user %}
+      <div class="form-group">
+        <label class="form-label">Username login</label>
+        <input type="text" class="form-control" value="@{{ aff.user.username }}" readonly style="opacity:0.85;">
+      </div>
+      {% endif %}
+      <div class="form-group">
+        <label class="form-label">Nama tampilan *</label>
+        <input type="text" name="nama_tampilan" class="form-control" required maxlength="120" value="{{ aff.nama_tampilan or '' }}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="form-control" maxlength="120" value="{{ aff.email or '' }}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Telepon</label>
+        <input type="text" name="telepon" class="form-control" maxlength="30" value="{{ aff.telepon or '' }}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Catatan internal</label>
+        <textarea name="catatan" class="form-control" rows="3" maxlength="5000">{{ aff.catatan or '' }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+      <div class="card-title">Batas kampanye referral</div>
+      <div class="card-subtitle">Setelah tanggal ini (akhir hari WIB), kode tidak lagi menerima atribusi baru. Kosongkan dengan &quot;Tanpa batas&quot;.</div>
+    </div>
+    <div style="padding:16px 18px;">
+      <div class="form-group">
+        <label class="form-checkbox" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px;">
+          <input type="radio" name="campaign_mode" value="unlimited" {% if not aff.campaign_expires_at %}checked{% endif %}/>
+          <span>Tanpa batas</span>
+        </label>
+        <label class="form-checkbox" style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-wrap:wrap;">
+          <input type="radio" name="campaign_mode" value="until" {% if aff.campaign_expires_at %}checked{% endif %}/>
+          <span>Sampai tanggal (WIB)</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="camp_date">Tanggal akhir</label>
+        <input type="date" id="camp_date" name="campaign_expires_date" class="form-control" value="{{ campaign_date }}"/>
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Simpan</button>
+  <a href="{{ url_for('superadmin.affiliate_partners') }}" class="btn btn-outline">Batal</a>
+</form>
+{% endblock %}

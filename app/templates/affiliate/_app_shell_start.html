@@ -1,0 +1,8 @@
+{# expects: aff_app_page_title; optional aff_app_lead #}
+<div class="aff-app">
+  <div class="aff-app-bg" aria-hidden="true"></div>
+  <header class="aff-app-header">
+    <h1 class="aff-app-header__title">{{ aff_app_page_title }}</h1>
+    {% if aff_app_lead is defined and aff_app_lead %}<p class="aff-app-header__lead">{{ aff_app_lead }}</p>{% endif %}
+  </header>
+  <main class="aff-app-main" id="aff-app-main">

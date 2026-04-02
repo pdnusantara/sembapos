@@ -96,7 +96,7 @@ class User(db.Model, UserMixin):
     nama = db.Column(db.String(100), nullable=False)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), default='kasir')  # superadmin, admin, kasir
+    role = db.Column(db.String(20), default='kasir')  # superadmin, admin, kasir, affiliate
     aktif = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
@@ -121,6 +121,10 @@ class User(db.Model, UserMixin):
     @property
     def is_admin(self):
         return self.role in ['superadmin', 'admin']
+
+    @property
+    def is_affiliate(self):
+        return self.role == 'affiliate'
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -895,11 +899,132 @@ class LeadCapture(db.Model):
     kecamatan = db.Column(db.String(100), nullable=True)
     desa = db.Column(db.String(100), nullable=True)
     catatan_admin = db.Column(db.Text, nullable=True)
+    affiliate_id = db.Column(db.Integer, db.ForeignKey('affiliates.id'), nullable=True)
 
     trial_tenant = db.relationship('Tenant', backref='lead_source', lazy=True)
+    affiliate = db.relationship('Affiliate', backref='lead_captures', lazy=True)
 
     def __repr__(self):
         return f'<LeadCapture {self.nama}>'
+
+
+# ==========================================
+# SUPERADMIN: AFFILIATE PROGRAM
+# ==========================================
+
+class Affiliate(db.Model):
+    """Peserta program afiliasi: per tenant atau akun eksternal."""
+    __tablename__ = 'affiliates'
+    __table_args__ = (
+        UniqueConstraint('jenis', 'tenant_id', name='uq_affiliate_jenis_tenant'),
+    )
+
+    JENIS_TENANT = 'tenant'
+    JENIS_EKSTERNAL = 'eksternal'
+
+    id = db.Column(db.Integer, primary_key=True)
+    kode = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    jenis = db.Column(db.String(20), nullable=False)  # tenant | eksternal
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    nama_tampilan = db.Column(db.String(120), nullable=False, default='')
+    email = db.Column(db.String(120), nullable=True)
+    telepon = db.Column(db.String(30), nullable=True)
+    aktif = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    catatan = db.Column(db.Text, nullable=True)
+    campaign_expires_at = db.Column(db.DateTime, nullable=True)
+
+    tenant = db.relationship('Tenant', backref=db.backref('affiliate_profile', uselist=False), lazy=True)
+    user = db.relationship('User', foreign_keys=[user_id], backref='affiliate_profile', lazy=True)
+
+    def __repr__(self):
+        return f'<Affiliate {self.kode}>'
+
+
+class AffiliateClick(db.Model):
+    """Klik link referral (tanpa PII; ip_hash untuk agregat)."""
+    __tablename__ = 'affiliate_clicks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    affiliate_id = db.Column(db.Integer, db.ForeignKey('affiliates.id'), nullable=True)
+    kode_snapshot = db.Column(db.String(32), nullable=False)
+    ip_hash = db.Column(db.String(64), nullable=True)
+    path = db.Column(db.String(120), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    affiliate = db.relationship('Affiliate', backref='clicks', lazy=True)
+
+
+class AffiliateApplication(db.Model):
+    """Pendaftaran afiliasi eksternal (publik) — persetujuan Super Admin."""
+    __tablename__ = 'affiliate_applications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nama = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(120), nullable=True)
+    telepon = db.Column(db.String(30), nullable=True)
+    username = db.Column(db.String(50), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    alasan = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending, approved, rejected
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    reviewer_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    catatan_admin = db.Column(db.Text, nullable=True)
+    created_affiliate_id = db.Column(db.Integer, db.ForeignKey('affiliates.id'), nullable=True)
+
+    reviewer = db.relationship('User', foreign_keys=[reviewer_user_id], lazy=True)
+    created_affiliate = db.relationship('Affiliate', foreign_keys=[created_affiliate_id], lazy=True)
+
+    def __repr__(self):
+        return f'<AffiliateApplication {self.id} {self.username}>'
+
+
+class TenantAffiliateAttribution(db.Model):
+    """Sekali per tenant: siapa affiliate yang membawa tenant ini."""
+    __tablename__ = 'tenant_affiliate_attributions'
+
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), primary_key=True)
+    affiliate_id = db.Column(db.Integer, db.ForeignKey('affiliates.id'), nullable=False)
+    sumber = db.Column(db.String(40), nullable=False, default='trial')  # trial, manual, ...
+    attributed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    tenant = db.relationship('Tenant', backref=db.backref('affiliate_attribution', uselist=False), lazy=True)
+    affiliate = db.relationship('Affiliate', backref='attributed_tenants', lazy=True)
+
+
+AFFILIATE_COMMISSION_STATUS = ('menunggu', 'disetujui', 'dibayar', 'dibatalkan')
+
+
+class AffiliateCommission(db.Model):
+    """Komisi dari invoice langganan yang lunas (berulang per invoice)."""
+    __tablename__ = 'affiliate_commissions'
+    __table_args__ = (
+        UniqueConstraint('tenant_invoice_id', name='uq_aff_commission_invoice'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    affiliate_id = db.Column(db.Integer, db.ForeignKey('affiliates.id'), nullable=False)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=False)
+    tenant_invoice_id = db.Column(db.Integer, db.ForeignKey('tenant_invoices.id'), nullable=False)
+    base_amount = db.Column(db.Float, nullable=False, default=0)
+    commission_pct = db.Column(db.Float, nullable=False, default=0)
+    commission_amount = db.Column(db.Float, nullable=False, default=0)
+    status = db.Column(db.String(20), nullable=False, default='menunggu')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    paid_at = db.Column(db.DateTime, nullable=True)
+    catatan = db.Column(db.Text, nullable=True)
+    payout_metode = db.Column(db.String(40), nullable=True)
+    payout_referensi = db.Column(db.Text, nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+
+    affiliate = db.relationship('Affiliate', backref='commissions', lazy=True)
+    tenant = db.relationship('Tenant', backref='affiliate_commissions', lazy=True)
+    invoice = db.relationship('TenantInvoice', backref='affiliate_commission', lazy=True, uselist=False)
+
+    def __repr__(self):
+        return f'<AffiliateCommission {self.id} inv={self.tenant_invoice_id}>'
 
 
 class AppSetting(db.Model):

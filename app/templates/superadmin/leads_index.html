@@ -78,7 +78,7 @@
   <div class="table-wrapper sa-leads-table-wrapper">
     <table class="table sa-leads-table">
       <thead>
-        <tr><th>Nama</th><th>Jenis usaha</th><th>WA</th><th>Lokasi</th><th>Sumber</th><th>Status</th><th>Tanggal</th><th>Trial</th><th>Aksi</th></tr>
+        <tr><th>Nama</th><th>Jenis usaha</th><th>WA</th><th>Lokasi</th><th>Sumber</th><th>Ref affiliate</th><th>Status</th><th>Tanggal</th><th>Trial</th><th>Aksi</th></tr>
       </thead>
       <tbody>
         {% for lead in leads %}
@@ -88,6 +88,7 @@
           <td data-label="WA" class="sa-leads-cell-small">{{ lead.no_wa or '—' }}</td>
           <td data-label="Lokasi" class="sa-leads-cell-small">{{ lead.kabupaten or '—' }}</td>
           <td data-label="Sumber"><span class="badge badge-info sa-leads-source-badge">{{ lead.source }}</span></td>
+          <td data-label="Ref affiliate" class="sa-leads-cell-small">{% if lead.affiliate %}<code>{{ lead.affiliate.kode }}</code>{% else %}—{% endif %}</td>
           <td data-label="Status">
             <span class="badge {% if lead.status == 'new' %}badge-primary{% elif lead.status == 'contacted' %}badge-warning{% elif lead.status == 'converted' %}badge-success{% else %}badge-danger{% endif %}">
               {{ lead_status_label_by_code.get(lead.status, lead.status) }}
@@ -141,7 +142,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="text-muted sa-leads-empty">Belum ada lead untuk filter ini</td></tr>
+        <tr><td colspan="10" class="text-muted sa-leads-empty">Belum ada lead untuk filter ini</td></tr>
         {% endfor %}
       </tbody>
     </table>

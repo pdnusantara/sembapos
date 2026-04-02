@@ -1,15 +1,25 @@
 import os
 import re
+import time
 import uuid
 from datetime import datetime
 from functools import wraps
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
-from flask_login import login_required, current_user
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
+from flask_login import login_required, current_user, login_user
 from sqlalchemy import or_, func
+from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import IntegrityError
 
 from .. import db
-from ..models import User, Branch, Tenant, UserAuditLog, Transaction
+from ..models import User, Branch, Tenant, UserAuditLog, Transaction, TenantAffiliateAttribution, AffiliateCommission
+from ..trial_registration import run_trial_registration
+from ..trial_constants import (
+    SIMPLE_ANIMAL_PASSWORD_WORDS,
+    TRIAL_JENIS_USAHA_CHOICES,
+    JENIS_USAHA_KEY_TO_LABEL,
+)
+from ..rate_limiting import allow_request, client_key
+from ..subscription import tenant_login_allowed
 from ..permissions import (
     parse_perm_form,
     normalize_permissions_json,
@@ -109,6 +119,246 @@ def _save_tenant_logo(file_storage, tenant_id):
     path_abs = os.path.join(folder, fname)
     file_storage.save(path_abs)
     return f'uploads/tenants/{sub}/{fname}'
+
+
+@admin_bp.route('/affiliate')
+@login_required
+@admin_required
+def affiliate_program():
+    """Link referral & ringkasan komisi untuk tenant (admin)."""
+    if current_user.is_superadmin:
+        flash('Program afiliasi per tenant diakses dari akun admin tenant (atau impersonate).', 'info')
+        return redirect(url_for('superadmin.sa_dashboard'))
+    tenant_id = current_user.tenant_id
+    if not tenant_id:
+        flash('Tidak ada tenant terkait akun ini.', 'danger')
+        return redirect(url_for('dashboard.index'))
+    tenant = Tenant.query.get_or_404(tenant_id)
+    from ..affiliate_service import ensure_tenant_affiliate, load_affiliate_settings
+
+    prof = ensure_tenant_affiliate(tenant)
+    db.session.commit()
+
+    settings = load_affiliate_settings()
+    ref_count = TenantAffiliateAttribution.query.filter_by(affiliate_id=prof.id).count()
+    _comm_rows = (
+        db.session.query(
+            AffiliateCommission.status,
+            func.coalesce(func.sum(AffiliateCommission.commission_amount), 0),
+            func.count(AffiliateCommission.id),
+        )
+        .filter(AffiliateCommission.affiliate_id == prof.id)
+        .group_by(AffiliateCommission.status)
+        .all()
+    )
+    _by_st = {st: (float(s or 0), int(c or 0)) for st, s, c in _comm_rows}
+
+    def _sc(st):
+        return _by_st.get(st, (0.0, 0))
+
+    sm, nm = _sc('menunggu')
+    sd, nd = _sc('disetujui')
+    sp, np = _sc('dibayar')
+    sx, nx = _sc('dibatalkan')
+    aff_comm_stats = {
+        'sum_menunggu': sm,
+        'n_menunggu': nm,
+        'sum_disetujui': sd,
+        'n_disetujui': nd,
+        'sum_dibayar': sp,
+        'n_dibayar': np,
+        'sum_batal': sx,
+        'n_batal': nx,
+        'sum_non_batal': sm + sd + sp,
+        'n_total': nm + nd + np + nx,
+    }
+    total_menunggu = sd
+    total_dibayar = sp
+    rows = (
+        AffiliateCommission.query.filter_by(affiliate_id=prof.id)
+        .options(joinedload(AffiliateCommission.invoice))
+        .order_by(AffiliateCommission.created_at.desc())
+        .limit(40)
+        .all()
+    )
+    base = request.url_root.rstrip('/')
+    link = f'{base}{url_for("landing.trial_register")}?ref={prof.kode}'
+    return render_template(
+        'admin/affiliate.html',
+        tenant=tenant,
+        profile=prof,
+        settings=settings,
+        ref_count=ref_count,
+        aff_comm_stats=aff_comm_stats,
+        total_menunggu=float(total_menunggu),
+        total_dibayar=float(total_dibayar),
+        referral_link=link,
+        rows=rows,
+    )
+
+
+@admin_bp.route('/affiliate/daftar-tenant', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def register_tenant_affiliate():
+    """Admin tenant mendaftarkan calon tenant baru (trial) dengan atribusi ke affiliate toko ini."""
+    if current_user.is_superadmin:
+        flash('Gunakan akun admin tenant atau impersonate.', 'info')
+        return redirect(url_for('superadmin.sa_dashboard'))
+    tenant_id = current_user.tenant_id
+    if not tenant_id:
+        flash('Tidak ada tenant terkait.', 'danger')
+        return redirect(url_for('dashboard.index'))
+    tenant = Tenant.query.get_or_404(tenant_id)
+    from ..affiliate_service import ensure_tenant_affiliate, load_affiliate_settings
+
+    prof = ensure_tenant_affiliate(tenant)
+    db.session.commit()
+    settings = load_affiliate_settings()
+    terms_txt = (settings.get('terms_affiliate_text') or '').strip()
+
+    if request.method == 'GET':
+        return render_template(
+            'trial_register.html',
+            jenis_usaha_choices=TRIAL_JENIS_USAHA_CHOICES,
+            aff_ref='',
+            form_action=url_for('admin.register_tenant_affiliate'),
+            show_aff_ref=False,
+            terms_affiliate_text=terms_txt,
+            wizard_title='Daftarkan tenant (trial)',
+            wizard_intro='Untuk calon tenant baru — komisi mengikuti kode referral toko Anda.',
+        )
+
+    lim = int(settings.get('affiliate_form_rate_per_hour') or 15)
+    if not allow_request(
+        client_key('adm_aff_tenant', request.remote_addr or '', str(tenant_id)),
+        lim,
+        3600,
+    ):
+        flash('Terlalu banyak pendaftaran. Silakan tunggu.', 'danger')
+        return redirect(url_for('admin.register_tenant_affiliate'))
+
+    if terms_txt and request.form.get('terms_ok') != '1':
+        flash('Syarat program harus disetujui.', 'danger')
+        return redirect(url_for('admin.register_tenant_affiliate'))
+
+    nama = (request.form.get('nama') or '').strip()
+    no_wa = (request.form.get('no_wa') or '').strip()
+    nama_toko = (request.form.get('nama_toko') or '').strip()
+    jenis_key = (request.form.get('jenis_usaha') or '').strip()
+    provinsi = (request.form.get('provinsi') or '').strip()
+    kabupaten = (request.form.get('kabupaten') or '').strip()
+    kecamatan = (request.form.get('kecamatan') or '').strip()
+    desa = (request.form.get('desa') or '').strip()
+    jenis_usaha = JENIS_USAHA_KEY_TO_LABEL.get(jenis_key, '')
+
+    if not nama or not no_wa or not nama_toko or not jenis_usaha:
+        flash('Lengkapi semua data wajib.', 'danger')
+        return redirect(url_for('admin.register_tenant_affiliate'))
+    if not provinsi or not kabupaten or not kecamatan:
+        flash('Wilayah wajib dipilih.', 'danger')
+        return redirect(url_for('admin.register_tenant_affiliate'))
+
+    res = run_trial_registration(
+        nama=nama,
+        no_wa=no_wa,
+        nama_toko=nama_toko,
+        jenis_usaha=jenis_usaha,
+        provinsi=provinsi,
+        kabupaten=kabupaten,
+        kecamatan=kecamatan,
+        desa=desa,
+        affiliate_id=prof.id,
+        attribution_source='affiliate_form',
+        lead_source='affiliate_tenant_admin',
+        auto_login=False,
+        session_obj=None,
+        simple_animal_words=SIMPLE_ANIMAL_PASSWORD_WORDS,
+    )
+    if not res.ok:
+        flash(res.error_message or 'Gagal.', 'danger')
+        return redirect(url_for('admin.register_tenant_affiliate'))
+
+    session['admin_aff_trial_success'] = {
+        'username': res.admin_username,
+        'password': res.plain_password,
+        'tenant_nama': res.nama_toko,
+        'kode_tenant': res.tenant_kode,
+        'expired_label': res.trial_expired_label,
+        'trial_success_mode': 'admin_affiliate',
+    }
+    # Token sekali pakai: tombol "Buka dashboard tenant baru" masuk sebagai admin tenant yang baru dibuat
+    session['admin_aff_trial_switch'] = {
+        'new_uid': res.admin_user_id,
+        'from_uid': current_user.id,
+        'ts': time.time(),
+    }
+    return redirect(url_for('admin.register_tenant_affiliate_success'))
+
+
+@admin_bp.route('/affiliate/daftar-tenant/buka-dashboard-tenant-baru')
+@login_required
+@admin_required
+def open_registered_trial_dashboard():
+    """Satu kali setelah daftar tenant dari program afiliasi — login sebagai admin tenant baru."""
+    if current_user.is_superadmin:
+        flash('Gunakan impersonate dari Super Admin jika perlu.', 'info')
+        return redirect(url_for('superadmin.sa_dashboard'))
+    sw = session.pop('admin_aff_trial_switch', None)
+    if not sw or not isinstance(sw, dict):
+        flash('Tautan tidak valid atau sudah dipakai. Masuk manual dengan username & password di halaman sukses.', 'warning')
+        return redirect(url_for('admin.affiliate'))
+    if sw.get('from_uid') != current_user.id:
+        flash('Sesi tidak cocok dengan akun Anda.', 'danger')
+        return redirect(url_for('admin.affiliate'))
+    if time.time() - float(sw.get('ts') or 0) > 900:
+        flash('Tautan pembuka dashboard sudah kedaluwarsa (15 menit). Masuk lewat halaman Masuk dengan kredensial trial.', 'warning')
+        return redirect(url_for('admin.affiliate'))
+
+    new_uid = sw.get('new_uid')
+    new_user = User.query.get(new_uid) if new_uid else None
+    if not new_user or new_user.role != 'admin' or not new_user.tenant_id:
+        flash('Akun tenant tidak ditemukan.', 'danger')
+        return redirect(url_for('admin.affiliate'))
+
+    tenant = Tenant.query.get(new_user.tenant_id)
+    if not tenant or not tenant.aktif:
+        flash('Tenant tidak aktif.', 'danger')
+        return redirect(url_for('admin.affiliate'))
+    ok_login, sub_msg = tenant_login_allowed(tenant, current_app.config)
+    if not ok_login:
+        flash(sub_msg or 'Akses tenant ditolak.', 'danger')
+        return redirect(url_for('admin.affiliate'))
+
+    log_user_audit(
+        current_user.tenant_id,
+        current_user.id,
+        'affiliate_trial_switch_login',
+        target_user_id=new_user.id,
+        detail=f'ke_tenant_id={new_user.tenant_id}',
+    )
+    login_user(new_user, remember=False)
+    new_user.last_login = datetime.utcnow()
+    db.session.commit()
+    db.session.refresh(new_user)
+    session['user_session_version'] = int(getattr(new_user, 'session_version', 0) or 0)
+    session['tenant_id'] = new_user.tenant_id
+    session['branch_id'] = new_user.branch_id
+    flash(f'Selamat datang di dashboard {tenant.nama or "toko"}.', 'success')
+    return redirect(url_for('dashboard.index'))
+
+
+@admin_bp.route('/affiliate/daftar-tenant/sukses')
+@login_required
+@admin_required
+def register_tenant_affiliate_success():
+    if current_user.is_superadmin:
+        return redirect(url_for('superadmin.sa_dashboard'))
+    data = session.pop('admin_aff_trial_success', None)
+    if data:
+        return render_template('trial_success.html', **data)
+    flash('Sesi tidak valid.', 'warning')
+    return redirect(url_for('admin.register_tenant_affiliate'))
 
 
 @admin_bp.route('/settings', methods=['GET', 'POST'])
