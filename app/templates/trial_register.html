@@ -57,8 +57,13 @@
       {% endif %}
     {% endwith %}
 
+    {% if compact_tenant_wizard %}
+    <div class="trial-progress" id="trialProgressLabel">Langkah 1 dari 2</div>
+    <div class="trial-progress-bar"><div class="trial-progress-fill" id="trialProgressFill" style="width:50%;"></div></div>
+    {% else %}
     <div class="trial-progress" id="trialProgressLabel">Langkah 1 dari 6</div>
     <div class="trial-progress-bar"><div class="trial-progress-fill" id="trialProgressFill" style="width:16.66%;"></div></div>
+    {% endif %}
 
     <form method="POST" action="{{ form_action or url_for('landing.trial_register') }}" id="trialForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -88,6 +93,62 @@
           <p class="trial-hint">Lanjut ke jenis usaha & lokasi wilayah Indonesia.</p>
         </div>
 
+        {% if compact_tenant_wizard %}
+        <!-- Step 2: jenis usaha + wilayah + persyaratan (gabungan) -->
+        <div class="trial-step" data-step="2">
+          <div class="form-group">
+            <label class="form-label">Jenis usaha</label>
+            <select name="jenis_usaha" id="inp_jenis" class="form-control" required>
+              <option value="">— Pilih —</option>
+              {% for val, label in jenis_usaha_choices %}
+              <option value="{{ val }}" {% if request.form.get('jenis_usaha') == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Provinsi</label>
+            <select id="selProv" class="form-control" aria-label="Provinsi">
+              <option value="">Memuat…</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Kabupaten / Kota</label>
+            <select id="selKab" class="form-control" aria-label="Kabupaten atau kota" disabled>
+              <option value="">Pilih provinsi terlebih dahulu</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Kecamatan</label>
+            <select id="selKec" class="form-control" aria-label="Kecamatan" disabled>
+              <option value="">Pilih kabupaten/kota terlebih dahulu</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Desa / Kelurahan</label>
+            <select id="selDesa" class="form-control" aria-label="Desa atau kelurahan" disabled>
+              <option value="">Pilih kecamatan terlebih dahulu</option>
+            </select>
+          </div>
+
+          <p class="trial-hint">Pilih berurutan dari provinsi sampai desa.</p>
+
+          {% if terms_affiliate_text %}
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label" style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:500;">
+              <input type="checkbox" name="terms_ok" value="1" required style="margin-top:4px;">
+              <span>Saya menyetujui syarat program afiliasi / pendaftaran.</span>
+            </label>
+            <div class="trial-hint" style="white-space:pre-wrap;margin-top:8px;">{{ terms_affiliate_text }}</div>
+          </div>
+          {% endif %}
+
+          <p class="trial-hint">Dengan mendaftar, Anda menyetujui pembuatan akun uji coba. Satu nomor WhatsApp hanya untuk satu trial aktif.</p>
+        </div>
+        {% else %}
         <!-- Step 2: jenis usaha -->
         <div class="trial-step" data-step="2">
           <div class="form-group">
@@ -152,6 +213,7 @@
           {% endif %}
           <p class="trial-hint">Dengan mendaftar, Anda menyetujui pembuatan akun uji coba. Satu nomor WhatsApp hanya untuk satu trial aktif.</p>
         </div>
+        {% endif %}
       </div>
 
       <div class="trial-nav">
@@ -168,7 +230,8 @@
 {% endif %}
 <script>
 (function() {
-  const totalSteps = 6;
+  const compactMode = {{ (compact_tenant_wizard|default(false))|tojson }};
+  const totalSteps = compactMode ? 2 : 6;
   let step = 1;
   let provinsiLoaded = false;
   let provId = '';
@@ -193,7 +256,8 @@
     btnBack.style.display = n > 1 ? 'block' : 'none';
     btnNext.style.display = n < totalSteps ? 'block' : 'none';
     btnSubmit.style.display = n === totalSteps ? 'block' : 'none';
-    if (n === 3 && !provinsiLoaded) loadProvinsi();
+    const needProv = compactMode ? (n === 2) : (n === 3);
+    if (needProv && !provinsiLoaded) loadProvinsi();
   }
 
   function alertStep(msg) {
@@ -241,6 +305,9 @@
     el('in_desa').value = '';
     kabId = '';
     kecId = '';
+    if (compactMode && this.value) {
+      loadKabupaten(this.value);
+    }
   });
 
   async function loadKabupaten(pid) {
@@ -273,6 +340,9 @@
     el('selDesa').disabled = true;
     el('in_desa').value = '';
     kecId = '';
+    if (compactMode && this.value) {
+      loadKecamatan(this.value);
+    }
   });
 
   async function loadKecamatan(kid) {
@@ -301,6 +371,9 @@
     el('selDesa').innerHTML = '<option value="">Memuat…</option>';
     el('selDesa').disabled = true;
     el('in_desa').value = '';
+    if (compactMode && this.value) {
+      loadDesa(this.value);
+    }
   });
 
   async function loadDesa(kid) {
@@ -335,6 +408,7 @@
       showStep(2);
       return;
     }
+    if (compactMode) return;
     if (step === 2) {
       if (!el('inp_jenis').value) { alertStep('Pilih jenis usaha.'); return; }
       showStep(3);
@@ -370,10 +444,57 @@
   });
 
   form.addEventListener('submit', function(ev) {
-    if (step !== 6) {
+    if (step !== totalSteps) {
       ev.preventDefault();
       return;
     }
+
+    if (compactMode) {
+      if (!el('inp_jenis').value) {
+        ev.preventDefault();
+        alertStep('Pilih jenis usaha.');
+        return;
+      }
+
+      const sp = el('selProv');
+      if (!sp.value) {
+        ev.preventDefault();
+        alertStep('Pilih provinsi.');
+        return;
+      }
+
+      const sk = el('selKab');
+      if (!sk.value) {
+        ev.preventDefault();
+        alertStep('Pilih kabupaten/kota.');
+        return;
+      }
+
+      const skc = el('selKec');
+      if (!skc.value) {
+        ev.preventDefault();
+        alertStep('Pilih kecamatan.');
+        return;
+      }
+
+      const sd = el('selDesa');
+      if (!sd.value) {
+        ev.preventDefault();
+        alertStep('Pilih desa/kelurahan.');
+        return;
+      }
+
+      const optP = sp.options[sp.selectedIndex];
+      const optK = sk.options[sk.selectedIndex];
+      const optKc = skc.options[skc.selectedIndex];
+      const optD = sd.options[sd.selectedIndex];
+      el('in_provinsi').value = optP.getAttribute('data-nama') || optP.textContent || '';
+      el('in_kabupaten').value = optK.getAttribute('data-nama') || optK.textContent || '';
+      el('in_kecamatan').value = optKc.getAttribute('data-nama') || optKc.textContent || '';
+      el('in_desa').value = optD.getAttribute('data-nama') || optD.textContent || '';
+      return;
+    }
+
     const sd = el('selDesa');
     if (!sd.value) {
       ev.preventDefault();

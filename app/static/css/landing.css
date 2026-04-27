@@ -792,10 +792,94 @@ main {
   transition: background 0.15s, transform 0.15s;
 }
 
+.btn-whatsapp__icon {
+  flex-shrink: 0;
+}
+
 .btn-whatsapp:hover {
   background: #22c55e;
   color: #fff;
   transform: translateY(-1px);
+}
+
+.btn-whatsapp:focus-visible {
+  outline: 2px solid var(--dark);
+  outline-offset: 3px;
+}
+
+/* ── WhatsApp FAB (mengambang, mudah dijangkau) ─────── */
+.wa-fab {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: 1.25rem;
+  z-index: 260;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--whatsapp);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(37, 211, 102, 0.45);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  animation: wa-fab-glow 2.8s ease-in-out infinite;
+}
+
+.wa-fab:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 28px rgba(37, 211, 102, 0.55);
+}
+
+.wa-fab:focus-visible {
+  outline: 3px solid var(--dark);
+  outline-offset: 3px;
+}
+
+@keyframes wa-fab-glow {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(37, 211, 102, 0.45);
+  }
+  50% {
+    box-shadow: 0 6px 26px rgba(37, 211, 102, 0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wa-fab {
+    animation: none;
+  }
+}
+
+/* Di HP: satu WA — pakai FAB mengambang; tombol WA di bar sticky disembunyikan */
+@media (max-width: 768px) {
+  .wa-fab {
+    bottom: calc(5.35rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-sticky-cta .btn-wa-sticky {
+    display: none !important;
+  }
+
+  .mobile-sticky-cta .cta-inner__actions {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .mobile-sticky-cta .cta-inner__actions .btn-primary {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+}
+
+@media print {
+  .wa-fab {
+    display: none !important;
+  }
 }
 
 /* ── MOBILE STICKY CTA ─────────────────────────────── */
@@ -827,6 +911,51 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.cta-inner--split {
+  flex-wrap: wrap;
+  row-gap: 0.65rem;
+}
+
+.cta-inner__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cta-inner__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.btn-wa-sticky {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 0.8rem;
+  background: var(--whatsapp);
+  color: #fff !important;
+  border: none;
+  box-shadow: 0 2px 10px rgba(37, 211, 102, 0.35);
+  transition: background 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+
+.btn-wa-sticky:hover {
+  background: #20bd5a;
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+
+.btn-wa-sticky:focus-visible {
+  outline: 2px solid var(--dark);
+  outline-offset: 2px;
 }
 
 .cta-inner strong {
@@ -1091,5 +1220,15 @@ footer p + p {
   .cta-section {
     padding: 2.5rem 1.25rem;
     border-radius: 16px;
+  }
+
+  .cta-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cta-row > a {
+    width: 100%;
+    justify-content: center;
   }
 }

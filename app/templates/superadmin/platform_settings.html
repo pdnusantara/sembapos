@@ -38,7 +38,7 @@
     <div class="card-header"><div class="card-title">🏷️ Platform</div></div>
     <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
       {% for key, label, default in setting_keys %}
-      {% if key in ('platform_name', 'default_tenant_timezone', 'maintenance_mode') %}
+      {% if key in ('platform_name', 'default_tenant_timezone', 'maintenance_mode', 'landing_wa_phone', 'landing_wa_message') %}
       <div class="form-group" style="margin:0;">
         <label class="form-label">{{ label }}</label>
         {% if key == 'maintenance_mode' %}
@@ -46,6 +46,12 @@
           <option value="0" {% if current_settings[key] != '1' %}selected{% endif %}>Nonaktif</option>
           <option value="1" {% if current_settings[key] == '1' %}selected{% endif %}>Aktif (semua tenant diblokir)</option>
         </select>
+        {% elif key == 'landing_wa_message' %}
+        <input type="text" name="{{ key }}" value="{{ current_settings[key] }}" class="form-control" placeholder="{{ default }}" maxlength="500">
+        <p class="text-muted" style="font-size:12px;margin:4px 0 0;">Teks yang terisi otomatis saat pengunjung membuka chat dari tombol WhatsApp.</p>
+        {% elif key == 'landing_wa_phone' %}
+        <input type="text" name="{{ key }}" value="{{ current_settings[key] }}" class="form-control" placeholder="{{ default }}" inputmode="numeric" autocomplete="tel">
+        <p class="text-muted" style="font-size:12px;margin:4px 0 0;">Tanpa + dan spasi, dengan kode negara <strong>62</strong> (contoh: 6281234567890). Boleh juga 08… — akan dinormalisasi.</p>
         {% else %}
         <input type="text" name="{{ key }}" value="{{ current_settings[key] }}" class="form-control" placeholder="{{ default }}">
         {% endif %}

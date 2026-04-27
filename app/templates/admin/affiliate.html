@@ -151,6 +151,26 @@
     </div>
   </section>
 </div>
+  <div class="admin-affiliate-mobile-tabbar-spacer" aria-hidden="true"></div>
+  <nav
+    class="aff-app-tabbar admin-affiliate-mobile-tabbar"
+    aria-label="Menu afiliasi"
+  >
+    <a
+      href="{{ url_for('admin.affiliate_program') }}"
+      class="aff-app-tab {% if request.endpoint == 'admin.affiliate_program' %}aff-app-tab--active{% endif %}"
+    >
+      <span class="aff-app-tab__ico" aria-hidden="true">🔗</span>
+      <span class="aff-app-tab__lbl">Ringkasan</span>
+    </a>
+    <a
+      href="{{ url_for('admin.register_tenant_affiliate') }}"
+      class="aff-app-tab {% if request.endpoint == 'admin.register_tenant_affiliate' %}aff-app-tab--active{% endif %}"
+    >
+      <span class="aff-app-tab__ico" aria-hidden="true">📝</span>
+      <span class="aff-app-tab__lbl">Daftar tenant</span>
+    </a>
+  </nav>
 {% endblock %}
 
 {% block scripts %}

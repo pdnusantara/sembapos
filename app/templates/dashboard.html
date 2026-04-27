@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% block title %}Dashboard — Kasir Sembako{% endblock %}
+{% block body_class %}page-dashboard{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 {% block page_sub %}Ringkasan bisnis hari ini · {{ dashboard_timezone_label }}{% endblock %}
 
 {% block content %}
-<div class="stats-grid">
+<div class="stats-grid dashboard-stats">
   <div class="stat-card primary">
     <div class="stat-icon primary">💰</div>
     <div class="stat-info">
@@ -56,21 +57,19 @@
   </div>
 </div>
 
-<div class="layout-split-2-1 dashboard-main" style="margin-bottom:20px;">
+<div class="layout-split-2-1 dashboard-main">
   {% if onboarding %}
-  <div class="card" style="grid-column:1/-1;border:2px dashed var(--primary);background:rgba(108,99,255,0.04);">
+  <div class="card dashboard-onboarding">
     <div class="card-header">
       <div class="card-title">🚀 Setup Toko Anda ({{ onboarding.done }}/{{ onboarding.total }})</div>
-      <div style="font-size:12px;color:var(--text-muted);">{{ onboarding.pct }}% selesai</div>
+      <div class="dashboard-onboarding-pct">{{ onboarding.pct }}% selesai</div>
     </div>
-    <div style="padding:0 16px;">
-      <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.1);margin-bottom:12px;overflow:hidden;">
-        <div style="width:{{ onboarding.pct }}%;height:100%;background:var(--primary);border-radius:3px;transition:width 0.3s;"></div>
-      </div>
+    <div class="dashboard-onboarding-progress-outer">
+      <div class="dashboard-onboarding-progress-inner" style="width:{{ onboarding.pct }}%;"></div>
     </div>
-    <div style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:8px;">
+    <div class="dashboard-onboarding-steps">
       {% for step in onboarding.steps %}
-      <a href="{{ step.url }}" class="btn {% if step.done %}btn-outline{% else %}btn-primary{% endif %} btn-sm" style="{% if step.done %}opacity:0.6;text-decoration:line-through;{% endif %}">
+      <a href="{{ step.url }}" class="btn dashboard-onboarding-step {% if step.done %}btn-outline{% else %}btn-primary{% endif %} btn-sm{% if step.done %} dashboard-onboarding-step--done{% endif %}">
         {{ '✅' if step.done else '⬜' }} {{ step.label }}
       </a>
       {% endfor %}
@@ -78,21 +77,23 @@
   </div>
   {% endif %}
 
-  <div class="card">
+  <div class="card dashboard-card-chart">
     <div class="card-header">
       <div>
         <div class="card-title">📈 Penjualan 7 Hari Terakhir</div>
         <div class="card-subtitle">Total per hari kalender ({{ dashboard_timezone_label }})</div>
       </div>
     </div>
-    <canvas id="salesChart" height="200" aria-label="Grafik penjualan 7 hari terakhir"></canvas>
+    <div class="dashboard-chart-wrap">
+      <canvas id="salesChart" height="200" aria-label="Grafik penjualan 7 hari terakhir"></canvas>
+    </div>
   </div>
 
-  <div class="card">
+  <div class="card dashboard-card-quick">
     <div class="card-header">
       <div class="card-title">⚡ Aksi Cepat</div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;">
+    <div class="dashboard-quick-actions">
       {% if perm('pos') %}
       <a href="{{ url_for('pos.index') }}" class="btn btn-primary btn-block">🛒 Buka Kasir</a>
       {% endif %}
@@ -114,8 +115,8 @@
     </div>
 
     {% if total_cabang > 0 %}
-    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;font-weight:600;">INFO TOKO</div>
+    <div class="dashboard-info-toko">
+      <div class="dashboard-info-toko__label">INFO TOKO</div>
       <div class="cart-row">
         <span>Cabang Aktif</span>
         <span class="badge badge-success">{{ total_cabang }}</span>
@@ -125,20 +126,20 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
+<div class="card dashboard-recent-card">
+  <div class="card-header dashboard-recent-card__head">
     <div>
       <div class="card-title">🧾 Transaksi Terbaru</div>
       <div class="card-subtitle">10 transaksi terakhir (semua tanggal)</div>
     </div>
     {% if perm('transactions') %}
-    <a href="{{ url_for('transactions.index') }}" class="btn btn-outline btn-sm">Lihat semua →</a>
+    <a href="{{ url_for('transactions.index') }}" class="btn btn-outline btn-sm dashboard-recent-card__link">Lihat semua →</a>
     {% elif perm('reports') %}
-    <a href="{{ url_for('reports.index') }}" class="btn btn-outline btn-sm">Laporan →</a>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline btn-sm dashboard-recent-card__link">Laporan →</a>
     {% endif %}
   </div>
-  <div class="table-wrapper">
-    <table class="table">
+  <div class="table-wrapper dashboard-trx-wrap">
+    <table class="table dashboard-trx-table">
       <thead>
         <tr>
           <th>No. Transaksi</th>

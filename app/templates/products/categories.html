@@ -1,35 +1,42 @@
 {% extends 'base.html' %}
 {% block title %}Kategori Produk{% endblock %}
+{% block body_class %}page-categories{% endblock %}
 {% block page_title %}🏷️ Kategori Produk{% endblock %}
 {% block page_sub %}{{ categories|length }} kategori tersedia{% endblock %}
 
 {% block content %}
-<div class="layout-two-col">
-  <div class="card">
-    <div class="table-wrapper">
-      <table class="table">
+<div class="layout-two-col categories-layout">
+  <div class="card categories-list-card">
+    <div class="card-header categories-list-card__head">
+      <div>
+        <div class="card-title">Daftar kategori</div>
+        <div class="card-subtitle categories-list-card__sub">{{ categories|length }} kategori</div>
+      </div>
+    </div>
+    <div class="table-wrapper categories-table-wrap">
+      <table class="table categories-data-table {% if current_user.is_admin %}categories-data-table--admin{% endif %}">
         <thead>
           <tr><th>Nama Kategori</th><th>Jumlah Produk</th>{% if current_user.is_admin %}<th class="th-actions">Aksi</th>{% endif %}</tr>
         </thead>
         <tbody>
           {% for cat in categories %}
           <tr>
-            <td style="font-weight:600;">📦 {{ cat.nama }}</td>
-            <td><span class="badge badge-primary">{{ cat.products|length }} produk</span></td>
+            <td class="category-cell-name"><span class="category-name-text">📦 {{ cat.nama }}</span></td>
+            <td class="category-cell-count"><span class="badge badge-primary">{{ cat.products|length }} produk</span></td>
             {% if current_user.is_admin %}
-            <td class="td-actions">
-              <div class="row-actions" role="group" aria-label="Aksi kategori">
-                <a href="{{ url_for('products.edit_category', id=cat.id) }}" class="btn btn-outline btn-sm" title="Edit kategori">✏️ Edit</a>
-                <form method="POST" action="{{ url_for('products.delete_category', id=cat.id) }}" class="row-actions__form" onsubmit="return confirm('Hapus kategori ini?');">
+            <td class="td-actions category-cell-actions">
+              <div class="row-actions category-row-actions" role="group" aria-label="Aksi kategori">
+                <a href="{{ url_for('products.edit_category', id=cat.id) }}" class="btn btn-outline btn-sm category-btn-edit" title="Edit kategori">✏️ Edit</a>
+                <form method="POST" action="{{ url_for('products.delete_category', id=cat.id) }}" class="row-actions__form category-form-del" onsubmit="return confirm('Hapus kategori ini?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                  <button type="submit" class="btn btn-outline btn-sm row-actions__del" style="color:var(--danger);" title="Hapus" {{ 'disabled' if cat.products }}>🗑️</button>
+                  <button type="submit" class="btn btn-outline btn-sm row-actions__del category-btn-del" title="Hapus" {{ 'disabled' if cat.products }}>🗑️ Hapus</button>
                 </form>
               </div>
             </td>
             {% endif %}
           </tr>
           {% else %}
-          <tr><td colspan="3" style="text-align:center;padding:32px;color:var(--text-muted);">📭 Belum ada kategori</td></tr>
+          <tr class="categories-empty-row"><td colspan="{% if current_user.is_admin %}3{% else %}2{% endif %}" class="categories-empty">📭 Belum ada kategori</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -37,15 +44,15 @@
   </div>
 
   {% if current_user.is_admin %}
-  <div class="card">
+  <div class="card categories-form-card">
     <div class="card-header"><div class="card-title">➕ Tambah Kategori</div></div>
-    <form method="POST" action="{{ url_for('products.add_category') }}">
+    <form method="POST" action="{{ url_for('products.add_category') }}" class="categories-add-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div class="form-group">
         <label class="form-label">Nama Kategori *</label>
-        <input type="text" name="nama" class="form-control" required placeholder="Contoh: Beras & Gula">
+        <input type="text" name="nama" class="form-control" required placeholder="Contoh: Beras & Gula" autocomplete="off">
       </div>
-      <button type="submit" class="btn btn-primary btn-block">Simpan Kategori</button>
+      <button type="submit" class="btn btn-primary btn-block categories-btn-save">Simpan Kategori</button>
     </form>
   </div>
   {% endif %}

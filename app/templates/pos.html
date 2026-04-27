@@ -136,22 +136,33 @@
         <span>Subtotal</span>
         <span id="subtotalDisplay" style="font-weight:600; color:var(--pos-text);">Rp 0</span>
       </div>
-      <div class="pos-summary-row discount" id="diskonPerBarisRow" style="display:none;">
-        <span>Diskon per baris</span>
-        <span id="diskonPerBarisDisplay">Rp 0</span>
-      </div>
-      <div class="pos-summary-row discount" id="diskonMemberRow" style="display:none;">
-        <span>Diskon member</span>
-        <span id="diskonMemberDisplay">Rp 0</span>
-      </div>
-      <div class="pos-summary-row" style="align-items: center;">
-        <span>Diskon manual</span>
-        <input type="number" id="diskonInput" class="form-control" style="width: 100px; text-align: right; padding: 4px 8px; height: 32px;" value="0" min="0" oninput="recalculate()">
-      </div>
-      <div class="pos-summary-row discount" id="promoDiscountRow" style="display:none;">
-        <span>Diskon promo</span>
-        <span id="promoDiscountDisplay">Rp 0</span>
-      </div>
+
+      <details class="pos-discount-details" id="discountDetails">
+        <summary>
+          <span>Detail diskon</span>
+          <span class="pos-discount-summary-hint">ketuk untuk lihat</span>
+        </summary>
+
+        <div class="pos-discount-details-body">
+          <div class="pos-summary-row discount" id="diskonPerBarisRow" style="display:none;">
+            <span>Diskon per baris</span>
+            <span id="diskonPerBarisDisplay">Rp 0</span>
+          </div>
+          <div class="pos-summary-row discount" id="diskonMemberRow" style="display:none;">
+            <span>Diskon member</span>
+            <span id="diskonMemberDisplay">Rp 0</span>
+          </div>
+          <div class="pos-summary-row" style="align-items: center;">
+            <span>Diskon manual</span>
+            <input type="number" id="diskonInput" class="form-control" style="width: 100px; text-align: right; padding: 4px 8px; height: 32px;" value="0" min="0" oninput="recalculate()">
+          </div>
+          <div class="pos-summary-row discount" id="promoDiscountRow" style="display:none;">
+            <span>Diskon promo</span>
+            <span id="promoDiscountDisplay">Rp 0</span>
+          </div>
+        </div>
+      </details>
+
       <div class="pos-summary-row total">
         <span>Total</span>
         <span id="totalDisplay">Rp 0</span>
@@ -210,23 +221,27 @@
         <button type="button" class="method-btn method-btn--danger" onclick="focusPaymentInput('kredit')">💳 Kredit</button>
       </div>
 
-      <div id="splitPaymentSection" style="margin-top:8px;">
+      <button type="button" class="pos-pay-split-toggle" id="posPaySplitToggle" onclick="togglePayModalSplitExpanded()" aria-expanded="false">
+        Split pembayaran — tampilkan semua metode
+      </button>
+
+      <div id="splitPaymentSection" class="pos-split-payment-section" data-split-expanded="0" data-active-method="tunai" style="margin-top:8px;">
         <label class="form-label">Nominal per metode</label>
-        <div style="display:grid;grid-template-columns:1fr;gap:8px;">
-          <div class="payment-input">
-            <span class="currency-prefix" style="min-width:74px;">Tunai</span>
+        <div class="pos-payment-inputs-grid" style="display:grid;grid-template-columns:1fr;gap:8px;">
+          <div class="payment-input" data-pay-method="tunai">
+            <span class="currency-prefix pos-pay-prefix">Tunai</span>
             <input type="number" id="payTunaiInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
           </div>
-          <div class="payment-input">
-            <span class="currency-prefix" style="min-width:74px;">Transfer</span>
+          <div class="payment-input" data-pay-method="transfer">
+            <span class="currency-prefix pos-pay-prefix">Transfer</span>
             <input type="number" id="payTransferInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
           </div>
-          <div class="payment-input">
-            <span class="currency-prefix" style="min-width:74px;">QRIS</span>
+          <div class="payment-input" data-pay-method="qris">
+            <span class="currency-prefix pos-pay-prefix">QRIS</span>
             <input type="number" id="payQrisInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
           </div>
-          <div class="payment-input">
-            <span class="currency-prefix" style="min-width:74px;">Kredit</span>
+          <div class="payment-input" data-pay-method="kredit">
+            <span class="currency-prefix pos-pay-prefix">Kredit</span>
             <input type="number" id="payKreditInput" class="form-control" placeholder="0" min="0" oninput="calcChange()">
           </div>
         </div>
@@ -279,23 +294,31 @@
 </div>
 
 <div class="modal-overlay" id="successModal">
-  <div class="modal" style="text-align:center;max-width:380px;">
+  <div class="modal pos-success-modal">
     <div class="success-animation">
       <span class="success-icon">✅</span>
-      <h2 style="color:var(--text-light);margin-bottom:8px;">Transaksi Berhasil!</h2>
+      <h2 class="pos-success-modal__title">Transaksi Berhasil!</h2>
       <p class="text-muted" id="successNomor"></p>
     </div>
-    <div style="background:rgba(255,255,255,0.04);border-radius:12px;padding:16px;margin:16px 0;text-align:left;">
+    <div class="pos-success-modal__summary">
       <div class="cart-row"><span>Total</span><span id="successTotal" class="fw-bold text-light"></span></div>
       <div class="cart-row"><span>Dibayar</span><span id="successBayar" class="fw-bold"></span></div>
-      <div id="successPayments" style="margin-top:8px;"></div>
-      <div id="successDecisionSummary" class="text-muted" style="margin-top:8px;font-size:12px;"></div>
+      <div id="successPayments" class="pos-success-modal__payments"></div>
+      <div id="successDecisionSummary" class="text-muted pos-success-modal__promo"></div>
       <div class="cart-row" id="successChangeRow"><span>Kembalian</span><span id="successKembalian" class="fw-bold text-success"></span></div>
       <div class="cart-row" id="successPointRow" style="display:none;"><span>Poin didapat</span><span id="successPoint" class="fw-bold text-warning"></span></div>
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <a id="btnCetakStruk" href="#" target="_blank" class="btn btn-primary" style="flex:1;min-width:140px;">🖨️ Cetak struk</a>
-      <button type="button" class="btn btn-outline" style="flex:1;min-width:140px;" onclick="closeSuccessModal()">🆕 Transaksi baru</button>
+    <div class="pos-success-actions">
+      <a id="btnShareWa" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-success pos-success-wa-share" title="Buka WhatsApp dengan teks struk ringkas">
+        <span class="pos-success-wa-share__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.173.198-.297.298-.495.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+        </span>
+        <span class="pos-success-wa-share__label">Bagikan ke WhatsApp</span>
+      </a>
+      <div class="pos-success-actions__row">
+        <a id="btnCetakStruk" href="#" target="_blank" class="btn btn-primary pos-success-btn-print">🖨️ Cetak struk</a>
+        <button type="button" class="btn btn-outline pos-success-btn-new" onclick="closeSuccessModal()">🆕 Transaksi baru</button>
+      </div>
     </div>
   </div>
 </div>
@@ -868,6 +891,15 @@ async function openPayModal() {
   }
   renderQuickPayPresets(totalAkhir());
   calcChange();
+  var splitSec = document.getElementById('splitPaymentSection');
+  if (splitSec) {
+    splitSec.setAttribute('data-split-expanded', '0');
+    splitSec.setAttribute('data-active-method', 'tunai');
+  }
+  document.querySelectorAll('#payModal .method-btn').forEach(function(b) { b.classList.remove('active'); });
+  var btns = document.querySelectorAll('#payModal .method-btn');
+  if (btns[0]) btns[0].classList.add('active');
+  syncPayModalSplitRows();
   document.getElementById('payModal').classList.add('active');
   setTimeout(function() {
     const el = document.getElementById('payTunaiInput');
@@ -898,6 +930,16 @@ function syncMobileDock() {
   const payDock = document.getElementById('posMobileDockPay');
   const countEl = document.getElementById('posMobileDockCount');
   const totalEl = document.getElementById('posMobileDockTotal');
+  const tabCart = document.getElementById('posMobileTabCart');
+  const isCartTabActive = tabCart && tabCart.classList.contains('active');
+
+  // Saat tab Keranjang aktif, sembunyikan dock agar tidak dobel dengan footer keranjang.
+  if (isCartTabActive) {
+    dock.hidden = true;
+    dock.setAttribute('aria-hidden', 'true');
+    if (bleed) bleed.classList.remove('pos-page-bleed--dock');
+    return;
+  }
   if (!cart.length) {
     dock.hidden = true;
     dock.setAttribute('aria-hidden', 'true');
@@ -956,7 +998,7 @@ function syncPosMobileLayout() {
   const cartArea = document.getElementById('posCartArea');
   if (!productsArea || !cartArea) return;
   
-  if (window.innerWidth > 768) {
+  if (window.innerWidth > 1024) {
     productsArea.style.display = 'flex';
     cartArea.classList.remove('active');
   } else {
@@ -1302,6 +1344,42 @@ function calcChange() {
   document.getElementById('checkoutBtn').disabled = cart.length === 0 || !shiftOpen || pb.remaining > 0.0001;
 }
 
+/** Di mobile: sembunyikan baris nominal metode lain kecuali split diaktifkan. */
+function syncPayModalSplitRows() {
+  var split = document.getElementById('splitPaymentSection');
+  var toggle = document.getElementById('posPaySplitToggle');
+  if (!split) return;
+  var compact = false;
+  try {
+    compact = window.matchMedia('(max-width: 1024px)').matches;
+  } catch (e) {}
+  var expanded = split.getAttribute('data-split-expanded') === '1';
+  var active = split.getAttribute('data-active-method') || 'tunai';
+  split.querySelectorAll('.payment-input').forEach(function(row) {
+    var m = row.getAttribute('data-pay-method');
+    if (!compact) {
+      row.hidden = false;
+    } else {
+      row.hidden = !expanded && m !== active;
+    }
+  });
+  if (toggle) {
+    toggle.hidden = !compact;
+    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    toggle.textContent = expanded
+      ? 'Hanya metode terpilih (sembunyikan split)'
+      : 'Split pembayaran — tampilkan semua metode';
+  }
+}
+
+function togglePayModalSplitExpanded() {
+  var split = document.getElementById('splitPaymentSection');
+  if (!split) return;
+  var cur = split.getAttribute('data-split-expanded') === '1';
+  split.setAttribute('data-split-expanded', cur ? '0' : '1');
+  syncPayModalSplitRows();
+}
+
 function focusPaymentInput(method) {
   method = String(method || '').toLowerCase();
   const map = {
@@ -1317,6 +1395,9 @@ function focusPaymentInput(method) {
   const idxMap = { tunai: 0, transfer: 1, qris: 2, kredit: 3 };
   const idx = idxMap[method];
   if (typeof idx === 'number' && btns[idx]) btns[idx].classList.add('active');
+  var split = document.getElementById('splitPaymentSection');
+  if (split) split.setAttribute('data-active-method', method);
+  syncPayModalSplitRows();
   const el = document.getElementById(targetId);
   if (el) {
     el.focus();
@@ -1435,6 +1516,49 @@ async function refreshMembersSelect() {
 
 function posReceiptHref(id) {
   return {{ url_for('receipt.view_receipt', id=888888888)|tojson }}.replace('888888888', String(id));
+}
+
+function posAbsoluteUrl(pathOrUrl) {
+  try {
+    return new URL(pathOrUrl, window.location.origin).href;
+  } catch (e) {
+    return String(pathOrUrl || '');
+  }
+}
+
+function buildPosReceiptWaText(data) {
+  const lines = [];
+  lines.push('*SembaPOS — Transaksi berhasil*');
+  lines.push('No: ' + (data.nomor || ''));
+  lines.push('Total: ' + formatRupiah(data.total));
+  lines.push('Dibayar: ' + formatRupiah(data.bayar));
+  const labels = { tunai: 'Tunai', transfer: 'Transfer', qris: 'QRIS', kredit: 'Kredit' };
+  (Array.isArray(data.payments) ? data.payments : []).forEach(function (p) {
+    const lab = labels[p.method] || String(p.method || '').toUpperCase();
+    lines.push(lab + ': ' + formatRupiah(p.amount || 0));
+  });
+  if (data.kembalian > 0) {
+    lines.push('Kembalian: ' + formatRupiah(data.kembalian));
+  }
+  if (data.poin > 0) {
+    lines.push('Poin didapat: +' + data.poin);
+  }
+  const dd = data.discount_decision || {};
+  if (dd.reason && String(dd.reason).trim()) {
+    lines.push('Promo: ' + String(dd.reason).trim());
+  }
+  if (data.transaction_id) {
+    lines.push('');
+    lines.push('Struk digital:');
+    lines.push(posAbsoluteUrl(posReceiptHref(data.transaction_id)));
+  }
+  lines.push('');
+  lines.push('Terima kasih.');
+  return lines.join('\n');
+}
+
+function posWaShareUrlFromText(text) {
+  return 'https://wa.me/?text=' + encodeURIComponent(text);
 }
 
 function focusSearch() {
@@ -1788,6 +1912,11 @@ function showSuccessModal(data) {
     btnCetak.href = posReceiptHref(data.transaction_id);
   }
 
+  const btnWa = document.getElementById('btnShareWa');
+  if (btnWa) {
+    btnWa.href = posWaShareUrlFromText(buildPosReceiptWaText(data));
+  }
+
   document.getElementById('successChangeRow').style.display = data.kembalian > 0 ? 'flex' : 'none';
 
   const pointRow = document.getElementById('successPointRow');
@@ -1804,7 +1933,7 @@ function showSuccessModal(data) {
 function closeSuccessModal() {
   document.getElementById('successModal').classList.remove('active');
   try {
-    if (window.matchMedia('(max-width: 768px)').matches) setPosMobileTab('produk');
+    if (window.matchMedia('(max-width: 1024px)').matches) setPosMobileTab('produk');
   } catch (e) {}
   focusSearch();
 }
@@ -1825,6 +1954,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.addEventListener('resize', function() {
     syncPosFilterDetailsOpen();
     syncPosMobileLayout();
+    syncPayModalSplitRows();
   });
   syncPosMobileLayout();
   (function() {
@@ -1886,6 +2016,17 @@ document.addEventListener('DOMContentLoaded', function() {
   syncMobileDock();
   updatePosTabBadge();
   focusSearch();
+  syncPayModalSplitRows();
+
+  // Di mobile, mulai dengan panel "Detail diskon" tertutup supaya footer lebih ringkas.
+  try {
+    if (window.innerWidth <= 1024) {
+      var det = document.getElementById('discountDetails');
+      if (det && det.hasAttribute('open')) {
+        det.removeAttribute('open');
+      }
+    }
+  } catch (e) {}
 });
 
 function toggleMobileView(view) {
@@ -1897,19 +2038,29 @@ function toggleMobileView(view) {
   if (!productsArea || !cartArea) return;
   
   if (view === 'produk') {
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 1024) {
       productsArea.style.display = 'flex';
       cartArea.classList.remove('active');
     }
     if (tabProduk) tabProduk.classList.add('active');
     if (tabCart) tabCart.classList.remove('active');
   } else {
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 1024) {
       productsArea.style.display = 'none';
       cartArea.classList.add('active');
     }
     if (tabProduk) tabProduk.classList.remove('active');
     if (tabCart) tabCart.classList.add('active');
+
+    // Saat masuk tab Keranjang di mobile, scroll halus ke ringkasan total.
+    if (window.innerWidth <= 1024) {
+      setTimeout(function() {
+        var footer = document.querySelector('.pos-cart-footer');
+        if (footer) {
+          footer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+      }, 150);
+    }
   }
 }
 

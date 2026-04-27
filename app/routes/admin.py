@@ -227,6 +227,7 @@ def register_tenant_affiliate():
             terms_affiliate_text=terms_txt,
             wizard_title='Daftarkan tenant (trial)',
             wizard_intro='Untuk calon tenant baru — komisi mengikuti kode referral toko Anda.',
+            compact_tenant_wizard=True,
         )
 
     lim = int(settings.get('affiliate_form_rate_per_hour') or 15)

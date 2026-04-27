@@ -26,6 +26,7 @@ from ..models import (
     TutorialPageConfig,
     AffiliateApplication,
 )
+from ..platform_contact import public_whatsapp_link
 from ..affiliate_service import (
     get_affiliate_by_code,
     normalize_ref_code,
@@ -166,18 +167,27 @@ def index():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.index'))
     landing_packages = _landing_package_rows()
-    return render_template('landing.html', landing_packages=landing_packages)
+    return render_template(
+        'landing.html',
+        landing_packages=landing_packages,
+        landing_wa_link=public_whatsapp_link(),
+    )
 
 
 @landing_bp.route('/tutorial')
 def tutorial():
+    landing_wa_link = public_whatsapp_link()
     try:
         cfg = ensure_tutorial_page_config_default(slug=TUTORIAL_CONFIG_SLUG, aktif=True)
         tutorial_data = json.loads(cfg.data_json or '{}')
-        return render_template('tutorial_dynamic.html', tutorial=tutorial_data)
+        return render_template(
+            'tutorial_dynamic.html',
+            tutorial=tutorial_data,
+            landing_wa_link=landing_wa_link,
+        )
     except Exception:
         # Fallback: jika DB/seed gagal, tetap tampil versi statis.
-        return render_template('tutorial.html')
+        return render_template('tutorial.html', landing_wa_link=landing_wa_link)
 
 
 @landing_bp.route('/daftar-trial/wilayah/provinsi')
@@ -226,6 +236,7 @@ def trial_register():
             aff_ref=aff_ref,
             form_action=url_for('landing.trial_register'),
             show_aff_ref=True,
+            compact_tenant_wizard=True,
         )
         resp = make_response(html)
         if ref_q:

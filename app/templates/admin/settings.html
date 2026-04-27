@@ -1,22 +1,23 @@
 {% extends 'base.html' %}
 {% block title %}Pengaturan — {{ tenant.nama }}{% endblock %}
+{% block body_class %}page-settings{% endblock %}
 {% block page_title %}⚙️ Pengaturan{% endblock %}
 {% block page_sub %}Profil toko, logo, dan zona waktu{% endblock %}
 
 {% block content %}
-<form method="POST" enctype="multipart/form-data" style="max-width:640px;">
+<form method="POST" enctype="multipart/form-data" class="admin-settings-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
-  <div class="card" style="margin-bottom:16px;">
+  <div class="card admin-settings-card">
     <div class="card-header">
       <div class="card-title">Profil toko</div>
       <div class="card-subtitle">Nama, kontak, dan alamat tersimpan di data tenant (sama untuk semua cabang).</div>
     </div>
-    <div style="padding:16px;">
+    <div class="admin-settings-card__body">
       <div class="form-group">
         <label class="form-label">Kode toko</label>
-        <input type="text" class="form-control" value="{{ tenant.kode }}" disabled style="opacity:0.7;">
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Kode tidak dapat diubah dari sini.</div>
+        <input type="text" class="form-control admin-settings-input-readonly" value="{{ tenant.kode }}" disabled>
+        <div class="admin-settings-hint">Kode tidak dapat diubah dari sini.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Nama toko / usaha *</label>
@@ -63,20 +64,20 @@
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:16px;">
+  <div class="card admin-settings-card">
     <div class="card-header">
       <div class="card-title">Logo toko</div>
       <div class="card-subtitle">Tampil di struk cetak jika diunggah. PNG, JPG, WebP, atau GIF (maks. sesuai batas unggah server).</div>
     </div>
-    <div style="padding:16px;">
+    <div class="admin-settings-card__body">
       {% if tenant.logo %}
-      <div style="margin-bottom:12px;">
-        <img src="{{ url_for('static', filename=tenant.logo) }}" alt="Logo" style="max-height:80px;max-width:240px;object-fit:contain;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg-muted);">
+      <div class="admin-settings-logo-preview">
+        <img src="{{ url_for('static', filename=tenant.logo) }}" alt="Logo toko saat ini">
       </div>
       <div class="form-group">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-          <input type="checkbox" name="remove_logo" value="1">
-          Hapus logo saat simpan
+        <label class="admin-settings-check-row">
+          <input type="checkbox" name="remove_logo" value="1" class="admin-settings-check">
+          <span>Hapus logo saat simpan</span>
         </label>
       </div>
       {% endif %}
@@ -87,12 +88,12 @@
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:16px;">
+  <div class="card admin-settings-card">
     <div class="card-header">
       <div class="card-title">Zona waktu</div>
       <div class="card-subtitle">Memengaruhi perhitungan &quot;hari ini&quot; dan grafik di dashboard serta tampilan zona di aplikasi.</div>
     </div>
-    <div style="padding:16px;">
+    <div class="admin-settings-card__body">
       <div class="form-group">
         <label class="form-label">Zona waktu</label>
         <select name="timezone" class="form-control" required>
@@ -104,7 +105,7 @@
     </div>
   </div>
 
-  <div style="display:flex;gap:12px;flex-wrap:wrap;padding:0 0 16px;">
+  <div class="admin-settings-actions">
     <button type="submit" class="btn btn-primary">Simpan</button>
     <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline">Batal</a>
   </div>

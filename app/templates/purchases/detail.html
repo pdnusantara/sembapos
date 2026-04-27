@@ -1,21 +1,22 @@
 {% extends 'base.html' %}
 {% block title %}Detail PO: {{ po.nomor }}{% endblock %}
 {% block page_title %}📄 Detail Purchase Order{% endblock %}
-{% block page_sub %}Nomor: <span style="font-family:monospace;color:var(--primary-light);">{{ po.nomor }}</span>{% endblock %}
+{% block page_sub %}Nomor: <span class="po-detail-nomor">{{ po.nomor }}</span>{% endblock %}
+{% block body_class %}page-po-detail{% if po.status == 'dipesan' %} page-po-detail--can-receive{% endif %}{% endblock %}
 
 {% block content %}
 <div class="layout-two-col">
   
-  <div class="card">
+  <div class="card po-detail-items-card">
     <div class="card-header"><div class="card-title">Daftar Barang Pesanan</div></div>
     
     {% if po.status == 'dipesan' %}
-    <form method="POST" action="{{ url_for('purchases.receive', id=po.id) }}">
+    <form method="POST" class="po-receive-form" action="{{ url_for('purchases.receive', id=po.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     {% endif %}
     
-    <div class="table-wrapper">
-      <table class="table">
+    <div class="table-wrapper po-detail-table-wrap">
+      <table class="table po-detail-items-table {% if po.status == 'draft' %}po-detail-items-table--cols-4{% else %}po-detail-items-table--cols-5{% endif %}">
         <thead>
           <tr>
             <th>Produk</th>
@@ -28,86 +29,123 @@
         <tbody>
           {% for item in po.items %}
           <tr>
-            <td style="font-weight:600;">{{ item.nama_produk }}</td>
-            <td>Rp {{ "{:,.0f}".format(item.harga_beli).replace(",",".") }}</td>
-            <td>{{ item.qty_pesan }}</td>
+            <td class="po-detail-produk">{{ item.nama_produk }}</td>
+            <td class="po-detail-harga">Rp {{ "{:,.0f}".format(item.harga_beli).replace(",",".") }}</td>
+            <td class="po-detail-qty-pesan">{{ item.qty_pesan }}</td>
             
             {% if po.status != 'draft' %}
-            <td>
+            <td class="po-detail-qty-terima-cell">
               {% if po.status == 'dipesan' %}
-              <!-- Input qty terima aktual -->
-              <input type="number" name="terima_{{ item.id }}" class="form-control" style="width:100px;padding:4px 8px;" step="0.1" value="{{ item.qty_pesan }}" required>
+              <div class="po-qty-stepper">
+                <button type="button" class="po-qty-stepper__btn po-qty-stepper__btn--down" aria-label="Kurangi qty terima">−</button>
+                <input type="number" name="terima_{{ item.id }}" class="form-control po-qty-terima" step="0.1" min="0" value="{{ item.qty_pesan }}" inputmode="decimal" required>
+                <button type="button" class="po-qty-stepper__btn po-qty-stepper__btn--up" aria-label="Tambah qty terima">+</button>
+              </div>
               {% else %}
-              <strong style="color:var(--success);">{{ item.qty_terima }}</strong>
+              <strong class="po-detail-qty-terima-readonly">{{ item.qty_terima }}</strong>
               {% endif %}
             </td>
             {% endif %}
             
-            <td style="font-weight:600;">Rp {{ "{:,.0f}".format(item.subtotal).replace(",",".") }}</td>
+            <td class="po-detail-subtotal">Rp {{ "{:,.0f}".format(item.subtotal).replace(",",".") }}</td>
           </tr>
           {% endfor %}
         </tbody>
         <tfoot>
-          <tr>
-            <td colspan="{{ 4 if po.status != 'draft' else 3 }}" style="text-align:right;font-weight:600;">TOTAL</td>
-            <td style="font-weight:700;color:var(--primary-light);font-size:16px;">Rp {{ "{:,.0f}".format(po.total).replace(",",".") }}</td>
+          <tr class="po-detail-total-row">
+            <td colspan="{{ 4 if po.status != 'draft' else 3 }}">TOTAL</td>
+            <td class="po-detail-total-value">Rp {{ "{:,.0f}".format(po.total).replace(",",".") }}</td>
           </tr>
         </tfoot>
       </table>
     </div>
 
     {% if po.status == 'dipesan' %}
-    <div style="padding:16px;background:rgba(76,175,80,0.1);border-top:1px solid rgba(76,175,80,0.2);margin-top:10px;">
-      <div style="font-size:14px;color:var(--success);margin-bottom:12px;">✅ Klik tombol di bawah ini jika barang fisik sudah datang di toko. Stok akan otomatis ditambahkan ke inventory.</div>
-      <button type="submit" class="btn btn-success">📦 Terima Barang & Update Stok</button>
+    <div class="po-receive-actions">
+      <p class="po-receive-hint">✅ Klik tombol di bawah ini jika barang fisik sudah datang di toko. Stok akan otomatis ditambahkan ke inventory.</p>
+      <button type="submit" class="btn btn-success btn-block po-receive-submit">📦 Terima Barang & Update Stok</button>
     </div>
+    <div class="po-receive-dock-spacer" aria-hidden="true"></div>
     </form>
     {% endif %}
   </div>
 
-  <div class="card">
+  <div class="card po-detail-summary-card">
     <div class="card-header"><div class="card-title">Informasi Pesanan</div></div>
     
-    <div style="margin-bottom:16px;">
-      <div style="font-size:11px;color:var(--text-muted);">Status PO</div>
-      <span class="badge {{ 'badge-warning' if po.status == 'dipesan' else ('badge-success' if po.status == 'diterima' else 'badge-danger') }}" style="font-size:14px;">
+    <div class="po-detail-meta">
+      <div class="po-detail-meta-label">Status PO</div>
+      <span class="badge po-detail-status-badge {{ 'badge-warning' if po.status == 'dipesan' else ('badge-success' if po.status == 'diterima' else 'badge-danger') }}">
         {{ po.status|upper }}
       </span>
     </div>
 
-    <div style="margin-bottom:16px;">
-      <div style="font-size:11px;color:var(--text-muted);">Supplier</div>
-      <div style="font-weight:600;">{{ po.supplier.nama }}</div>
-      {% if po.supplier.telepon %}<div style="font-size:12px;">📞 {{ po.supplier.telepon }}</div>{% endif %}
+    <div class="po-detail-meta">
+      <div class="po-detail-meta-label">Supplier</div>
+      <div class="po-detail-meta-value">{{ po.supplier.nama }}</div>
+      {% if po.supplier.telepon %}<div class="po-detail-meta-sub">📞 {{ po.supplier.telepon }}</div>{% endif %}
     </div>
 
-    <div style="margin-bottom:16px;">
-      <div style="font-size:11px;color:var(--text-muted);">Tanggal Pesan</div>
+    <div class="po-detail-meta">
+      <div class="po-detail-meta-label">Tanggal Pesan</div>
       <div>📅 {{ po.tanggal_pesan|local_dt('%d %b %Y - %H:%M') }}</div>
     </div>
     
     {% if po.tanggal_terima %}
-    <div style="margin-bottom:16px;">
-      <div style="font-size:11px;color:var(--text-muted);">Tanggal Diterima</div>
-      <div style="color:var(--success);">✅ {{ po.tanggal_terima|local_dt('%d %b %Y - %H:%M') }}</div>
+    <div class="po-detail-meta">
+      <div class="po-detail-meta-label">Tanggal Diterima</div>
+      <div class="po-detail-meta-success">✅ {{ po.tanggal_terima|local_dt('%d %b %Y - %H:%M') }}</div>
     </div>
     {% endif %}
 
     {% if po.catatan %}
-    <div style="margin-bottom:16px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:13px;font-style:italic;">
-      "{{ po.catatan }}"
-    </div>
+    <div class="po-detail-catatan">"{{ po.catatan }}"</div>
     {% endif %}
     
-    <div style="display:flex;flex-direction:column;gap:8px;margin-top:24px;">
+    <div class="po-detail-actions">
       {% if po.status == 'dipesan' and current_user.is_admin %}
       <form method="POST" action="{{ url_for('purchases.cancel', id=po.id) }}" onsubmit="return confirm('Yakin ingin membatalkan pesanan ini?');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-        <button type="submit" class="btn btn-outline btn-block" style="color:var(--danger);border-color:var(--danger);">❌ Batalkan Pesanan</button>
+        <button type="submit" class="btn btn-outline btn-block po-detail-btn-cancel">❌ Batalkan Pesanan</button>
       </form>
       {% endif %}
       <a href="{{ url_for('purchases.index') }}" class="btn btn-outline btn-block">← Kembali List PO</a>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    document.querySelectorAll('.po-qty-stepper').forEach(function (wrap) {
+      var input = wrap.querySelector('.po-qty-terima');
+      if (!input) return;
+      var step = parseFloat(input.getAttribute('step')) || 0.1;
+      var min = input.getAttribute('min');
+      min = min !== '' && min !== null ? parseFloat(min) : 0;
+
+      function clamp(val) {
+        if (val < min) val = min;
+        var dec = (String(step).split('.')[1] || '').length;
+        var n = Math.round((val - min) / step) * step + min;
+        return dec ? parseFloat(n.toFixed(dec)) : n;
+      }
+
+      function parseVal() {
+        var v = parseFloat(String(input.value).replace(',', '.'));
+        return isNaN(v) ? min : v;
+      }
+
+      wrap.querySelector('.po-qty-stepper__btn--down').addEventListener('click', function () {
+        input.value = String(clamp(parseVal() - step));
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      wrap.querySelector('.po-qty-stepper__btn--up').addEventListener('click', function () {
+        input.value = String(clamp(parseVal() + step));
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+  })();
+</script>
 {% endblock %}

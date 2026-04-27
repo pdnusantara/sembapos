@@ -233,7 +233,7 @@
           </div>
           <div class="flex gap-2 flex-shrink-0">
             <a href="#mulai" class="px-4 py-2 bg-brand text-white text-sm font-semibold rounded-lg hover:bg-brand-hover transition-colors shadow-sm">Mulai Tutorial →</a>
-            <a href="https://wa.me/6281234567890" target="_blank" class="px-4 py-2 bg-white text-ink text-sm font-semibold rounded-lg border border-slate-200 hover:border-brand hover:text-brand transition-colors">💬 Tanya Tim</a>
+            <a href="{{ landing_wa_link }}" target="_blank" rel="noopener noreferrer" class="px-4 py-2 bg-white text-ink text-sm font-semibold rounded-lg border border-slate-200 hover:border-brand hover:text-brand transition-colors">💬 Tanya Tim</a>
           </div>
         </div>
 
@@ -333,8 +333,7 @@
           </nav>
           <div class="mt-6 p-3 bg-brand-light rounded-xl border border-brand-border">
             <p class="text-xs font-semibold text-brand mb-2">Butuh bantuan?</p>
-            <!-- TODO: Ganti wa.me ke nomor produksi final; saat ini disamakan dengan app/templates/landing.html -->
-            <a href="https://wa.me/6281234567890?text=Halo%2C%20saya%20butuh%20bantuan%20SembaPOS" target="_blank" rel="noopener noreferrer" class="text-xs text-brand underline hover:no-underline">💬 Chat WhatsApp →</a>
+            <a href="{{ landing_wa_link }}" target="_blank" rel="noopener noreferrer" class="text-xs text-brand underline hover:no-underline">💬 Chat WhatsApp →</a>
             <p class="text-[10px] text-ink-faint mt-2 leading-snug">Nomor kontak sama dengan halaman utama; hubungi tim untuk nomor resmi terbaru.</p>
           </div>
         </div>
@@ -1671,8 +1670,7 @@
           <h2 class="text-2xl font-bold mb-3">Masih punya pertanyaan?</h2>
           <p class="text-indigo-100 mb-6 max-w-md mx-auto text-sm">Tim kami siap membantu Anda onboarding, migrasi data, atau menjawab pertanyaan teknis apa pun.</p>
           <div class="flex flex-wrap justify-center gap-3">
-            <!-- TODO: Ganti wa.me ke nomor produksi final; saat ini disamakan dengan app/templates/landing.html -->
-            <a href="https://wa.me/6281234567890?text=Halo%2C%20saya%20butuh%20bantuan%20penggunaan%20SembaPOS" target="_blank" rel="noopener noreferrer"
+            <a href="{{ landing_wa_link }}" target="_blank" rel="noopener noreferrer"
                class="px-5 py-2.5 bg-white text-brand rounded-lg font-semibold hover:bg-indigo-50 transition-colors shadow-sm">
               💬 Chat WhatsApp
             </a>

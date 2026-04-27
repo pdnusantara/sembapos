@@ -597,7 +597,7 @@ body.pos-full-view .pos-layout {
 .pos-cart-item {
   background: var(--pos-card-bg);
   border-radius: var(--pos-radius-sm);
-  padding: 12px;
+  padding: 8px;
   border: 1px solid var(--pos-border);
   box-shadow: var(--pos-shadow-sm);
 }
@@ -606,12 +606,12 @@ body.pos-full-view .pos-layout {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .pos-cart-item-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 12px;
   color: var(--pos-text);
   line-height: 1.3;
   padding-right: 12px;
@@ -635,16 +635,16 @@ body.pos-full-view .pos-layout {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 .pos-cart-item-diskon-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin: -4px 0 12px;
-  padding-bottom: 10px;
+  gap: 8px;
+  margin: -2px 0 8px;
+  padding-bottom: 6px;
   border-bottom: 1px dashed var(--pos-border);
 }
 
@@ -660,18 +660,18 @@ body.pos-full-view .pos-layout {
   max-width: 42vw;
   text-align: right;
   padding: 6px 8px;
-  height: 34px;
-  font-size: 14px;
+  height: 30px;
+  font-size: 12px;
 }
 
 .pos-cart-item-price {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--pos-text-muted);
 }
 
 .pos-cart-item-subtotal {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--pos-primary);
 }
 
@@ -693,9 +693,9 @@ body.pos-full-view .pos-layout {
 .pos-qty-btn {
   background: transparent;
   border: none;
-  width: 36px;
-  height: 36px;
-  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
   color: var(--pos-text);
   cursor: pointer;
   display: flex;
@@ -831,7 +831,7 @@ input.pos-qty-input:focus {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   /*
    * Mobile: satu area scroll (produk / keranjang), bukan page-content + panel bersarang.
    * page-content overflow hidden + flex chain → scroll di .pos-products-body / .pos-cart-body.
@@ -848,6 +848,8 @@ input.pos-qty-input:focus {
     display: flex;
     flex-direction: column;
     flex: 1 1 0%;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
     min-height: 100dvh;
     overscroll-behavior-y: none;
     -webkit-overflow-scrolling: touch;
@@ -1001,7 +1003,7 @@ input.pos-qty-input:focus {
     padding-bottom: env(safe-area-inset-bottom);
     background: var(--pos-card-bg);
     border-top: 1px solid var(--pos-border);
-    z-index: 110;
+    z-index: 115;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
   }
 
@@ -1011,7 +1013,10 @@ input.pos-qty-input:focus {
     left: 10px;
     right: 10px;
     bottom: calc(58px + env(safe-area-inset-bottom, 0px));
-    z-index: 111;
+    /* Di atas tab Produk/Keranjang supaya area "Bayar" bisa diketuk */
+    z-index: 120;
+    /* style.css memakai pointer-events:none + .pos-mobile-dock__inner; POS tidak pakai inner */
+    pointer-events: auto !important;
     align-items: center;
     gap: 8px;
     padding: 8px;
@@ -1052,10 +1057,14 @@ input.pos-qty-input:focus {
   }
 
   .pos-mobile-dock-pay {
-    min-height: 38px;
-    min-width: 84px;
+    min-height: 40px;
+    min-width: 88px;
     border-radius: 10px;
     font-weight: 700;
+    position: relative;
+    z-index: 1;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
   
   .pos-nav-item {
@@ -1119,13 +1128,13 @@ input.pos-qty-input:focus {
   }
 
   input.pos-qty-input.pos-qty-val {
-    font-size: 16px;
-    min-height: 40px;
+    font-size: 13px;
+    min-height: 30px;
   }
 
   .pos-cart-line-diskon-input {
-    font-size: 16px;
-    min-height: 40px;
+    font-size: 13px;
+    min-height: 30px;
   }
 
   #payModal .modal.pos-pay-modal {
@@ -1158,8 +1167,10 @@ input.pos-qty-input:focus {
   .pos-mobile-dock {
     left: 8px;
     right: 8px;
-    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
     padding: 7px;
+    pointer-events: auto !important;
+    z-index: 120;
   }
 
   .pos-mobile-dock-meta {
@@ -1175,17 +1186,17 @@ input.pos-qty-input:focus {
   }
 
   .pos-cart-header {
-    padding: 12px;
+    padding: 10px;
   }
 
   .pos-cart-title {
-    font-size: 16px;
+    font-size: 14px;
   }
 
   .pos-cart-item-price-row {
     flex-wrap: wrap;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
   }
 
   .pos-cart-item-price-row > div:first-child {
@@ -1199,7 +1210,8 @@ input.pos-qty-input:focus {
 
   .pos-price-mode-select {
     width: 100%;
-    min-height: 36px;
+    min-height: 32px;
+    font-size: 11px;
   }
 
   #payModal .modal.pos-pay-modal {
@@ -1272,10 +1284,141 @@ input.pos-qty-input:focus {
 }
 
 /* Bottom sheet HP: lebih banyak ruang isi, tetap ada batas agar scroll jelas */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   #payModal .pos-pay-modal-body.cart-payment,
   #payModal .pos-pay-modal-body {
-    max-height: min(calc(88dvh - 120px), 720px) !important;
+    max-height: min(calc(82dvh - 100px), 560px) !important;
+    padding: 10px 12px 14px !important;
+  }
+
+  #payModal .modal.pos-pay-modal,
+  .modal.pos-pay-modal {
+    max-height: min(92dvh, 640px) !important;
+    width: min(96vw, 420px) !important;
+    margin: auto !important;
+  }
+
+  .pos-pay-modal-head {
+    padding: 10px 12px !important;
+  }
+
+  .pos-pay-modal-title.modal-title {
+    font-size: 16px !important;
+  }
+
+  .pos-pay-modal-total-line {
+    font-size: 12px !important;
+  }
+
+  .pos-pay-modal-close {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 16px !important;
+  }
+
+  .payment-methods {
+    gap: 6px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .method-btn {
+    min-height: 38px !important;
+    padding: 6px 6px !important;
+    font-size: 11px !important;
+  }
+
+  .pos-pay-split-toggle {
+    display: block;
+    width: 100%;
+    margin: 0 0 6px;
+    padding: 6px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--pos-primary);
+    background: transparent;
+    border: 1px dashed var(--pos-border);
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pos-pay-split-toggle[hidden] {
+    display: none !important;
+  }
+
+  .pos-split-payment-section .form-label {
+    margin-bottom: 6px !important;
+  }
+
+  .pos-payment-inputs-grid {
+    gap: 6px !important;
+  }
+
+  .payment-input {
+    min-height: 42px !important;
+    margin-bottom: 0 !important;
+  }
+
+  .payment-input .pos-pay-prefix,
+  .payment-input .currency-prefix {
+    min-width: 62px !important;
+    padding: 0 8px !important;
+    font-size: 11px !important;
+  }
+
+  .payment-input input {
+    padding: 8px 10px !important;
+    font-size: 16px !important;
+  }
+
+  .pos-quick-cash {
+    gap: 6px !important;
+    margin-top: 8px !important;
+  }
+
+  .pos-quick-cash-btn {
+    padding: 6px 10px !important;
+    min-height: 34px !important;
+    font-size: 12px !important;
+  }
+
+  .change-display {
+    padding: 8px 10px !important;
+    margin-top: 6px !important;
+  }
+
+  .change-label {
+    font-size: 12px !important;
+  }
+
+  .change-value {
+    font-size: clamp(14px, 3.5vw, 17px) !important;
+  }
+
+  #payModal .cart-payment select.form-control,
+  #payModal .cart-payment > input.form-control {
+    min-height: 40px !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  #payModal #discountDecisionPanel {
+    padding: 8px !important;
+    margin-top: 8px !important;
+  }
+
+  #payModal .btn-checkout {
+    min-height: 44px !important;
+    font-size: 14px !important;
+    margin-top: 10px !important;
+  }
+}
+
+@media (min-width: 1025px) {
+  .pos-pay-split-toggle {
+    display: none !important;
   }
 }
 
@@ -1430,21 +1573,142 @@ input.pos-qty-input:focus {
   border-radius: var(--pos-radius-sm) !important;
 }
 
-/* Success Modal Enhancements */
-.success-animation {
-  padding: 20px 0;
+/* Success Modal — layout rapi & aman di mobile (tanpa overlap) */
+#successModal .modal.pos-success-modal {
+  text-align: center;
+  max-width: 380px;
+  width: min(100%, 380px);
+  padding: 20px 18px 22px;
+  box-sizing: border-box;
 }
 
-.success-icon {
-  font-size: 64px;
+#successModal .pos-success-modal__title {
+  color: var(--text-light);
+  margin: 0 0 8px;
+  font-size: 1.22rem;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+#successModal .pos-success-modal__summary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 12px 0 0;
+  text-align: left;
+}
+
+#successModal .pos-success-modal__payments {
+  margin-top: 8px;
+}
+
+#successModal .pos-success-modal__promo {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#successModal .pos-success-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  margin-top: 16px;
+  box-sizing: border-box;
+}
+
+#successModal .pos-success-actions__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+#successModal .pos-success-wa-share {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  font-weight: 700;
+  border-radius: var(--pos-radius-sm, 10px);
+  white-space: normal;
+  line-height: 1.3;
+  text-align: center;
+  word-break: break-word;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#successModal .pos-success-wa-share__icon {
+  display: flex;
+  flex-shrink: 0;
+}
+
+#successModal .pos-success-wa-share__label {
+  flex: 1;
+  min-width: 0;
+}
+
+#successModal .pos-success-btn-print,
+#successModal .pos-success-btn-new {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: center;
+}
+
+#successModal .pos-success-btn-new {
+  border-width: 2px;
+}
+
+#successModal .success-animation {
+  padding: 12px 0 8px;
+}
+
+#successModal .success-icon {
+  font-size: 56px;
   display: block;
-  margin-bottom: 16px;
+  margin: 0 auto 12px;
   animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes scaleIn {
   0% { transform: scale(0); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 420px) {
+  #successModal .modal.pos-success-modal {
+    padding: 16px 14px 20px;
+    width: calc(100% - 8px);
+  }
+
+  #successModal .success-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+  }
+
+  #successModal .pos-success-actions__row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }
 
 /* Search Panel */
@@ -1519,7 +1783,7 @@ input.pos-qty-input:focus {
 }
 
 /* ===== MOBILE REVAMP V2 (kasir-first) ===== */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .page-content:has(.pos-page-bleed) {
     padding: 8px 10px calc(140px + env(safe-area-inset-bottom, 0px)) !important;
     overflow-y: auto !important;
@@ -1534,9 +1798,9 @@ input.pos-qty-input:focus {
   }
 
   .pos-shift-strip {
-    position: sticky;
-    top: 0;
-    z-index: 40;
+    position: relative;
+    top: auto;
+    z-index: 1;
     margin-bottom: 8px !important;
     padding: 8px 10px !important;
     border-radius: 12px !important;
@@ -1568,17 +1832,17 @@ input.pos-qty-input:focus {
   }
 
   .pos-products-header {
-    position: sticky;
-    top: 66px;
-    z-index: 35;
-    margin-bottom: 8px !important;
-    padding: 10px !important;
+    position: relative;
+    top: auto;
+    z-index: auto;
+    margin-bottom: 6px !important;
+    padding: 8px !important;
     border-radius: 12px !important;
   }
 
   .pos-search-wrap input {
-    min-height: 46px !important;
-    padding: 12px 12px 12px 40px !important;
+    min-height: 38px !important;
+    padding: 8px 10px 8px 36px !important;
     border-radius: 12px !important;
   }
 
@@ -1593,23 +1857,39 @@ input.pos-qty-input:focus {
   }
 
   .pos-products-body {
-    overflow: visible !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
     padding-right: 0 !important;
   }
 
   .pos-products-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 10px !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
     padding-bottom: 8px !important;
   }
 
+  @media (max-width: 600px) {
+    .pos-products-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 5px !important;
+    }
+  }
+
+  .pos-product-img-wrap {
+    padding: 8px !important;
+  }
+
+  .pos-product-img-wrap .emoji {
+    font-size: 40px !important;
+  }
+
   .pos-product-info {
-    padding: 10px !important;
+    padding: 8px !important;
   }
 
   .pos-product-name {
     font-size: 12px !important;
-    min-height: 30px;
+    min-height: 26px;
   }
 
   .pos-product-price {
@@ -1636,10 +1916,10 @@ input.pos-qty-input:focus {
   }
 
   .pos-cart-header {
-    position: sticky;
-    top: 66px;
-    z-index: 36;
-    padding: 10px 12px !important;
+    position: relative;
+    top: auto;
+    z-index: 1;
+    padding: 8px 12px !important;
   }
 
   .pos-cart-body {
@@ -1649,12 +1929,12 @@ input.pos-qty-input:focus {
   }
 
   .pos-cart-items {
-    padding: 10px !important;
-    gap: 10px !important;
+    padding: 6px !important;
+    gap: 6px !important;
   }
 
   .pos-cart-item {
-    padding: 10px !important;
+    padding: 6px !important;
     border-radius: 10px !important;
   }
 
@@ -1664,36 +1944,65 @@ input.pos-qty-input:focus {
   }
 
   .pos-cart-footer {
-    position: sticky;
-    bottom: calc(106px + env(safe-area-inset-bottom, 0px));
-    z-index: 35;
-    padding: 12px !important;
+    position: relative;
+    bottom: auto;
+    z-index: 1;
+    padding: 10px 12px !important;
     border-top: 1px solid var(--pos-border);
-    box-shadow: 0 -10px 22px rgba(0, 0, 0, 0.16);
+    box-shadow: none;
   }
 
   .pos-summary-row.total {
-    font-size: 18px !important;
+    font-size: 16px !important;
   }
 
+.pos-discount-details {
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+.pos-discount-details > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--pos-text-muted);
+}
+
+.pos-discount-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pos-discount-summary-hint {
+  font-size: 11px;
+}
+
+.pos-discount-details-body {
+  padding-top: 4px;
+}
+
   .pos-btn-pay {
-    min-height: 46px !important;
-    font-size: 16px !important;
-    margin-top: 10px !important;
+    min-height: 42px !important;
+    font-size: 15px !important;
+    margin-top: 8px !important;
   }
 
   .pos-mobile-dock {
-    bottom: calc(54px + env(safe-area-inset-bottom, 0px)) !important;
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
     left: 8px !important;
     right: 8px !important;
     border-radius: 12px !important;
     padding: 7px 8px !important;
-    z-index: 112 !important;
+    z-index: 120 !important;
+    pointer-events: auto !important;
   }
 
   .pos-mobile-nav {
     min-height: calc(52px + env(safe-area-inset-bottom, 0px)) !important;
-    z-index: 113 !important;
+    z-index: 115 !important;
   }
 
   .pos-nav-item {

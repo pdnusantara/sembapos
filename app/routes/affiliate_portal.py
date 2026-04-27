@@ -309,6 +309,7 @@ def register_tenant():
             wizard_title='Daftarkan tenant (trial)',
             wizard_intro='Isi data calon tenant — akun trial 30 hari; komisi mengikuti aturan platform.',
             affiliate_app=True,
+            compact_tenant_wizard=True,
         )
 
     lim = int(settings.get('affiliate_form_rate_per_hour') or 15)

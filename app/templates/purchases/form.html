@@ -2,6 +2,7 @@
 {% block title %}Buat Purchase Order{% endblock %}
 {% block page_title %}📥 Buat Purchase Order{% endblock %}
 {% block page_sub %}Pesan barang ke supplier{% endblock %}
+{% block body_class %}page-po-form{% endblock %}
 
 {% block content %}
 <form method="POST" id="poForm">
@@ -9,10 +10,10 @@
   <div class="layout-two-col">
     
     <!-- Bagian Items -->
-    <div class="card">
+    <div class="card po-items-card">
       <div class="card-header"><div class="card-title">Daftar Produk yang Dipesan</div></div>
-      <div class="table-wrapper">
-        <table class="table" id="itemsTable">
+      <div class="table-wrapper po-items-table-wrap">
+        <table class="table po-items-table" id="itemsTable">
           <thead>
             <tr>
               <th>Produk</th>
@@ -27,13 +28,13 @@
           </tbody>
         </table>
       </div>
-      <div style="padding:16px;text-align:center;background:rgba(255,255,255,0.02);border-top:1px solid var(--border);">
-        <button type="button" class="btn btn-outline" onclick="addItemRow()">➕ Tambah Baris Produk</button>
+      <div class="po-add-row-wrap">
+        <button type="button" class="btn btn-outline po-add-row-btn" onclick="addItemRow()">➕ Tambah Baris Produk</button>
       </div>
     </div>
 
     <!-- Bagian Form Utama -->
-    <div class="card" style="position:sticky;top:80px;">
+    <div class="card po-summary-card">
       <div class="form-group">
         <label class="form-label">Pilih Supplier *</label>
         <select name="supplier_id" class="form-control" required>
@@ -48,15 +49,15 @@
         <textarea name="catatan" class="form-control" rows="3" placeholder="Contoh: Kirim secepatnya"></textarea>
       </div>
       
-      <div style="margin:20px 0;padding-top:16px;border-top:1px dashed var(--border);">
-        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:8px;">
-          <span style="color:var(--text-muted);">Total Estimasi:</span>
-          <strong style="font-size:20px;color:var(--primary-light);" id="grandTotal">Rp 0</strong>
+      <div class="po-total-block">
+        <div class="po-total-line">
+          <span class="po-total-label">Total Estimasi:</span>
+          <strong class="po-total-value" id="grandTotal">Rp 0</strong>
         </div>
       </div>
       
-      <button type="submit" class="btn btn-primary btn-block" style="font-size:16px;padding:12px;">✅ Buat Pesanan (PO)</button>
-      <a href="{{ url_for('purchases.index') }}" class="btn btn-outline btn-block" style="margin-top:12px;">✕ Batal</a>
+      <button type="submit" class="btn btn-primary btn-block po-submit-po">✅ Buat Pesanan (PO)</button>
+      <a href="{{ url_for('purchases.index') }}" class="btn btn-outline btn-block po-cancel-po">✕ Batal</a>
     </div>
   </div>
 </form>
@@ -75,8 +76,8 @@
     <td><input type="number" name="qty[]" class="form-control row-qty" min="1" step="0.1" value="1" required oninput="calcSubtotal(this)"></td>
     <td><input type="number" name="harga[]" class="form-control row-harga" min="0" required oninput="calcSubtotal(this)"></td>
     <td class="row-subtotal fw-bold text-end" style="vertical-align:middle;">0</td>
-    <td style="vertical-align:middle;text-align:center;">
-      <button type="button" class="btn btn-sm" style="background:transparent;color:var(--danger);" onclick="this.closest('tr').remove();calcGrandTotal()">✕</button>
+    <td class="po-row-actions">
+      <button type="button" class="btn btn-sm po-row-remove" onclick="this.closest('tr').remove();calcGrandTotal()">✕</button>
     </td>
   </tr>
 </template>

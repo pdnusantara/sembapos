@@ -47,6 +47,7 @@ from ..tutorial_content import (
     normalize_tutorial_data,
     validate_tutorial_data_structure,
 )
+from ..platform_contact import public_whatsapp_link
 
 
 def _tutorial_preview_tmp_dir():
@@ -92,6 +93,7 @@ from ..permissions import (
     tenant_package_module_cap,
     blocked_module_labels_for_package_role,
 )
+from ..platform_contact import public_whatsapp_link
 
 superadmin_bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
 
@@ -451,11 +453,12 @@ def tutorial_preview():
 
         tutorial_data = normalize_tutorial_data(tutorial_data)
         errors = validate_tutorial_data_structure(tutorial_data)
+        wa = public_whatsapp_link()
         if errors:
-            return render_template('tutorial.html')
-        return render_template('tutorial_dynamic.html', tutorial=tutorial_data)
+            return render_template('tutorial.html', landing_wa_link=wa)
+        return render_template('tutorial_dynamic.html', tutorial=tutorial_data, landing_wa_link=wa)
     except Exception:
-        return render_template('tutorial.html')
+        return render_template('tutorial.html', landing_wa_link=public_whatsapp_link())
 
 
 @superadmin_bp.route('/tutorial/reset', methods=['POST'])
@@ -2857,6 +2860,8 @@ PLATFORM_SETTING_KEYS = [
     ('smtp_pass', 'SMTP Password', ''),
     ('wa_gateway_url', 'WhatsApp Gateway URL', ''),
     ('wa_gateway_token', 'WhatsApp Gateway Token', ''),
+    ('landing_wa_phone', 'Nomor WhatsApp publik (landing & tutorial)', '6281234567890'),
+    ('landing_wa_message', 'Pesan awal chat WhatsApp (landing & tutorial)', 'Halo, saya ingin tanya tentang SembaPOS'),
     ('notif_expiring_days', 'Notif Tenant Expiring (hari sebelum)', '7'),
 ]
 
@@ -2868,6 +2873,8 @@ def platform_settings():
     if request.method == 'POST':
         for key, label, default in PLATFORM_SETTING_KEYS:
             val = request.form.get(key, '').strip()
+            if key == 'landing_wa_phone':
+                val = re.sub(r'\D', '', val)
             AppSetting.set(key, val)
 
         logo_file = request.files.get('platform_logo_file')
